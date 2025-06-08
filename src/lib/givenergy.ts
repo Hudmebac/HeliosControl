@@ -1,87 +1,162 @@
 
-import type { RealTimeData, GivEnergyIDs, Metric, BatteryStatus, EVChargerStatus } from "@/lib/types";
+import type {
+  RealTimeData,
+  GivEnergyIDs,
+  Metric,
+  BatteryStatus,
+  EVChargerStatus,
+  RawCommunicationDevicesResponse,
+  RawSystemDataLatestResponse,
+  RawEVChargersResponse,
+  RawEVChargerStatusResponse,
+} from "@/lib/types";
 
-// MOCK IMPLEMENTATION
-// In a real scenario, these functions would make authenticated API calls to GivEnergy.
+const GIVENERGY_API_BASE_URL = "https://api.givenergy.cloud/v1";
 
-const MOCK_API_KEY_VALID = "VALID_KEY"; // Replace with a mock valid key for testing
+async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers({
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  });
+
+  const response = await fetch(`${GIVENERGY_API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    let errorBody;
+    try {
+      errorBody = await response.json();
+    } catch (e) {
+      // Ignore if body isn't json
+    }
+    throw new Error(`GivEnergy API Error: ${response.status} ${response.statusText} - ${errorBody?.message || 'Unknown error'}`);
+  }
+  return response.json() as Promise<T>;
+}
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {
-  // Simulate API call to validate key
-  await new Promise(resolve => setTimeout(resolve, 500));
-  // Basic mock validation - allows the MOCK_API_KEY_VALID or any non-empty string for broader testing.
-  return apiKey === MOCK_API_KEY_VALID || (apiKey && apiKey.length > 0); 
+  if (!apiKey) return false;
+  try {
+    // Try fetching communication devices as a way to validate the key
+    await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-devices");
+    return true;
+  } catch (error) {
+    console.error("API Key validation failed:", error);
+    return false;
+  }
+}
+
+async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
+  let inverterSerial: string | null = null;
+  let evChargerId: string | null = null;
+
+  try {
+    const commDevicesResponse = await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-devices");
+    if (commDevicesResponse.data && commDevicesResponse.data.length > 0) {
+      inverterSerial = commDevicesResponse.data[0].inverter.serial;
+    }
+  } catch (error) {
+    console.warn("Could not fetch communication devices (inverter serial):", error);
+    // Potentially throw error if inverter serial is critical and not found
+  }
+
+  try {
+    const evChargersResponse = await _fetchGivEnergyAPI<RawEVChargersResponse>(apiKey, "/ev-charger");
+    if (evChargersResponse.data && evChargersResponse.data.length > 0) {
+        evChargerId = evChargersResponse.data[0].id;
+    }
+  } catch (error) {
+      console.warn("Could not fetch EV chargers list:", error);
+      // It's okay if no EV charger is found, it's optional.
+  }
+  
+  return { inverterSerial, evChargerId };
 }
 
 export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
-  if (!await validateApiKey(apiKey)) {
-    throw new Error("Invalid API Key");
-  }
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 700));
-  return {
-    inverterSerial: "INV123456789",
-    inverterUUID: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
-    evChargerId: "EV001",
-  };
+    if (!apiKey) {
+        throw new Error("API Key not provided for getDeviceIDs");
+    }
+    return _getPrimaryDeviceIDs(apiKey);
 }
 
-let lastSolarGeneration = 2.5;
-let lastHomeConsumption = 1.0;
-let lastBatteryPercentage = 70;
-let lastGridPower = 0.5; // Positive for import, negative for export
+
+function mapEVChargerAPIStatus(apiStatus: string): EVChargerStatus['status'] {
+    const lowerApiStatus = apiStatus.toLowerCase();
+    if (lowerApiStatus.includes("charging")) return "charging";
+    if (lowerApiStatus.includes("disconnected")) return "disconnected";
+    if (lowerApiStatus.includes("fault") || lowerApiStatus.includes("error")) return "faulted";
+    // Default to idle for "idle", "paused", "smart", "boost" etc.
+    return "idle";
+}
+
 
 export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
-  if (!await validateApiKey(apiKey)) {
-    throw new Error("Invalid API Key");
+  if (!apiKey) {
+    throw new Error("API Key not provided");
   }
-  // Simulate API call and dynamic data
-  await new Promise(resolve => setTimeout(resolve, 300));
 
-  // Simulate fluctuations
-  lastSolarGeneration += (Math.random() - 0.5) * 0.2; // Fluctuate by +/- 0.1 kW
-  if (lastSolarGeneration < 0) lastSolarGeneration = 0;
-  if (lastSolarGeneration > 5) lastSolarGeneration = 5;
+  const { inverterSerial, evChargerId } = await _getPrimaryDeviceIDs(apiKey);
 
-  lastHomeConsumption += (Math.random() - 0.5) * 0.1;
-  if (lastHomeConsumption < 0.1) lastHomeConsumption = 0.1; // Min consumption
-  if (lastHomeConsumption > 3) lastHomeConsumption = 3;
-
-
-  const isCharging = Math.random() > 0.5;
-  if (isCharging && lastBatteryPercentage < 100) {
-    lastBatteryPercentage += Math.random() * 2;
-    if (lastBatteryPercentage > 100) lastBatteryPercentage = 100;
-  } else if (!isCharging && lastBatteryPercentage > 0) {
-    lastBatteryPercentage -= Math.random() * 1;
-    if (lastBatteryPercentage < 0) lastBatteryPercentage = 0;
+  if (!inverterSerial) {
+    throw new Error("Could not retrieve inverter serial number. Cannot fetch real-time data.");
   }
-  
-  lastGridPower += (Math.random() - 0.5) * 0.3;
-  if (Math.abs(lastGridPower) < 0.05) lastGridPower = 0;
 
+  const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
+  const rawData = systemDataResponse.data;
 
-  const homeConsumption: Metric = { value: parseFloat(lastHomeConsumption.toFixed(2)), unit: "kW" };
-  const solarGeneration: Metric = { value: parseFloat(lastSolarGeneration.toFixed(2)), unit: "kW" };
+  const homeConsumption: Metric = {
+    value: parseFloat((rawData.consumption.power / 1000).toFixed(2)), // Watts to kW
+    unit: "kW",
+  };
+
+  const solarGeneration: Metric = {
+    value: parseFloat((rawData.solar.power / 1000).toFixed(2)), // Watts to kW
+    unit: "kW",
+  };
+
+  const batteryPowerWatts = rawData.battery.power;
+  const batteryPercentage = rawData.battery.percent;
   const battery: BatteryStatus = {
-    value: parseFloat(lastBatteryPercentage.toFixed(0)),
+    value: batteryPercentage,
     unit: "%",
-    percentage: parseFloat(lastBatteryPercentage.toFixed(0)),
-    charging: lastBatteryPercentage < 98 ? (isCharging ? true : Math.random() > 0.7 ? false : undefined) : false,
+    percentage: batteryPercentage,
+    // API: battery.power positive for discharge, negative for charge
+    charging: batteryPowerWatts < 0 ? true : (batteryPowerWatts > 0 ? false : undefined),
   };
+
+  const gridPowerWatts = rawData.grid.power;
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
-    value: parseFloat(Math.abs(lastGridPower).toFixed(2)),
+    value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)), // Watts to kW
     unit: "kW",
-    flow: lastGridPower > 0.05 ? 'importing' : lastGridPower < -0.05 ? 'exporting' : 'idle',
+    // API: grid.power positive for import, negative for export
+    flow: gridPowerWatts > 50 ? 'importing' : (gridPowerWatts < -50 ? 'exporting' : 'idle'), // Added a small deadband
   };
-  
-  const evChargerStatuses: EVChargerStatus['status'][] = ['charging', 'idle', 'disconnected'];
-  const currentEVStatus = evChargerStatuses[Math.floor(Math.random() * evChargerStatuses.length)];
-  const evCharger: EVChargerStatus = {
-    value: currentEVStatus === 'charging' ? parseFloat((Math.random() * 7).toFixed(1)) : 0,
+
+  let evCharger: EVChargerStatus = {
+    value: 0,
     unit: "kW",
-    status: currentEVStatus,
+    status: "disconnected", // Default status
   };
+
+  if (evChargerId) {
+    try {
+      const evStatusResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${evChargerId}/status`);
+      const rawEVData = evStatusResponse.data;
+      evCharger = {
+        value: rawEVData.charge_session?.power ? parseFloat((rawEVData.charge_session.power / 1000).toFixed(1)) : 0, // Watts to kW
+        unit: "kW",
+        status: mapEVChargerAPIStatus(rawEVData.status),
+      };
+    } catch (error) {
+        console.warn(`Failed to fetch EV charger (${evChargerId}) status:`, error);
+        // Keep default/disconnected status if EV charger data fails
+    }
+  }
+
 
   return {
     homeConsumption,
@@ -89,6 +164,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     battery,
     grid,
     evCharger,
-    timestamp: Date.now(),
+    timestamp: new Date(rawData.time).getTime() || Date.now(),
   };
 }
