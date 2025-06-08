@@ -17,6 +17,7 @@ import type {
   GivEnergyAPIData,
   AccountData,
   RawAccountResponse,
+  GivEnergyPaginatedResponse,
 } from "@/lib/types";
 
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
@@ -45,7 +46,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       try {
         errorBody = await response.json();
       } catch (e) {
-        // Non-JSON error response or empty body
+        // Non-JSON error response or empty body, errorBody remains {}
       }
       const errorMessage = errorBody?.error || errorBody?.message || `API Request Error: ${response.status} ${response.statusText}`;
       console.error(`GivEnergy API error for ${fetchUrl}: ${response.status}`, errorBody);
@@ -71,10 +72,12 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       throw new Error(detailedMessage);
     }
     
+    // Re-throw if it's already a specific API error or network error we've formatted.
     if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error for") || originalMessage.startsWith("Network error:")) {
         throw error; 
     }
 
+    // Otherwise, wrap it as a generic proxy failure.
     const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
     console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
     throw new Error(errorMessage);
@@ -84,6 +87,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   if (!apiKey) return false;
   try {
+    // Use singular endpoint as per documentation examples for listing.
     await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-device");
     return true;
   } catch (error) {
@@ -91,13 +95,10 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
     if (error instanceof Error && (error.message.includes("401") || error.message.includes("Unauthenticated"))) {
         return false;
     }
+    // Check for any 4xx client error
     if (error instanceof Error && error.message.match(/API Request Error: 4\d\d/)) {
         return false;
     }
-    // For other errors (network, proxy issues), it's not strictly a validation failure of the key itself,
-    // but for practical purposes, if we can't reach the API, we can treat it as invalid for use.
-    // However, the current logic in useApiKey might benefit from distinguishing this.
-    // For now, returning false on any error during this check is safest for UI flow.
     return false;
   }
 }
@@ -107,6 +108,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let evChargerId: string | null = null;
 
   const allCommDevices: RawCommunicationDevice[] = [];
+  // Use singular endpoint as per documentation for listing devices.
   let commDevicesNextPageEndpoint: string | null = "/communication-device"; 
 
   try {
@@ -130,15 +132,24 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
       }
     }
     
+    // Find the first device that has an inverter serial.
     const primaryDevice = allCommDevices.find(device => device.inverter?.serial);
     if (primaryDevice && primaryDevice.inverter?.serial) {
         inverterSerial = primaryDevice.inverter.serial;
     }
 
+    if (!inverterSerial && allCommDevices.length > 0) {
+      // Fallback: if no device explicitly has inverter.serial, but devices exist,
+      // check if any device *itself* has a serial that could be an inverter.
+      // This is less ideal as `communication-device`'s `serial_number` is for the dongle.
+      // The primary logic relies on `device.inverter.serial`.
+      // For now, we stick to finding device.inverter.serial.
+    }
+    
     if (!inverterSerial) {
       const numDevices = allCommDevices.length;
       const deviceSerialsText = allCommDevices.map(d => d.serial_number).join(', ') || 'none';
-      const errorMsg = `Failed to identify a primary inverter. Checked ${numDevices} communication device(s) (serials: [${deviceSerialsText}]). Ensure: API key is correct with full permissions, inverter is registered & online, and dongle is connected. Verify details on GivEnergy portal.`;
+      const errorMsg = `Failed to identify a primary inverter. Checked ${numDevices} communication device(s) (dongle serials: [${deviceSerialsText}]). Ensure: API key is correct with full permissions, inverter is registered & online, and dongle is connected to the inverter. Verify details on GivEnergy portal.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -151,13 +162,15 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
         originalMessage = error;
     }
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", originalMessage, error);
-    if (originalMessage && (originalMessage.toLowerCase().includes('network error:') || originalMessage.startsWith('API Request Error:') || originalMessage.startsWith('API Request Failed via Proxy:') || originalMessage.startsWith('GivEnergy API error:'))) {
+    // Re-throw if it's an error we've already specifically formatted or a known API error structure
+    if (originalMessage && (originalMessage.toLowerCase().includes('network error:') || originalMessage.startsWith('API Request Error:') || originalMessage.startsWith('API Request Failed via Proxy:') || originalMessage.startsWith('GivEnergy API error:') || originalMessage.startsWith('Failed to identify a primary inverter'))) {
         throw error; 
     }
     throw new Error(`Failed to retrieve essential device identifiers (communication devices pagination via proxy): ${originalMessage}`);
   }
 
-  if (inverterSerial) {
+  // Fetch EV Chargers
+  if (inverterSerial) { // Only try to find EV chargers if we have an inverter
     const allEVChargers: RawEVCharger[] = [];
     let evChargersNextPageEndpoint: string | null = "/ev-charger";
     try {
@@ -182,9 +195,9 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
       }
 
       if (allEVChargers.length > 0 && allEVChargers[0].uuid) {
-          evChargerId = allEVChargers[0].uuid;
+          evChargerId = allEVChargers[0].uuid; // Taking the first EV charger found
       } else {
-        console.log("No EV chargers found or EV charger data is incomplete for this API key after checking all pages (via proxy).");
+        console.log("No EV chargers found or EV charger data is incomplete for this API key after checking all pages (via proxy). EV charger data may be unavailable.");
       }
     } catch (error: unknown) {
         let originalMessage = "Unknown error during EV charger list fetch";
@@ -193,16 +206,20 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
         } else if (typeof error === 'string') {
             originalMessage = error;
         }
-        console.warn(`Could not fetch EV chargers list (pagination via proxy, optional): ${originalMessage}. EV Charger data might be unavailable.`);
+        // This is not critical for dashboard core functionality if EV charger is not present/used
+        console.warn(`Could not fetch EV chargers list (pagination via proxy, this is optional): ${originalMessage}. EV Charger data will likely be unavailable.`);
+        // evChargerId remains null
     }
   }
 
   if (!inverterSerial) { 
-    throw new Error("Inverter serial could not be determined after device discovery.");
+    // This should have been caught earlier, but as a safeguard:
+    throw new Error("Inverter serial could not be determined after device discovery and EV charger search.");
   }
 
   return { inverterSerial: inverterSerial!, evChargerId };
 }
+
 
 export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     if (!apiKey) {
@@ -215,23 +232,25 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerI
     if (!apiStatus) return "unavailable";
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
-    if (lowerApiStatus === "available") return "disconnected";
+    // Direct OCPP 1.6 mappings from documentation
+    if (lowerApiStatus === "available") return "disconnected"; // "Available" means not plugged in
     if (lowerApiStatus === "preparing") return "preparing";
     if (lowerApiStatus === "charging") return "charging";
-    if (lowerApiStatus === "suspendedevse" || lowerApiStatus === "suspendedev") return "suspended";
+    if (lowerApiStatus === "suspendedevse") return "suspended"; // Covers SuspendedEVSE
+    if (lowerApiStatus === "suspendedev") return "suspended";   // Covers SuspendedEV
     if (lowerApiStatus === "finishing") return "finishing";
     if (lowerApiStatus === "reserved") return "reserved";
-    if (lowerApiStatus === "unavailable") return "unavailable";
+    if (lowerApiStatus === "unavailable") return "unavailable"; // Device itself is unavailable/out of service
     if (lowerApiStatus === "faulted") return "faulted";
     
-    // GivEnergy specific or other common terms
-    const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused", "plugged in", "idle"];
+    // GivEnergy specific or other common terms that might imply an idle but connected state
+    const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused", "plugged in", "idle", "connected"];
      if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
         return "idle"; 
     }
     
     console.warn(`Unknown EV Charger status from API: "${apiStatus}". Defaulting to "unavailable".`);
-    return "unavailable";
+    return "unavailable"; // Default for unmapped statuses
 }
 
 
@@ -257,7 +276,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: batteryPercentage,
     unit: "%",
     percentage: batteryPercentage,
-    charging: batteryPowerWatts < 0 ? true : (batteryPowerWatts > 0 ? false : undefined),
+    charging: batteryPowerWatts < -10 ? true : (batteryPowerWatts > 10 ? false : undefined), // Adding a small deadband
   };
 
   const gridPowerWatts = rawData.grid.power;
@@ -268,15 +287,14 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   };
 
   let evCharger: EVChargerStatus = {
-    value: "N/A", 
+    value: "N/A",
     unit: "kW",
-    status: "unavailable", 
+    status: "unavailable",
   };
 
   if (evChargerId && apiKey) {
     let detailedStatusFetched = false;
     try {
-      // Attempt 1: Fetch detailed EV status from /status sub-endpoint
       const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${evChargerId}/status`);
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       
@@ -288,20 +306,23 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       };
       detailedStatusFetched = true;
     } catch (errorDetailed) {
-      let detailedMsg = `Failed to fetch detailed EV charger status for ${evChargerId} (attempt 1).`;
+      let S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown ID';
+      let S_detailedErrorMsg = "Failed to fetch detailed EV charger status due to an unknown error type.";
+
       if (errorDetailed instanceof Error) {
-        detailedMsg += ` Error: ${errorDetailed.message}.`;
+        S_detailedErrorMsg = errorDetailed.message;
       } else if (typeof errorDetailed === 'string') {
-        detailedMsg += ` Error: ${errorDetailed}.`;
-      } else {
-        detailedMsg += ` Unknown error type during detailed fetch.`;
+        S_detailedErrorMsg = errorDetailed;
+      } else if (typeof errorDetailed === 'object' && errorDetailed !== null && 'message' in errorDetailed) {
+        const msg = (errorDetailed as { message: unknown }).message;
+        S_detailedErrorMsg = typeof msg === 'string' ? msg : "Object contained a non-string message for detailed EV fetch.";
       }
-      console.warn(`${detailedMsg} Will attempt fallback to basic EV info.`);
+      console.warn(`Detailed EV status fetch for ${S_evChargerId} failed (attempt 1): ${S_detailedErrorMsg}. Will attempt fallback.`);
+      // detailedStatusFetched remains false, error is handled, proceed to fallback.
     }
 
-    if (!detailedStatusFetched) {
+    if (!detailedStatusFetched) { 
       try {
-        // Attempt 2: Fallback to basic EV charger info from /ev-charger/{uuid}
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${evChargerId}`);
         const rawBasicEVData: RawEVCharger = evBasicInfoResponse.data;
         evCharger = {
@@ -310,22 +331,26 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
           status: mapEVChargerAPIStatus(rawBasicEVData.status),
         };
       } catch (errorBasic) {
-        let basicMsg = `Failed to fetch basic EV charger info for ${evChargerId} (fallback attempt 2).`;
-         if (errorBasic instanceof Error) {
-          basicMsg += ` Error: ${errorBasic.message}.`;
+        let S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown ID';
+        let S_basicErrorMsg = "Failed to fetch basic EV charger info due to an unknown error type.";
+
+        if (errorBasic instanceof Error) {
+          S_basicErrorMsg = errorBasic.message;
         } else if (typeof errorBasic === 'string') {
-          basicMsg += ` Error: ${errorBasic}.`;
-        } else {
-          basicMsg += ` Unknown error type during fallback fetch.`;
+          S_basicErrorMsg = errorBasic;
+        } else if (typeof errorBasic === 'object' && errorBasic !== null && 'message' in errorBasic) {
+          const msg = (errorBasic as { message: unknown }).message;
+          S_basicErrorMsg = typeof msg === 'string' ? msg : "Object contained a non-string message for basic EV info fetch.";
         }
-        console.warn(`${basicMsg} Defaulting EV charger to unavailable.`);
-        // evCharger remains its initial default state if fallback also fails
+        console.warn(`Fallback EV basic info fetch for ${S_evChargerId} also failed (attempt 2): ${S_basicErrorMsg}. Defaulting EV charger to unavailable.`);
+        evCharger = { value: "N/A", unit: "kW", status: "unavailable" }; 
       }
     }
   } else {
     if (!evChargerId) {
         console.log("No EV Charger ID available from device discovery, EV Charger data will be default/unavailable.");
     }
+     evCharger = { value: "N/A", unit: "kW", status: "unavailable" }; 
   }
 
   return {
@@ -342,6 +367,9 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   if (!apiKey) {
     throw new Error("API Key not provided for getAccountDetails");
   }
+  // Assuming the response for /account is not paginated and directly returns { data: AccountData }
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
+
+    
