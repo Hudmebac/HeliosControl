@@ -42,11 +42,9 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     if (!response.ok) {
       let errorBody: any = {};
       try {
-        // Try to parse the error body, but don't let this fail the function
         errorBody = await response.json();
       } catch (e) {
-        // GivEnergy might return non-JSON error for some statuses like 404 with empty body
-        // Or if the proxy itself had an issue and returned non-JSON
+        // Non-JSON error response or empty body
       }
       const errorMessage = errorBody?.error || errorBody?.message || `API Request Error: ${response.status} ${response.statusText}`;
       console.error(`GivEnergy API error for ${fetchUrl}: ${response.status}`, errorBody);
@@ -63,7 +61,6 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       originalMessage = (error as {message: string}).message;
     }
     
-    // Check if it's a network error related to the proxy itself
     if (error instanceof TypeError && 
         (originalMessage.toLowerCase().includes('failed to fetch') ||
          originalMessage.toLowerCase().includes('networkerror') ||
@@ -73,13 +70,10 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       throw new Error(detailedMessage);
     }
     
-    // If the error message already indicates it's from the API or proxy, re-throw it as is.
-    // This helps preserve specific error messages thrown by the previous block (if !response.ok).
     if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error for") || originalMessage.startsWith("Network error:")) {
-        throw error; // Re-throw the original error object
+        throw error; 
     }
 
-    // For other types of errors caught here (e.g., issues within _fetchGivEnergyAPI itself before fetch, unlikely)
     const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
     console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
     throw new Error(errorMessage);
@@ -89,6 +83,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   if (!apiKey) return false;
   try {
+    // Use singular endpoint as per recent findings
     await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-device");
     return true;
   } catch (error) {
@@ -108,6 +103,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let evChargerId: string | null = null;
 
   const allCommDevices: RawCommunicationDevice[] = [];
+  // Use singular endpoint based on documentation for listing communication devices
   let commDevicesNextPageEndpoint: string | null = "/communication-device"; 
 
   try {
@@ -131,6 +127,9 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
       }
     }
     
+    // The primary inverter's serial number is found directly in the inverter object
+    // associated with the communication device.
+    // We assume the first device with an inverter serial is the primary.
     const primaryDevice = allCommDevices.find(device => device.inverter?.serial);
     if (primaryDevice && primaryDevice.inverter?.serial) {
         inverterSerial = primaryDevice.inverter.serial;
@@ -153,7 +152,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     }
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", originalMessage, error);
     if (originalMessage && (originalMessage.toLowerCase().includes('network error:') || originalMessage.startsWith('API Request Error:') || originalMessage.startsWith('API Request Failed via Proxy:') || originalMessage.startsWith('GivEnergy API error:'))) {
-        throw error; // Re-throw original error if it's already informative
+        throw error; 
     }
     throw new Error(`Failed to retrieve essential device identifiers (communication devices pagination via proxy): ${originalMessage}`);
   }
@@ -182,6 +181,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
         }
       }
 
+      // Assuming the first EV charger found is the one to be used.
       if (allEVChargers.length > 0 && allEVChargers[0].uuid) {
           evChargerId = allEVChargers[0].uuid;
       } else {
@@ -198,7 +198,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     }
   }
 
-  if (!inverterSerial) { // Should have been caught above, but as a safeguard
+  if (!inverterSerial) { 
     throw new Error("Inverter serial could not be determined after device discovery.");
   }
 
@@ -216,17 +216,22 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerI
     if (!apiStatus) return "unavailable";
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
-    if (lowerApiStatus === "available") return "disconnected";
+    // Direct mappings from OCPP 1.6 like statuses
+    if (lowerApiStatus === "available") return "disconnected"; // "Available" means EV not plugged in
     if (lowerApiStatus === "preparing") return "preparing";
     if (lowerApiStatus === "charging") return "charging";
     if (lowerApiStatus === "suspendedevse" || lowerApiStatus === "suspendedev") return "suspended";
-    if (lowerApiStatus === "finishing") return "finishing";
+    if (lowerApiStatus === "finishing") return "finishing"; // OCPP Finishing (still plugged in, charge complete)
     if (lowerApiStatus === "reserved") return "reserved";
-    if (lowerApiStatus === "unavailable") return "unavailable";
+    if (lowerApiStatus === "unavailable") return "unavailable"; // Charger itself is unavailable
     if (lowerApiStatus === "faulted") return "faulted";
-    
+
+    // GivEnergy specific or other common terms that might imply an idle/standby state
     const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused", "plugged in"];
     if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
+        // If it's "charging" already caught, otherwise consider these idle or preparing if not charging.
+        // "vehicle connected" or "plugged in" but not "charging" could be "preparing" or simply "idle"
+        // For simplicity, we'll map these to idle if not charging, as detailed power will confirm actual charging.
         return "idle"; 
     }
     
@@ -237,9 +242,6 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerI
 
 export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const { inverterSerial, evChargerId } = await getDeviceIDs(apiKey);
-
-  // If inverterSerial is null here, getDeviceIDs would have thrown an error already.
-  // So, we can assume inverterSerial is valid.
 
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
   const rawData: RawSystemDataLatest = systemDataResponse.data;
@@ -271,12 +273,12 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   };
 
   let evCharger: EVChargerStatus = {
-    value: "N/A", // Default to N/A for power
+    value: "N/A", 
     unit: "kW",
     status: "unavailable", 
   };
 
-  if (evChargerId) {
+  if (evChargerId && apiKey) { // Ensure apiKey is also checked here for safety
     try {
       // Attempt 1: Fetch detailed EV status from /status sub-endpoint
       const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${evChargerId}/status`);
@@ -288,15 +290,16 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         unit: "kW",
         status: mapEVChargerAPIStatus(rawDetailedEVData.status),
       };
-    } catch (errorDetailed: unknown) {
-      // Log the error from the detailed fetch attempt
-      let detailedErrorMessage = "Unknown error during detailed EV status fetch";
+    } catch (errorDetailed) { // Catch any error from attempt 1
+      let detailedMsg = `Failed to fetch detailed EV charger status for ${evChargerId} (attempt 1).`;
       if (errorDetailed instanceof Error) {
-        detailedErrorMessage = errorDetailed.message;
+        detailedMsg += ` Error: ${errorDetailed.message}.`;
       } else if (typeof errorDetailed === 'string') {
-        detailedErrorMessage = errorDetailed;
+        detailedMsg += ` Error: ${errorDetailed}.`;
+      } else {
+        detailedMsg += ` Unknown error type during detailed fetch.`;
       }
-      console.warn(`Failed to fetch detailed EV charger status for ${evChargerId} (attempt 1): ${detailedErrorMessage}. Will attempt fallback.`);
+      console.warn(`${detailedMsg} Will attempt fallback.`);
 
       // Attempt 2: Fallback to basic EV charger info from /ev-charger/{uuid}
       try {
@@ -307,20 +310,29 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
           unit: "kW",
           status: mapEVChargerAPIStatus(rawBasicEVData.status),
         };
-      } catch (errorBasic: unknown) {
-        let basicErrorMessage = "Unknown error during basic EV info fetch";
+      } catch (errorBasic) { // Catch any error from attempt 2
+        let basicMsg = `Failed to fetch basic EV charger info for ${evChargerId} (fallback attempt 2).`;
         if (errorBasic instanceof Error) {
-            basicErrorMessage = errorBasic.message;
+          basicMsg += ` Error: ${errorBasic.message}.`;
         } else if (typeof errorBasic === 'string') {
-            basicErrorMessage = errorBasic;
+          basicMsg += ` Error: ${errorBasic}.`;
+        } else {
+          basicMsg += ` Unknown error type during fallback fetch.`;
         }
-        console.warn(`Failed to fetch basic EV charger info for ${evChargerId} (fallback attempt 2): ${basicErrorMessage}. Defaulting EV charger to unavailable.`);
-        // evCharger is already defaulted to unavailable, value N/A, unit kW from its initial declaration
+        console.warn(`${basicMsg} Defaulting EV charger to unavailable.`);
+        // Ensure evCharger is set to its default/error state from the initial declaration
+        evCharger = {
+            value: "N/A",
+            unit: "kW",
+            status: "unavailable",
+        };
       }
     }
   } else {
-    console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
-    // evCharger remains its default initialized value
+    if (!evChargerId) {
+        console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
+    }
+    // evCharger remains its initial default state
   }
 
   return {
@@ -332,5 +344,3 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     timestamp: new Date(rawData.time).getTime() || Date.now(),
   };
 }
-
-    
