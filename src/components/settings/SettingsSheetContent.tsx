@@ -19,6 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 export function SettingsSheetContent() {
   const { refreshInterval, setRefreshInterval, refreshIntervalOptions, isSettingsLoaded } = useAppSettings();
@@ -32,16 +38,29 @@ export function SettingsSheetContent() {
         </SheetDescription>
       </SheetHeader>
       <div className="py-6 space-y-6">
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-foreground">Authentication</h3>
-          <AuthenticationArea />
-        </div>
+        
+        <Accordion type="multiple" className="w-full">
+          <AccordionItem value="authentication">
+            <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+              Authentication
+            </AccordionTrigger>
+            <AccordionContent className="pt-4">
+              <AuthenticationArea />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="account-details">
+            <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+              Account Details
+            </AccordionTrigger>
+            <AccordionContent className="pt-4">
+              <AccountCard />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         <Separator />
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-foreground">Account Details</h3>
-          <AccountCard />
-        </div>
-        <Separator />
+        
         <div>
           <h3 className="text-lg font-semibold mb-3 text-foreground">Preferences</h3>
           <div className="space-y-2 p-3 bg-muted/50 rounded-md">
