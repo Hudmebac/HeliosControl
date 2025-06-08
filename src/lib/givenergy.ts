@@ -51,15 +51,17 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
 
 async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let inverterSerial: string | null = null;
+  let inverterCommDeviceUUID: string | null = null;
   let evChargerId: string | null = null;
 
   try {
     const commDevicesResponse = await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-devices");
     if (commDevicesResponse.data && commDevicesResponse.data.length > 0) {
       inverterSerial = commDevicesResponse.data[0].inverter.serial;
+      inverterCommDeviceUUID = commDevicesResponse.data[0].uuid;
     }
   } catch (error) {
-    console.warn("Could not fetch communication devices (inverter serial):", error);
+    console.warn("Could not fetch communication devices (inverter serial/UUID):", error);
     // Potentially throw error if inverter serial is critical and not found
   }
 
@@ -73,7 +75,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
       // It's okay if no EV charger is found, it's optional.
   }
   
-  return { inverterSerial, evChargerId };
+  return { inverterSerial, inverterCommDeviceUUID, evChargerId };
 }
 
 export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {

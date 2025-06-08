@@ -24,7 +24,7 @@ export interface RealTimeData {
 
 export interface GivEnergyIDs {
   inverterSerial: string | null;
-  // inverterUUID: string; // UUID might not be directly needed by system-data/latest endpoint if serial is primary key
+  inverterCommDeviceUUID: string | null; // UUID of the communication device associated with the inverter
   evChargerId?: string | null;
 }
 
@@ -37,7 +37,7 @@ interface GivEnergyAPIData<T> {
 }
 
 export interface RawCommunicationDevice {
-  uuid: string;
+  uuid: string; // This is the communication device UUID
   inverter: {
     serial: string;
     model: string;
