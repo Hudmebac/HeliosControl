@@ -28,7 +28,7 @@ export function DashboardCard({ title, value, unit, icon, description, children,
         {isLoading ? (
            <div className="h-10 w-3/4 bg-muted animate-pulse rounded-md"></div>
         ) : (
-          <div className={cn("text-2xl font-bold", valueColorClassName)}>
+          <div className={cn("text-2xl font-bold transition-colors duration-500 ease-in-out", valueColorClassName)}>
             {value}
             {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
           </div>

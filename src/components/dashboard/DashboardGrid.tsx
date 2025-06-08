@@ -106,10 +106,20 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     // If none of the above, implies an unusual state or covered by grid import, default color.
   }
 
+  // Determine Solar Generation color
+  let solarColorClassName = "";
+  if (data.numericSolarGenerationKW < 1) {
+    solarColorClassName = "text-[#C0C0C0]"; // Silver
+  } else if (data.numericSolarGenerationKW <= 3.5) {
+    solarColorClassName = "text-[#00A86B]"; // Green
+  } else {
+    solarColorClassName = "text-[#FFA500]"; // Orange
+  }
+
 
   const actualCardData = [
     { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}`, valueColorClassName: hcColor },
-    { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" /> },
+    { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" />, valueColorClassName: solarColorClassName },
     { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle" },
     { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: data.grid.flow === 'idle' ? <PowerOff className="h-6 w-6" /> : <PlugZap className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) },
     { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: data.evCharger.status === 'charging' ? <Bolt className="h-6 w-6 text-green-500" /> : <Power className="h-6 w-6" />, description: data.evCharger.status.charAt(0).toUpperCase() + data.evCharger.status.slice(1) },
