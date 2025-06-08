@@ -27,23 +27,38 @@ export async function GET(
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      // IMPORTANT: Do not pass the original request's body for GET requests.
-      // If you need to support POST/PUT etc. in the future, handle body appropriately.
     });
 
-    const data = await apiResponse.json();
-
     if (!apiResponse.ok) {
-      // Forward the error status and body from GivEnergy API
-      return NextResponse.json(data || { error: `GivEnergy API error: ${apiResponse.status}` }, { status: apiResponse.status });
+      let errorPayload;
+      try {
+        // Attempt to parse the error body from GivEnergy if it's JSON
+        errorPayload = await apiResponse.json();
+      } catch (parseError) {
+        // If GivEnergy returns a non-JSON error response or empty body
+        errorPayload = { 
+          error: `GivEnergy API error: ${apiResponse.status} ${apiResponse.statusText}.`,
+          details: `Target response status: ${apiResponse.status}. Response body was not valid JSON or was empty.`
+        };
+      }
+      // Ensure the payload is an object, if GivEnergy sent a primitive (e.g. just a string)
+      if (typeof errorPayload !== 'object' || errorPayload === null) {
+        errorPayload = { error: String(errorPayload) };
+      }
+      // Add a generic error message if one wasn't parsed or constructed
+      if (!errorPayload.error && !errorPayload.message) {
+        errorPayload.error = `GivEnergy API request failed with status ${apiResponse.status}.`;
+      }
+      return NextResponse.json(errorPayload, { status: apiResponse.status });
     }
 
-    return NextResponse.json(data);
+    // For successful responses from GivEnergy
+    const successData = await apiResponse.json();
+    return NextResponse.json(successData);
+
   } catch (error: any) {
     console.error('Error in GivEnergy proxy:', error);
+    // This catch is for network errors or unexpected issues in the proxy itself
     return NextResponse.json({ error: 'Proxy request failed', details: error.message }, { status: 500 });
   }
 }
-
-// If you need to support other methods like POST, you'd add them here:
-// export async function POST(request: NextRequest, { params }: { params: { slug: string[] } }) { ... }
