@@ -36,10 +36,31 @@ export interface RealTimeData {
 
 export interface GivEnergyIDs {
   inverterSerial: string | null;
-  evChargerId?: string | null; // This will be the UUID of the EV Charger
+  evChargerId?: string | null;
 }
 
 export type Theme = "light" | "dark" | "hc-light" | "hc-dark" | "system";
+
+export interface AccountData {
+  id: number;
+  name: string;
+  first_name: string | null;
+  surname: string | null;
+  role: string;
+  email: string;
+  address: string | null;
+  postcode: string | null;
+  country: string | null;
+  telephone_number: string | null;
+  timezone: string;
+  standard_timezone: string;
+  company: string | null;
+}
+
+export interface RawAccountResponse {
+  data: AccountData;
+}
+
 
 // --- API Response Link and Meta structures for Paginated Responses ---
 export interface GivEnergyAPILinks {
@@ -69,18 +90,17 @@ export interface GivEnergyPaginatedResponse<T> {
 // --- Raw API Response Types (internal to givenergy.ts) ---
 
 // For non-paginated single-object data responses
-interface GivEnergyAPIData<T> {
+export interface GivEnergyAPIData<T> { // Corrected export
   data: T;
 }
 
 export interface RawCommunicationDevice {
-  // uuid field is not present in the "GET /communication-device" list example from new docs
   serial_number: string;
   type: string;
-  commission_date?: string; // Optional as per some examples
+  commission_date?: string;
   inverter: {
     serial: string;
-    status?: string; // Optional as per some examples
+    status?: string;
     last_online?: string;
     last_updated?: string;
     commission_date?: string;
@@ -89,7 +109,7 @@ export interface RawCommunicationDevice {
         battery: {
             nominal_capacity: number;
             nominal_voltage: number;
-            depth_of_discharge?: number; // Optional
+            depth_of_discharge?: number;
         };
         model: string;
         max_charge_rate: number;
@@ -98,13 +118,13 @@ export interface RawCommunicationDevice {
         type: string;
         expiry_date: string;
     };
-    firmware_version: { // Changed from string to object based on new docs
+    firmware_version: {
         ARM: number | null;
         DSP: number | null;
-    } | string; // Allowing string for resilience if API is inconsistent or other endpoints are used
-    connections?: { // Optional
-        batteries: any[]; // Simplified for now
-        meters?: any[]; // Simplified for now
+    } | string;
+    connections?: {
+        batteries: any[];
+        meters?: any[];
     };
     flags?: string[];
   };
@@ -113,42 +133,41 @@ export type RawCommunicationDevicesResponse = GivEnergyPaginatedResponse<RawComm
 
 
 export interface RawEVCharger {
-    uuid: string; // Changed from id to uuid
+    uuid: string;
     serial_number: string;
     type: string;
     alias: string;
     online: boolean;
     went_offline_at: string | null;
-    status: string; // Raw status from API, will be mapped
+    status: string;
 }
 export type RawEVChargersResponse = GivEnergyPaginatedResponse<RawEVCharger>;
 
 
 export interface RawSystemDataLatest {
   time: string;
-  status: string; // Top-level status added
+  status: string;
   solar: { power: number; arrays: { array: number; voltage: number; current: number; power: number }[] };
   grid: { voltage: number; current: number; power: number; frequency: number };
   battery: { percent: number; power: number; temperature: number };
   inverter: {
     temperature: number;
     power: number;
-    // status: string; // Removed from here as per example, now top-level
-    output_voltage: number; // Added
-    output_frequency: number; // Added
+    output_voltage: number;
+    output_frequency: number;
     eps_power: number;
   };
-  consumption: number; // Changed from { power: number } to number
+  consumption: number;
 }
 export type RawSystemDataLatestResponse = GivEnergyAPIData<RawSystemDataLatest>;
 
 
 export interface RawEVChargerStatus {
     mode: string;
-    status: string; // This is the raw string status from the API
+    status: string;
     charge_session: {
         status: string;
-        power: number; // Watts
+        power: number | null; // Watts, can be null
         kwh_delivered: number;
         start_time: string | null;
         end_time: string | null;
