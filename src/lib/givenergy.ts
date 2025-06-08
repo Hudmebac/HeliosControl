@@ -50,7 +50,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     if (error instanceof TypeError &&
         (originalMessage.toLowerCase().includes('failed to fetch') ||
          originalMessage.toLowerCase().includes('networkerror') ||
-         originalMessage.toLowerCase().includes('load failed'))) { 
+         originalMessage.toLowerCase().includes('load failed'))) {
       const detailedMessage = `Network error: Could not connect to GivEnergy API (${GIVENERGY_API_BASE_URL}). Please check your internet connection, VPN/proxy settings, or if the API is temporarily unavailable. (Original error: ${originalMessage})`;
       console.error("Throwing detailed network error from _fetchGivEnergyAPI:", detailedMessage);
       throw new Error(detailedMessage);
@@ -97,7 +97,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs:", error);
     const baseMessage = "Failed to retrieve essential device identifiers from GivEnergy";
     if (error.message && (error.message.toLowerCase().includes('network error:') || error.message.toLowerCase().includes('givenergy api error:'))) {
-        throw error; 
+        throw error;
     }
     throw new Error(`${baseMessage}: ${error.message || 'An unknown error occurred.'}`);
   }
@@ -131,7 +131,7 @@ function mapEVChargerAPIStatus(apiStatus: string): EVChargerStatus['status'] {
     if (lowerApiStatus.includes("charging")) return "charging";
     if (lowerApiStatus.includes("disconnected") || lowerApiStatus.includes("idle") || lowerApiStatus.includes("paused") || lowerApiStatus.includes("scheduled")) return "idle";
     if (lowerApiStatus.includes("fault") || lowerApiStatus.includes("error")) return "faulted";
-    return "disconnected"; // Default to disconnected if status is unknown
+    return "disconnected";
 }
 
 
@@ -184,7 +184,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       };
     } catch (error: any) {
         console.warn(`Failed to fetch EV charger (${evChargerId}) status (this is optional): ${error.message}`);
-         evCharger.status = "disconnected"; // Ensure status reflects inability to fetch
+         evCharger.status = "disconnected";
     }
   }
 

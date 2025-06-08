@@ -19,7 +19,7 @@ export function useGivEnergyData(apiKey: string | null) {
     if (!apiKey) {
       setData(null);
       setError("API Key not provided. Please enter your GivEnergy API key.");
-      setIsLoading(false); 
+      setIsLoading(false);
       return;
     }
 
@@ -41,7 +41,7 @@ export function useGivEnergyData(apiKey: string | null) {
     } catch (e: any) {
       console.error("Error in useGivEnergyData fetchData:", e);
       setError(e.message || "An unexpected error occurred while fetching data. Please check your API key, network connection, and ensure your GivEnergy devices are online and correctly configured.");
-      setData(null); 
+      setData(null);
     } finally {
       setIsLoading(false);
     }
@@ -49,13 +49,13 @@ export function useGivEnergyData(apiKey: string | null) {
 
   useEffect(() => {
     if (apiKey) {
-      fetchData(); 
+      fetchData();
       const intervalId = setInterval(fetchData, REFRESH_INTERVAL);
       return () => clearInterval(intervalId);
     } else {
-      setData(null); 
-      setError(null); 
-      setIsLoading(false); 
+      setData(null);
+      setError(null);
+      setIsLoading(false);
     }
   }, [apiKey, fetchData]);
 
