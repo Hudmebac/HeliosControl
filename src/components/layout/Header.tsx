@@ -1,6 +1,13 @@
 
 import { AppLogo } from "@/components/layout/AppLogo";
 import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
+import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
+import {
+  Sheet,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { SettingsSheetContent } from "@/components/settings/SettingsSheetContent";
 
 export function Header() {
   return (
@@ -12,6 +19,14 @@ export function Header() {
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
           <ThemeSwitcher />
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Open application settings">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SettingsSheetContent />
+          </Sheet>
         </div>
       </div>
     </header>

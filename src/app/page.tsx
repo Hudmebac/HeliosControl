@@ -3,20 +3,12 @@
 
 import { useApiKey } from "@/hooks/use-api-key";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
-import { Loader2 } from "lucide-react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { AuthenticationArea } from "@/components/auth/AuthenticationArea";
-import { AccountCard } from "@/components/account/AccountCard";
-import { AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Settings } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button"; // Added for potential settings button
 
 export default function HomePage() {
-  const { apiKey, isLoading: isApiKeyHookLoading, deviceIDsError } = useApiKey();
+  const { apiKey, isLoading: isApiKeyHookLoading } = useApiKey();
 
   if (isApiKeyHookLoading) {
     return (
@@ -27,40 +19,17 @@ export default function HomePage() {
     );
   }
 
-  const defaultAccordionValue = !apiKey ? "auth-item" : undefined;
-
   return (
     <div className="w-full space-y-6">
-      <Accordion type="single" collapsible className="w-full" defaultValue={defaultAccordionValue}>
-        <AccordionItem value="auth-item">
-          <AccordionTrigger className="text-xl font-semibold hover:no-underline focus:no-underline pb-3 pt-1">
-            Authentication & System Setup
-          </AccordionTrigger>
-          <AccordionContent>
-            <AuthenticationArea />
-          </AccordionContent>
-        </AccordionItem>
-
-        {apiKey && (
-          <AccordionItem value="account-item">
-            <AccordionTrigger className="text-xl font-semibold hover:no-underline focus:no-underline pb-3 pt-1">
-                Account Details
-            </AccordionTrigger>
-            <AccordionContent>
-              <AccountCard />
-            </AccordionContent>
-          </AccordionItem>
-        )}
-      </Accordion>
-
-      {apiKey && <DashboardGrid apiKey={apiKey} />}
-      
-      {!apiKey && !isApiKeyHookLoading && (
-         <Alert>
+      {apiKey ? (
+        <DashboardGrid apiKey={apiKey} />
+      ) : (
+         <Alert variant="default" className="mt-8">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>API Key Required</AlertTitle>
+          <AlertTitle>Welcome to Helios Control!</AlertTitle>
           <AlertDescription>
-            Please configure your GivEnergy API key in the 'Authentication & System Setup' section above to view your energy dashboard.
+            To get started, please configure your GivEnergy API key.
+            You can do this by clicking the <Settings className="inline-block h-4 w-4 mx-1" /> settings icon in the header.
           </AlertDescription>
         </Alert>
       )}
