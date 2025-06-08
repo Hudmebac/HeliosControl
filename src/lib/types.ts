@@ -30,26 +30,49 @@ export interface GivEnergyIDs {
 
 export type Theme = "light" | "dark" | "hc-light" | "hc-dark" | "system";
 
+// --- API Response Link and Meta structures for Paginated Responses ---
+export interface GivEnergyAPILinks {
+  first: string | null;
+  last: string | null;
+  prev: string | null;
+  next: string | null;
+}
+
+export interface GivEnergyAPIMeta {
+  current_page: number;
+  from: number | null;
+  last_page: number;
+  path: string;
+  per_page: number;
+  to: number | null;
+  total: number;
+}
+
+// --- Generic Paginated API Response Type ---
+export interface GivEnergyPaginatedResponse<T> {
+  data: T[];
+  links: GivEnergyAPILinks;
+  meta: GivEnergyAPIMeta;
+}
+
 // --- Raw API Response Types (internal to givenergy.ts) ---
 
+// For non-paginated single-object data responses
 interface GivEnergyAPIData<T> {
   data: T;
 }
 
 export interface RawCommunicationDevice {
-  uuid: string; // UUID of the communication device
-  serial_number: string; // Serial number of the communication device itself
-  type: string; // Type of the communication device, e.g., "WIFI", "4G"
-  // online?: boolean; // Optional: based on GivEnergy docs
-  // last_online?: string; // Optional: based on GivEnergy docs
+  uuid: string;
+  serial_number: string; 
+  type: string; 
   inverter: {
     serial: string;
-    // model: string; // Removed, as it's nested deeper (inverter.info.model) if needed
-    firmware_version: string; // e.g., "D0.450-A0.416" as per /communication-devices doc
-    // status?: string; // Optional: based on GivEnergy docs
+    firmware_version: string;
   };
 }
-export type RawCommunicationDevicesResponse = GivEnergyAPIData<RawCommunicationDevice[]>;
+// Updated to use paginated response type
+export type RawCommunicationDevicesResponse = GivEnergyPaginatedResponse<RawCommunicationDevice>;
 
 
 export interface RawEVCharger {
@@ -57,9 +80,10 @@ export interface RawEVCharger {
     alias: string;
     serial_number: string;
     type: string;
-    status: string; // e.g., "ONLINE"
+    status: string; 
 }
-export type RawEVChargersResponse = GivEnergyAPIData<RawEVCharger[]>;
+// Updated to use paginated response type
+export type RawEVChargersResponse = GivEnergyPaginatedResponse<RawEVCharger>;
 
 
 export interface RawSystemDataLatest {
@@ -74,8 +98,8 @@ export type RawSystemDataLatestResponse = GivEnergyAPIData<RawSystemDataLatest>;
 
 
 export interface RawEVChargerStatus {
-    mode: string; // e.g. "SMART"
-    status: string; // e.g. "CHARGING_SCHEDULED", "CHARGING", "IDLE", "DISCONNECTED", "PAUSED", "FAULTED", "ERROR"
+    mode: string; 
+    status: string; 
     charge_session: {
         status: string;
         power: number; // Watts
@@ -86,4 +110,3 @@ export interface RawEVChargerStatus {
     vehicle_connected: boolean;
 }
 export type RawEVChargerStatusResponse = GivEnergyAPIData<RawEVChargerStatus>;
-
