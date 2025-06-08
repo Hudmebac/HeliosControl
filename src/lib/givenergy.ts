@@ -9,7 +9,8 @@ const MOCK_API_KEY_VALID = "VALID_KEY"; // Replace with a mock valid key for tes
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   // Simulate API call to validate key
   await new Promise(resolve => setTimeout(resolve, 500));
-  return apiKey === MOCK_API_KEY_VALID || apiKey.startsWith("sk_"); // Basic mock validation
+  // Basic mock validation - allows the MOCK_API_KEY_VALID or any non-empty string for broader testing.
+  return apiKey === MOCK_API_KEY_VALID || (apiKey && apiKey.length > 0); 
 }
 
 export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
