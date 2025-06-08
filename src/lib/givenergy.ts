@@ -56,26 +56,44 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
 
   try {
     const commDevicesResponse = await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-devices");
-    if (commDevicesResponse.data && commDevicesResponse.data.length > 0) {
+    if (commDevicesResponse.data &&
+        commDevicesResponse.data.length > 0 &&
+        commDevicesResponse.data[0].inverter &&
+        commDevicesResponse.data[0].inverter.serial &&
+        commDevicesResponse.data[0].uuid) {
       inverterSerial = commDevicesResponse.data[0].inverter.serial;
       inverterCommDeviceUUID = commDevicesResponse.data[0].uuid;
+    } else {
+      throw new Error("No active communication devices found for this API key, or the primary device is missing required information (inverter serial/UUID). Please check your GivEnergy account setup.");
     }
   } catch (error) {
-    console.warn("Could not fetch communication devices (inverter serial/UUID):", error);
-    // Potentially throw error if inverter serial is critical and not found
+    console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs:", error);
+    const baseMessage = "Failed to retrieve essential device identifiers from GivEnergy";
+    if (error instanceof Error) {
+        throw new Error(`${baseMessage}: ${error.message}`);
+    }
+    throw new Error(`${baseMessage}: An unknown error occurred.`);
   }
 
-  try {
-    const evChargersResponse = await _fetchGivEnergyAPI<RawEVChargersResponse>(apiKey, "/ev-charger");
-    if (evChargersResponse.data && evChargersResponse.data.length > 0) {
-        evChargerId = evChargersResponse.data[0].id;
+  // EV Charger fetching (optional, so failures are logged but don't stop the process if inverter ID was found)
+  // This ensures inverterSerial is not null due to the throw logic above.
+  // However, TypeScript still sees inverterSerial as string | null from its initial declaration.
+  // The control flow guarantees it's a string if this point is reached without an error.
+  if (inverterSerial) { 
+    try {
+      const evChargersResponse = await _fetchGivEnergyAPI<RawEVChargersResponse>(apiKey, "/ev-charger");
+      if (evChargersResponse.data && evChargersResponse.data.length > 0 && evChargersResponse.data[0].id) {
+          evChargerId = evChargersResponse.data[0].id;
+      } else {
+        console.log("No EV chargers found or EV charger data is incomplete for this API key.");
+      }
+    } catch (error) {
+        console.warn("Could not fetch EV chargers list (this is optional):", error);
     }
-  } catch (error) {
-      console.warn("Could not fetch EV chargers list:", error);
-      // It's okay if no EV charger is found, it's optional.
   }
   
-  return { inverterSerial, inverterCommDeviceUUID, evChargerId };
+  // If we reach here, inverterSerial and inverterCommDeviceUUID must be non-null due to the throw logic.
+  return { inverterSerial: inverterSerial!, inverterCommDeviceUUID: inverterCommDeviceUUID!, evChargerId };
 }
 
 export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
@@ -101,11 +119,9 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     throw new Error("API Key not provided");
   }
 
+  // _getPrimaryDeviceIDs will throw if inverterSerial cannot be obtained.
+  // The inverterSerial from its return type will be a string if successful.
   const { inverterSerial, evChargerId } = await _getPrimaryDeviceIDs(apiKey);
-
-  if (!inverterSerial) {
-    throw new Error("Could not retrieve inverter serial number. Cannot fetch real-time data.");
-  }
 
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
   const rawData = systemDataResponse.data;
@@ -169,3 +185,4 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     timestamp: new Date(rawData.time).getTime() || Date.now(),
   };
 }
+
