@@ -26,3 +26,4 @@ class EventBus {
 
 export const appEventBus = new EventBus();
 export const REFRESH_DASHBOARD_EVENT = 'refreshDashboard';
+export const DATA_FETCH_COMPLETED_EVENT = 'dataFetchCompleted';

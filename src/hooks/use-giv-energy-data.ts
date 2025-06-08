@@ -6,7 +6,7 @@ import type { RealTimeData } from "@/lib/types";
 import { getRealTimeData } from "@/lib/givenergy";
 import { useToast } from "@/hooks/use-toast";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { appEventBus, REFRESH_DASHBOARD_EVENT } from "@/lib/event-bus";
+import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT } from "@/lib/event-bus";
 
 const HIGH_CONSUMPTION_THRESHOLD = 2.5; // kW from grid
 
@@ -22,6 +22,7 @@ export function useGivEnergyData(apiKey: string | null) {
       setData(null);
       setError("API Key not provided. Please configure your API key in Settings.");
       setIsLoading(false);
+      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT); // Emit completion even if no API key
       return;
     }
 
@@ -49,14 +50,14 @@ export function useGivEnergyData(apiKey: string | null) {
 
     } catch (e: unknown) {
       let errorMessage = "An unexpected error occurred while fetching data. Please check your API key, network connection, and ensure your GivEnergy devices are online and correctly configured.";
-      if (typeof e === 'string') {
-        errorMessage = e;
-      } else if (e instanceof Error) {
+      if (e instanceof Error) {
         errorMessage = e.message;
+      } else if (typeof e === 'string') {
+        errorMessage = e;
       }
       console.error("Error in useGivEnergyData fetchData:", e);
       setError(errorMessage);
-      setData(null); // Clear data on error
+      setData(null); 
        if (isManualRefresh) {
         toast({
           title: "Refresh Failed",
@@ -67,6 +68,7 @@ export function useGivEnergyData(apiKey: string | null) {
       }
     } finally {
       setIsLoading(false);
+      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT);
     }
   }, [apiKey, toast]);
 
@@ -86,6 +88,9 @@ export function useGivEnergyData(apiKey: string | null) {
     } else {
       setData(null);
       setIsLoading(false);
+      if (isSettingsLoaded) { // Ensure settings are loaded before emitting completion for no-API-key scenario
+        appEventBus.emit(DATA_FETCH_COMPLETED_EVENT);
+      }
     }
   }, [apiKey, fetchData, refreshInterval, isSettingsLoaded]);
 

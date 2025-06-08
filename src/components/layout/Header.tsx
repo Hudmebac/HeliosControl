@@ -4,41 +4,77 @@
 import { AppLogo } from "@/components/layout/AppLogo";
 import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Loader2 } from "lucide-react";
+import { Settings, RefreshCw, Loader2, Timer } from "lucide-react";
 import {
   Sheet,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SettingsSheetContent } from "@/components/settings/SettingsSheetContent";
-import { appEventBus, REFRESH_DASHBOARD_EVENT } from "@/lib/event-bus";
-import { useGivEnergyData } from "@/hooks/use-giv-energy-data"; // To access isLoading state
-import { useApiKey } from "@/hooks/use-api-key"; // To check if API key is set
+import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT } from "@/lib/event-bus";
+import { useApiKey } from "@/hooks/use-api-key"; 
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { useState, useEffect } from "react";
 
 
 export function Header() {
   const { apiKey } = useApiKey();
-  // We need a local loading state for the refresh button,
-  // as the global isLoading from useGivEnergyData might be true for auto-refresh too.
+  const { refreshInterval, isSettingsLoaded } = useAppSettings();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [countdown, setCountdown] = useState(refreshInterval);
 
-  // This effect is a bit of a workaround to "observe" the global loading state
-  // from useGivEnergyData. A more robust solution might involve a shared state/context
-  // for the "manual refresh in progress" specifically.
-  // For now, we assume if apiKey exists and a refresh is triggered, we manage our own button state.
+  // Effect to reset countdown when refreshInterval from settings changes
+  useEffect(() => {
+    if (isSettingsLoaded) {
+      setCountdown(refreshInterval);
+    }
+  }, [refreshInterval, isSettingsLoaded]);
+
+  // Effect for the countdown timer logic
+  useEffect(() => {
+    if (!apiKey || !isSettingsLoaded) {
+      return;
+    }
+
+    if (countdown <= 0) {
+      // This simulates the auto-refresh cycle for the timer display
+      // The actual data fetch is handled by useGivEnergyData
+      setCountdown(refreshInterval); 
+      return;
+    }
+
+    const timerId = setTimeout(() => {
+      setCountdown(prevCountdown => prevCountdown - 1);
+    }, 1000);
+
+    return () => clearTimeout(timerId);
+  }, [countdown, apiKey, isSettingsLoaded, refreshInterval]);
+
+  // Effect to listen for actual data fetch completions to reset timer
+  useEffect(() => {
+    const handleDataFetchCompleted = () => {
+      if (isSettingsLoaded) {
+        setCountdown(refreshInterval);
+      }
+    };
+    appEventBus.on(DATA_FETCH_COMPLETED_EVENT, handleDataFetchCompleted);
+    return () => {
+      appEventBus.off(DATA_FETCH_COMPLETED_EVENT, handleDataFetchCompleted);
+    };
+  }, [refreshInterval, isSettingsLoaded]);
   
   const handleRefresh = () => {
     if (!apiKey || isManualRefreshing) return;
 
     setIsManualRefreshing(true);
     appEventBus.emit(REFRESH_DASHBOARD_EVENT);
-    
-    // Simulate the refresh duration for button state.
-    // Ideally, the event bus or a callback would signal completion.
-    // This is a simplification.
+    // The DATA_FETCH_COMPLETED_EVENT listener will reset the countdown.
+    // We can also optimistically reset it here for immediate UI feedback if desired,
+    // but letting the event handle it ensures it's tied to actual fetch completion.
+    // For now, we'll rely on the event.
+
     setTimeout(() => {
       setIsManualRefreshing(false);
-    }, 2000); // Reset after 2 seconds, adjust as needed
+    }, 3000); // Reset manual refreshing state after a bit
   };
 
 
@@ -49,7 +85,13 @@ export function Header() {
           <AppLogo className="h-6 w-6 mr-2 text-primary" />
           <h1 className="text-lg font-semibold font-headline">Helios Control</h1>
         </div>
-        <div className="flex flex-1 items-center justify-end space-x-2">
+        <div className="flex flex-1 items-center justify-end space-x-2 md:space-x-4">
+          {apiKey && isSettingsLoaded && (
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <Timer className="h-4 w-4" />
+              <span>Next: {countdown}s</span>
+            </div>
+          )}
           {apiKey && (
             <Button
               variant="ghost"
