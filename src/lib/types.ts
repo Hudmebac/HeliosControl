@@ -37,15 +37,16 @@ interface GivEnergyAPIData<T> {
 }
 
 export interface RawCommunicationDevice {
-  uuid: string; // This is the communication device UUID
+  uuid: string; // UUID of the communication device
+  serial_number: string; // Serial number of the communication device itself
+  type: string; // Type of the communication device, e.g., "WIFI", "4G"
+  // online?: boolean; // Optional: based on GivEnergy docs
+  // last_online?: string; // Optional: based on GivEnergy docs
   inverter: {
     serial: string;
-    model: string;
-    firmware_version: string;
-  };
-  dongle: {
-    serial: string;
-    firmware_version: string;
+    // model: string; // Removed, as it's nested deeper (inverter.info.model) if needed
+    firmware_version: string; // e.g., "D0.450-A0.416" as per /communication-devices doc
+    // status?: string; // Optional: based on GivEnergy docs
   };
 }
 export type RawCommunicationDevicesResponse = GivEnergyAPIData<RawCommunicationDevice[]>;
@@ -85,3 +86,4 @@ export interface RawEVChargerStatus {
     vehicle_connected: boolean;
 }
 export type RawEVChargerStatusResponse = GivEnergyAPIData<RawEVChargerStatus>;
+
