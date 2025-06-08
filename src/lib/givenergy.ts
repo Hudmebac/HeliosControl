@@ -29,7 +29,6 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     "Accept": "application/json",
   });
 
-  // Ensure endpoint starts with a slash if it's not already there
   const correctedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const fetchUrl = `${PROXY_API_BASE_URL}${correctedEndpoint}`;
 
@@ -41,11 +40,11 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     });
 
     if (!response.ok) {
-      let errorBody: any = {}; // Initialize with an empty object
+      let errorBody: any = {};
       try {
         errorBody = await response.json();
       } catch (e) {
-        // Ignore if body isn't json, errorBody remains {}
+        // Ignore if body isn't json
       }
       const errorMessage = errorBody?.error || errorBody?.message || `API Request Error: ${response.status} ${response.statusText}`;
       console.error(`GivEnergy API error for ${fetchUrl}: ${response.status}`, errorBody);
@@ -69,8 +68,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       throw new Error(detailedMessage);
     }
     
-    // If the error message already indicates it's an API request error from the proxy, don't re-wrap it.
-    if (originalMessage.startsWith("API Request Error:")) {
+    if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error:")) {
         throw new Error(originalMessage);
     }
 
@@ -83,6 +81,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   if (!apiKey) return false;
   try {
+    // Use singular based on latest understanding of docs for a simple list.
     await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-device");
     return true;
   } catch (error) {
@@ -90,9 +89,11 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
     if (error instanceof Error && (error.message.includes("401") || error.message.includes("Unauthenticated"))) {
         return false;
     }
+    // Check for any 4xx error as an indicator of invalid key or permissions issues.
     if (error instanceof Error && error.message.match(/API Request Error: 4\d\d/)) {
         return false;
     }
+    // For other errors (like network issues to the proxy), validation is inconclusive / fails.
     return false;
   }
 }
@@ -102,7 +103,8 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let evChargerId: string | null = null;
 
   const allCommDevices: RawCommunicationDevice[] = [];
-  let commDevicesNextPageEndpoint: string | null = "/communication-device";
+  // Use singular based on docs for communication device listing
+  let commDevicesNextPageEndpoint: string | null = "/communication-device"; 
 
   try {
     while (commDevicesNextPageEndpoint) {
@@ -140,7 +142,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
 
   } catch (error: any) {
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", error);
-    if (error.message && (error.message.toLowerCase().includes('network error:') || error.message.startsWith('API Request Error:') || error.message.startsWith('API Request Failed via Proxy:'))) {
+    if (error.message && (error.message.toLowerCase().includes('network error:') || error.message.startsWith('API Request Error:') || error.message.startsWith('API Request Failed via Proxy:') || error.message.startsWith('GivEnergy API error:'))) {
         throw error;
     }
     throw new Error(`Failed to retrieve essential device identifiers (communication devices pagination via proxy): ${error.message || 'An unknown error occurred.'}`);
@@ -191,25 +193,24 @@ export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
 }
 
 function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerInternalStatus {
-    if (!apiStatus) return "unavailable"; // Or 'unknown'
+    if (!apiStatus) return "unavailable";
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
     // Mapping based on GivEnergy API Docs for EV Charger status (OCPP 1.6 normalization)
-    if (lowerApiStatus === "available") return "disconnected";
+    if (lowerApiStatus === "available") return "disconnected"; // "Available" means not plugged in.
     if (lowerApiStatus === "preparing") return "preparing";
     if (lowerApiStatus === "charging") return "charging";
     if (lowerApiStatus === "suspendedevse" || lowerApiStatus === "suspendedev") return "suspended";
-    if (lowerApiStatus === "finishing") return "finishing";
+    if (lowerApiStatus === "finishing") return "finishing"; // Or "completed" if better distinction needed
     if (lowerApiStatus === "reserved") return "reserved";
-    if (lowerApiStatus === "unavailable") return "unavailable";
+    if (lowerApiStatus === "unavailable") return "unavailable"; // Hardware issue, maintenance etc.
     if (lowerApiStatus === "faulted") return "faulted";
     
-    // GivEnergy specific modes that might map to 'idle' if connected but not charging.
-    const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused"];
+    // Additional GivEnergy specific modes or less common OCPP states if needed
+    // e.g. some GivEnergy specific modes might imply "idle" if connected but not actively charging/faulted
+    const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused", "plugged in"];
     if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
-        // If status indicates vehicle is connected but not charging/faulted etc., it's idle.
-        // Otherwise, if not explicitly charging and not an error state, it could be considered disconnected if not otherwise specified.
-        // The 'Available' status (mapped to 'disconnected') should cover cases where it's ready but not plugged in.
+        // "vehicle connected" or similar could imply "idle" if not charging.
         return "idle"; 
     }
     
@@ -244,7 +245,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: batteryPercentage,
     unit: "%",
     percentage: batteryPercentage,
-    charging: batteryPowerWatts < 0 ? true : (batteryPowerWatts > 0 ? false : undefined), // Negative power = charging, Positive = discharging
+    charging: batteryPowerWatts < 0 ? true : (batteryPowerWatts > 0 ? false : undefined),
   };
 
   const gridPowerWatts = rawData.grid.power;
@@ -255,14 +256,13 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   };
 
   let evCharger: EVChargerStatus = {
-    value: 0, // Default value
+    value: 0,
     unit: "kW",
-    status: "disconnected", // Default status
+    status: "unavailable", // Default to unavailable, will be updated if ID exists & fetch succeeds
   };
 
   if (evChargerId) {
     try {
-      // Attempt to fetch the detailed status endpoint first
       const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${evChargerId}/status`);
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       
@@ -272,30 +272,47 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         unit: "kW",
         status: mapEVChargerAPIStatus(rawDetailedEVData.status),
       };
-    } catch (errorDetailed: any) {
-      if (errorDetailed.message && errorDetailed.message.includes("404")) {
-        // If detailed status endpoint is 404, fall back to fetching the basic EV charger info
-        console.warn(`EV Charger detailed status /ev-charger/${evChargerId}/status not found (404). Falling back to /ev-charger/${evChargerId}. Power data will be N/A.`);
+    } catch (errorDetailed: unknown) {
+      let caughtErrorMessage = "Unknown error during detailed EV status fetch";
+      if (errorDetailed instanceof Error) {
+        caughtErrorMessage = errorDetailed.message;
+      } else if (typeof errorDetailed === 'string') {
+        caughtErrorMessage = errorDetailed;
+      } else {
+        console.warn("Caught a non-standard error object for detailed EV status:", errorDetailed);
+      }
+
+      if (caughtErrorMessage.includes("404 Not Found") || caughtErrorMessage.includes("API Request Error: 404") || caughtErrorMessage.includes("GivEnergy API error: 404")) {
+        console.warn(`EV Charger detailed status /ev-charger/${evChargerId}/status not found (404). Falling back to /ev-charger/${evChargerId}. Original error: ${caughtErrorMessage}`);
         try {
           const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${evChargerId}`);
           const rawBasicEVData: RawEVCharger = evBasicInfoResponse.data;
           evCharger = {
-            value: "N/A", // Power is not available from this basic endpoint
+            value: "N/A", 
             unit: "kW",
             status: mapEVChargerAPIStatus(rawBasicEVData.status),
           };
-        } catch (errorBasic: any) {
-          console.warn(`Failed to fetch basic EV charger (${evChargerId}) info after 404 on status: ${errorBasic.message}. Defaulting to unavailable status.`);
+        } catch (errorBasic: unknown) {
+          let basicErrorMessage = "Unknown error during basic EV info fetch";
+            if (errorBasic instanceof Error) {
+                basicErrorMessage = errorBasic.message;
+            } else if (typeof errorBasic === 'string') {
+                basicErrorMessage = errorBasic;
+            } else {
+                console.warn("Caught a non-standard error object for basic EV info:", errorBasic);
+            }
+          console.warn(`Failed to fetch basic EV charger (${evChargerId}) info after 404 on status endpoint: ${basicErrorMessage}. Defaulting to unavailable status.`);
           evCharger.status = "unavailable";
-          evCharger.value = 0; // Keep value as a number if N/A is problematic for DashboardCard, or "N/A"
+          evCharger.value = 0; 
         }
       } else {
-        // Other error for the detailed status endpoint
-        console.warn(`Failed to fetch EV charger (${evChargerId}) detailed status: ${errorDetailed.message}. Defaulting to unavailable status.`);
+        console.warn(`Failed to fetch EV charger (${evChargerId}) detailed status (non-404): ${caughtErrorMessage}. Defaulting to unavailable status.`);
         evCharger.status = "unavailable";
-        evCharger.value = 0; // Or "N/A"
+        evCharger.value = 0;
       }
     }
+  } else {
+    console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
   }
 
   return {
