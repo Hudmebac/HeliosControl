@@ -17,7 +17,6 @@ import type {
   GivEnergyAPIData,
   AccountData,
   RawAccountResponse,
-  GivEnergyPaginatedResponse,
 } from "@/lib/types";
 
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
@@ -222,21 +221,26 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerI
     if (!apiStatus) return "unavailable";
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
-    // Direct mappings from OCPP 1.6 terms
-    if (lowerApiStatus === "available") return "disconnected"; // Not connected to EV
+    // Direct mappings from OCPP 1.6 terms (or GivEnergy's interpretation)
+    if (lowerApiStatus === "available") return "disconnected"; 
     if (lowerApiStatus === "preparing") return "preparing";
     if (lowerApiStatus === "charging") return "charging";
     if (lowerApiStatus === "suspendedevse") return "suspended_evse";
     if (lowerApiStatus === "suspendedev") return "suspended_ev";
-    if (lowerApiStatus === "finishing") return "finishing"; // Or "completed"
+    if (lowerApiStatus === "finishing") return "finishing"; 
     if (lowerApiStatus === "reserved") return "reserved";
-    if (lowerApiStatus === "unavailable") return "unavailable"; // Charger not operational
+    if (lowerApiStatus === "unavailable") return "unavailable"; 
     if (lowerApiStatus === "faulted") return "faulted";
     
-    // Common non-OCPP terms that imply an idle or ready state when connected
-    const idleLikeStates = ["eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", "paused", "plugged in", "idle", "connected", "stopped"];
+    // GivEnergy specific terms that imply an idle/ready state when connected
+    const idleLikeStates = [
+        "eco", "eco+", "boost", "modbusslave", 
+        "vehicle connected", "standby", "paused", 
+        "plugged in", "idle", "connected", "stopped",
+        "plugged_in_not_charging" // Common explicit state
+    ];
      if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
-        return "idle"; // Connected, not charging, not faulted
+        return "idle"; 
     }
     
     console.warn(`Unknown EV Charger status from API: "${apiStatus}". Defaulting to "unavailable".`);
@@ -276,6 +280,12 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     flow: gridPowerWatts > 50 ? 'importing' : (gridPowerWatts < -50 ? 'exporting' : 'idle'),
   };
 
+  // Calculate numeric power values in kW for internal logic
+  const numericHomeConsumptionKW = rawData.consumption / 1000;
+  const numericSolarGenerationKW = rawData.solar.power / 1000;
+  const numericBatteryDischargeKW = batteryPowerWatts > 10 ? batteryPowerWatts / 1000 : 0; // Only positive power considered discharge
+  const numericGridImportKW = gridPowerWatts > 50 ? gridPowerWatts / 1000 : 0; // Only positive power considered import
+
   let evCharger: EVChargerStatus = { 
     value: "N/A",
     unit: "kW",
@@ -285,42 +295,44 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   if (evChargerId && apiKey) {
     const S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown EV ID';
     let detailedStatusFetched = false;
+    let evPowerInWatts: number | null | undefined = null;
+    let evApiStatus: string | undefined | null = null;
 
     try {
-      const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${evChargerId}/status`);
+      const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(apiKey, `/ev-charger/${S_evChargerId}/status`);
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       
-      const powerInWatts = rawDetailedEVData.charge_session?.power;
-      evCharger = {
-        value: (typeof powerInWatts === 'number' && !isNaN(powerInWatts)) ? parseFloat((powerInWatts / 1000).toFixed(1)) : "N/A",
-        unit: "kW",
-        status: mapEVChargerAPIStatus(rawDetailedEVData.status),
-      };
+      evPowerInWatts = rawDetailedEVData.charge_session?.power;
+      evApiStatus = rawDetailedEVData.status;
       detailedStatusFetched = true;
     } catch (errorDetailed) {
-      console.warn(`Detailed EV status fetch failed for charger ${S_evChargerId}. Attempting fallback.`);
+      console.warn("Detailed EV status fetch failed. Will attempt fallback.");
       // detailedStatusFetched remains false, allowing fallback. No re-throw.
     }
 
     if (!detailedStatusFetched) { 
       try {
-        const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${evChargerId}`);
+        const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
         const rawBasicEVData: RawEVCharger = evBasicInfoResponse.data;
-        evCharger = {
-          value: "N/A", // Basic info doesn't provide live power
-          unit: "kW",
-          status: mapEVChargerAPIStatus(rawBasicEVData.status),
-        };
+        // Basic info doesn't provide live power, so evPowerInWatts remains null or previous error state
+        evApiStatus = rawBasicEVData.status; // Get status from basic info
       } catch (errorBasic) {
-        console.warn(`Fallback EV basic info fetch also failed for charger ${S_evChargerId}. Defaulting EV charger to 'unavailable'.`);
-        evCharger = { value: "N/A", unit: "kW", status: "unavailable" }; // Explicitly set to default here
+        console.warn("Fallback EV basic info fetch also failed. EV charger will be marked as unavailable.");
+        evApiStatus = "unavailable"; // Explicitly set to default here
+        evPowerInWatts = null;
       }
     }
+    
+    evCharger = {
+      value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
+      unit: "kW",
+      status: mapEVChargerAPIStatus(evApiStatus),
+    };
+
   } else {
     if (!evChargerId) {
         console.log("No EV Charger ID available from device discovery, EV Charger data will be default/unavailable.");
     }
-    // evCharger is already initialized to a safe default if no evChargerId
   }
 
   return {
@@ -330,6 +342,10 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     grid,
     evCharger,
     timestamp: new Date(rawData.time).getTime() || Date.now(),
+    numericHomeConsumptionKW,
+    numericSolarGenerationKW,
+    numericBatteryDischargeKW,
+    numericGridImportKW,
   };
 }
 

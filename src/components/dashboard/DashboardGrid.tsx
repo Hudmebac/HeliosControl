@@ -6,6 +6,7 @@ import { useGivEnergyData } from "@/hooks/use-giv-energy-data";
 import { Home, Sun, BatteryCharging, Zap, Bolt, AlertTriangle, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, PowerOff, Power, PlugZap, Loader2 } from "lucide-react";
 import type { BatteryStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils"; // Ensure cn is imported if not already
 
 interface DashboardGridProps {
   apiKey: string;
@@ -32,7 +33,8 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
       </div>
     );
   }
-
+  
+  // Show skeletons only on initial load when data is null
   if (isLoading && !data) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -63,14 +65,11 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
       if (originalValue === 0) {
         return { value: 0, unit: "W" };
       }
-      if (originalValue < 1) {
+      if (originalValue < 1 && originalValue > -1) { // Also handles small negative numbers if they appear before Math.abs
         return { value: Math.round(originalValue * 1000), unit: "W" };
       }
-      // For kW values >= 1, ensure consistent decimal places (e.g., 2 decimal places if not whole)
-      // The toFixed is already applied in givenergy.ts when creating the number, so originalValue is like 1.23 or 0.54
       return { value: Number.isInteger(originalValue) ? originalValue : originalValue.toFixed(2), unit: "kW" };
     }
-    // For non-kW units or non-numeric kW values (like "N/A"), return as is
     return { value: originalValue, unit: originalUnit };
   };
 
@@ -79,8 +78,37 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
   const gridFormatted = formatPowerValue(data.grid.value, data.grid.unit);
   const evChargerFormatted = formatPowerValue(data.evCharger.value, data.evCharger.unit);
 
+  // Determine Home Consumption color
+  let hcColor = "";
+  const consumptionKW = data.numericHomeConsumptionKW;
+  const solarKW = data.numericSolarGenerationKW;
+  const batteryDischargeKW = data.numericBatteryDischargeKW;
+  const gridImportKW = data.numericGridImportKW;
+  const epsilon = 0.01; // Threshold for small values
+
+  if (consumptionKW <= epsilon) { // Negligible consumption
+    if (solarKW > epsilon) {
+      hcColor = "text-green-600"; // Solar is active (exporting/charging battery)
+    }
+    // Default: no specific color if consumption is zero and no solar
+  } else { // Active consumption
+    if (gridImportKW > epsilon) {
+      hcColor = "text-red-600"; // Any grid import
+    } else if (solarKW >= consumptionKW - epsilon) { // Primarily solar
+      hcColor = "text-green-600";
+    } else if (solarKW + batteryDischargeKW >= consumptionKW - epsilon) { // Solar + Battery
+      if (solarKW > epsilon) { // Both contributing
+        hcColor = "text-orange-500";
+      } else { // Primarily battery
+        hcColor = "text-orange-700"; // Darker orange
+      }
+    }
+    // If none of the above, implies an unusual state or covered by grid import, default color.
+  }
+
+
   const actualCardData = [
-    { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}` },
+    { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}`, valueColorClassName: hcColor },
     { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" /> },
     { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle" },
     { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: data.grid.flow === 'idle' ? <PowerOff className="h-6 w-6" /> : <PlugZap className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) },
@@ -97,7 +125,8 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
           unit={card.unit}
           icon={card.icon}
           description={card.description}
-          isLoading={false} 
+          isLoading={isLoading && !data} // Pass isLoading only if there's no data yet
+          valueColorClassName={card.valueColorClassName}
         />
       ))}
     </div>

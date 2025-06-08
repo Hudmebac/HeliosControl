@@ -14,9 +14,10 @@ interface DashboardCardProps {
   children?: ReactNode; // For additional content like small charts or status indicators
   className?: string;
   isLoading?: boolean;
+  valueColorClassName?: string; // New prop for specific value color
 }
 
-export function DashboardCard({ title, value, unit, icon, description, children, className, isLoading }: DashboardCardProps) {
+export function DashboardCard({ title, value, unit, icon, description, children, className, isLoading, valueColorClassName }: DashboardCardProps) {
   return (
     <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -27,7 +28,7 @@ export function DashboardCard({ title, value, unit, icon, description, children,
         {isLoading ? (
            <div className="h-10 w-3/4 bg-muted animate-pulse rounded-md"></div>
         ) : (
-          <div className="text-2xl font-bold">
+          <div className={cn("text-2xl font-bold", valueColorClassName)}>
             {value}
             {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
           </div>

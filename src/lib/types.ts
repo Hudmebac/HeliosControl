@@ -11,7 +11,8 @@ export type EVChargerInternalStatus =
   | 'disconnected' // Equivalent to OCPP "Available" (i.e., not connected to EV)
   | 'unavailable' // OCPP "Unavailable"
   | 'preparing' // OCPP "Preparing"
-  | 'suspended' // Covers OCPP "SuspendedEVSE" and "SuspendedEV"
+  | 'suspended_evse' // OCPP "SuspendedEVSE"
+  | 'suspended_ev' // OCPP "SuspendedEV"
   | 'finishing' // OCPP "Finishing"
   | 'reserved'; // OCPP "Reserved"
 
@@ -32,6 +33,11 @@ export interface RealTimeData {
   grid: Metric & { flow: 'importing' | 'exporting' | 'idle' };
   evCharger: EVChargerStatus;
   timestamp: number;
+  // New numeric fields for easier calculations
+  numericHomeConsumptionKW: number;
+  numericSolarGenerationKW: number;
+  numericBatteryDischargeKW: number; // Power being discharged from the battery (kW, always positive or 0)
+  numericGridImportKW: number;      // Power being imported from the grid (kW, always positive or 0)
 }
 
 export interface GivEnergyIDs {
@@ -175,3 +181,4 @@ export interface RawEVChargerStatus {
     vehicle_connected: boolean;
 }
 export type RawEVChargerStatusResponse = GivEnergyAPIData<RawEVChargerStatus>;
+
