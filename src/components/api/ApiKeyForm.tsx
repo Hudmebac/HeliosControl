@@ -16,9 +16,7 @@ import type React from "react";
 import { useRef } from "react";
 
 const apiKeyFormSchema = z.object({
-  apiKey: z.string().min(1, "API Key is required.").refine(key => key.startsWith("sk_") || key === "VALID_KEY", { // Example validation
-    message: "API Key format seems incorrect. It usually starts with 'sk_'.",
-  }),
+  apiKey: z.string().min(1, "API Key is required."),
 });
 
 type ApiKeyFormValues = z.infer<typeof apiKeyFormSchema>;
