@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { RealTimeData } from "@/lib/types";
-import { getRealTimeData } from "@/lib/givenergy"; 
+import { getRealTimeData } from "@/lib/givenergy";
 import { useToast } from "@/hooks/use-toast";
 
 const REFRESH_INTERVAL = 15000; // 15 seconds
@@ -18,7 +18,8 @@ export function useGivEnergyData(apiKey: string | null) {
   const fetchData = useCallback(async () => {
     if (!apiKey) {
       setData(null);
-      setError("API Key not provided.");
+      setError("API Key not provided. Please enter your GivEnergy API key.");
+      setIsLoading(false); // Ensure loading state is reset
       return;
     }
 
@@ -34,14 +35,15 @@ export function useGivEnergyData(apiKey: string | null) {
           title: "High Grid Consumption Alert",
           description: `Currently importing ${newData.grid.value} ${newData.grid.unit} from the grid.`,
           variant: "destructive",
-          duration: 10000, 
+          duration: 10000,
         });
       }
 
     } catch (e: any) {
-      console.error("Failed to fetch GivEnergy data:", e);
-      setError(e.message || "Failed to fetch data. Check API key and connection.");
-      setData(null); // Clear data on error to avoid showing stale info
+      console.error("Error in useGivEnergyData fetchData:", e);
+      // e.message should now be the more detailed error from _fetchGivEnergyAPI or other specific errors
+      setError(e.message || "An unexpected error occurred while fetching data. Please check your API key, network connection, and ensure your GivEnergy devices are online and correctly configured.");
+      setData(null); // Clear data on error
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +56,8 @@ export function useGivEnergyData(apiKey: string | null) {
       return () => clearInterval(intervalId);
     } else {
       setData(null); // Clear data if API key is removed
+      setError(null); // Clear error if API key is removed
+      setIsLoading(false); // Ensure loading state is reset
     }
   }, [apiKey, fetchData]);
 

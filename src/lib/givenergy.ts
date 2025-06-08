@@ -38,7 +38,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     }
     return response.json() as Promise<T>;
   } catch (error: unknown) {
-    console.error("GivEnergy API request failed in _fetchGivEnergyAPI. Original error:", error);
+    console.error(`GivEnergy API request failed for endpoint '${endpoint}'. Original error:`, error);
 
     let originalMessage = "Unknown error during fetch operation";
     if (error instanceof Error) {
@@ -47,17 +47,15 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       originalMessage = error;
     }
 
-    // Check for typical network error indicators. Browsers often throw TypeError for these.
     if (error instanceof TypeError &&
         (originalMessage.toLowerCase().includes('failed to fetch') ||
-         originalMessage.toLowerCase().includes('networkerror'))) {
+         originalMessage.toLowerCase().includes('networkerror') ||
+         originalMessage.toLowerCase().includes('load failed'))) { // Common in Safari/Firefox for network issues
       const detailedMessage = `Network error: Could not connect to GivEnergy API (${GIVENERGY_API_BASE_URL}). Please check your internet connection, VPN/proxy settings, or if the API is temporarily unavailable. (Original error: ${originalMessage})`;
       console.error("Throwing detailed network error from _fetchGivEnergyAPI:", detailedMessage);
       throw new Error(detailedMessage);
     }
 
-    // Fallback for other errors that might occur during the fetch process or if it's an error object with a message
-    // This includes the re-thrown error from the `if (!response.ok)` block above.
     const errorMessage = `GivEnergy API Request Failed: ${originalMessage}`;
     console.error("Throwing generic API request error from _fetchGivEnergyAPI:", errorMessage);
     throw new Error(errorMessage);
@@ -98,8 +96,8 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   } catch (error: any) {
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs:", error);
     const baseMessage = "Failed to retrieve essential device identifiers from GivEnergy";
-    if (error.message && error.message.toLowerCase().includes('network error:')) {
-        throw error; // Re-throw the detailed network error from _fetchGivEnergyAPI
+    if (error.message && (error.message.toLowerCase().includes('network error:') || error.message.toLowerCase().includes('givenergy api error:'))) {
+        throw error; 
     }
     throw new Error(`${baseMessage}: ${error.message || 'An unknown error occurred.'}`);
   }
@@ -133,7 +131,7 @@ function mapEVChargerAPIStatus(apiStatus: string): EVChargerStatus['status'] {
     if (lowerApiStatus.includes("charging")) return "charging";
     if (lowerApiStatus.includes("disconnected") || lowerApiStatus.includes("idle") || lowerApiStatus.includes("paused") || lowerApiStatus.includes("scheduled")) return "idle";
     if (lowerApiStatus.includes("fault") || lowerApiStatus.includes("error")) return "faulted";
-    return "idle";
+    return "disconnected"; // Default to disconnected if status is unknown
 }
 
 
@@ -190,6 +188,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       };
     } catch (error: any) {
         console.warn(`Failed to fetch EV charger (${evChargerId}) status (this is optional): ${error.message}`);
+         evCharger.status = "disconnected"; // Ensure status reflects inability to fetch
     }
   }
 
