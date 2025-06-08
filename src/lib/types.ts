@@ -4,13 +4,25 @@ export interface Metric {
   unit: string;
 }
 
+export type EVChargerInternalStatus =
+  | 'charging'
+  | 'idle' // General term for connected but not charging and not faulted
+  | 'faulted'
+  | 'disconnected' // Equivalent to OCPP "Available" (i.e., not connected to EV)
+  | 'unavailable' // OCPP "Unavailable"
+  | 'preparing' // OCPP "Preparing"
+  | 'suspended' // Covers OCPP "SuspendedEVSE" and "SuspendedEV"
+  | 'finishing' // OCPP "Finishing"
+  | 'reserved'; // OCPP "Reserved"
+
+
 export interface BatteryStatus extends Metric {
   charging?: boolean; // true if charging, false if discharging, undefined if idle
   percentage: number;
 }
 
 export interface EVChargerStatus extends Metric {
-  status: 'charging' | 'idle' | 'faulted' | 'disconnected';
+  status: EVChargerInternalStatus;
 }
 
 export interface RealTimeData {
@@ -24,8 +36,7 @@ export interface RealTimeData {
 
 export interface GivEnergyIDs {
   inverterSerial: string | null;
-  inverterCommDeviceUUID: string | null; // UUID of the communication device associated with the inverter
-  evChargerId?: string | null;
+  evChargerId?: string | null; // This will be the UUID of the EV Charger
 }
 
 export type Theme = "light" | "dark" | "hc-light" | "hc-dark" | "system";
@@ -63,43 +74,78 @@ interface GivEnergyAPIData<T> {
 }
 
 export interface RawCommunicationDevice {
-  uuid: string;
-  serial_number: string; 
-  type: string; 
+  // uuid field is not present in the "GET /communication-device" list example from new docs
+  serial_number: string;
+  type: string;
+  commission_date?: string; // Optional as per some examples
   inverter: {
     serial: string;
-    firmware_version: string;
+    status?: string; // Optional as per some examples
+    last_online?: string;
+    last_updated?: string;
+    commission_date?: string;
+    info?: {
+        battery_type: string;
+        battery: {
+            nominal_capacity: number;
+            nominal_voltage: number;
+            depth_of_discharge?: number; // Optional
+        };
+        model: string;
+        max_charge_rate: number;
+    };
+    warranty?: {
+        type: string;
+        expiry_date: string;
+    };
+    firmware_version: { // Changed from string to object based on new docs
+        ARM: number | null;
+        DSP: number | null;
+    } | string; // Allowing string for resilience if API is inconsistent or other endpoints are used
+    connections?: { // Optional
+        batteries: any[]; // Simplified for now
+        meters?: any[]; // Simplified for now
+    };
+    flags?: string[];
   };
 }
-// Updated to use paginated response type
 export type RawCommunicationDevicesResponse = GivEnergyPaginatedResponse<RawCommunicationDevice>;
 
 
 export interface RawEVCharger {
-    id: string;
-    alias: string;
+    uuid: string; // Changed from id to uuid
     serial_number: string;
     type: string;
-    status: string; 
+    alias: string;
+    online: boolean;
+    went_offline_at: string | null;
+    status: string; // Raw status from API, will be mapped
 }
-// Updated to use paginated response type
 export type RawEVChargersResponse = GivEnergyPaginatedResponse<RawEVCharger>;
 
 
 export interface RawSystemDataLatest {
   time: string;
+  status: string; // Top-level status added
   solar: { power: number; arrays: { array: number; voltage: number; current: number; power: number }[] };
-  grid: { power: number; current: number; voltage: number; frequency: number };
+  grid: { voltage: number; current: number; power: number; frequency: number };
   battery: { percent: number; power: number; temperature: number };
-  inverter: { power: number; temperature: number; status: string; eps_power: number };
-  consumption: { power: number };
+  inverter: {
+    temperature: number;
+    power: number;
+    // status: string; // Removed from here as per example, now top-level
+    output_voltage: number; // Added
+    output_frequency: number; // Added
+    eps_power: number;
+  };
+  consumption: number; // Changed from { power: number } to number
 }
 export type RawSystemDataLatestResponse = GivEnergyAPIData<RawSystemDataLatest>;
 
 
 export interface RawEVChargerStatus {
-    mode: string; 
-    status: string; 
+    mode: string;
+    status: string; // This is the raw string status from the API
     charge_session: {
         status: string;
         power: number; // Watts
