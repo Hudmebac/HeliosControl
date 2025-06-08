@@ -50,7 +50,7 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     if (error instanceof TypeError &&
         (originalMessage.toLowerCase().includes('failed to fetch') ||
          originalMessage.toLowerCase().includes('networkerror') ||
-         originalMessage.toLowerCase().includes('load failed'))) { // Common in Safari/Firefox for network issues
+         originalMessage.toLowerCase().includes('load failed'))) { 
       const detailedMessage = `Network error: Could not connect to GivEnergy API (${GIVENERGY_API_BASE_URL}). Please check your internet connection, VPN/proxy settings, or if the API is temporarily unavailable. (Original error: ${originalMessage})`;
       console.error("Throwing detailed network error from _fetchGivEnergyAPI:", detailedMessage);
       throw new Error(detailedMessage);
@@ -136,10 +136,6 @@ function mapEVChargerAPIStatus(apiStatus: string): EVChargerStatus['status'] {
 
 
 export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
-  if (!apiKey) {
-    throw new Error("API Key not provided. Cannot fetch real-time data.");
-  }
-
   const { inverterSerial, evChargerId } = await _getPrimaryDeviceIDs(apiKey);
 
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);

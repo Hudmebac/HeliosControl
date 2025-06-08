@@ -19,7 +19,7 @@ export function useGivEnergyData(apiKey: string | null) {
     if (!apiKey) {
       setData(null);
       setError("API Key not provided. Please enter your GivEnergy API key.");
-      setIsLoading(false); // Ensure loading state is reset
+      setIsLoading(false); 
       return;
     }
 
@@ -29,7 +29,6 @@ export function useGivEnergyData(apiKey: string | null) {
       const newData = await getRealTimeData(apiKey);
       setData(newData);
 
-      // High consumption alert
       if (newData.grid.flow === 'importing' && typeof newData.grid.value === 'number' && newData.grid.value > HIGH_CONSUMPTION_THRESHOLD) {
         toast({
           title: "High Grid Consumption Alert",
@@ -41,9 +40,8 @@ export function useGivEnergyData(apiKey: string | null) {
 
     } catch (e: any) {
       console.error("Error in useGivEnergyData fetchData:", e);
-      // e.message should now be the more detailed error from _fetchGivEnergyAPI or other specific errors
       setError(e.message || "An unexpected error occurred while fetching data. Please check your API key, network connection, and ensure your GivEnergy devices are online and correctly configured.");
-      setData(null); // Clear data on error
+      setData(null); 
     } finally {
       setIsLoading(false);
     }
@@ -51,13 +49,13 @@ export function useGivEnergyData(apiKey: string | null) {
 
   useEffect(() => {
     if (apiKey) {
-      fetchData(); // Initial fetch
+      fetchData(); 
       const intervalId = setInterval(fetchData, REFRESH_INTERVAL);
       return () => clearInterval(intervalId);
     } else {
-      setData(null); // Clear data if API key is removed
-      setError(null); // Clear error if API key is removed
-      setIsLoading(false); // Ensure loading state is reset
+      setData(null); 
+      setError(null); 
+      setIsLoading(false); 
     }
   }, [apiKey, fetchData]);
 
