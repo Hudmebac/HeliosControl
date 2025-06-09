@@ -1,11 +1,33 @@
 
 "use client";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { SettingsSheetContent } from "@/components/settings/SettingsSheetContent";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { ApiKeyForm } from "@/components/api/ApiKeyForm";
 import { useApiKey } from "@/hooks/use-api-key";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ShieldCheck, AlertTriangle, Info } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+
+// Note: The AccountCard defined here is specific to this file and different from src/components/account/AccountCard.tsx
+export function AccountCard() {
+  const { isSettingsOpen, setIsSettingsOpen } = useAppSettings();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+        <CardDescription>Manage your account settings.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <AuthenticationArea /> {/* Uses AuthenticationArea defined below in the same module */}
+        <Separator />
+        {/* Temporarily disabled */}
+        {/* <SettingsSheetContent open={isSettingsOpen} onOpenChange={setIsSettingsOpen} /> */}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function AuthenticationArea() {
   const { apiKey, deviceIDs, isDeviceIDsLoading, deviceIDsError, isLoading: isApiKeyHookLoading } = useApiKey();
@@ -52,12 +74,12 @@ export function AuthenticationArea() {
                   <div className="flex items-center">
                     <Info className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
                     <span className="text-sm font-medium">Inverter Serial:</span>
-                    <span className="ml-2 text-sm text-foreground truncate">{deviceIDs.inverterSerial || "Not found"}</span>
+                    <span className="ml-2 text-sm text-foreground truncate">{deviceIDs?.inverterSerial || "Not found"}</span>
                   </div>
                   <div className="flex items-center">
                     <Info className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
                     <span className="text-sm font-medium">EV Charger ID:</span>
-                    <span className="ml-2 text-sm text-foreground truncate">{deviceIDs.evChargerId || "Not available / Not found"}</span>
+                    <span className="ml-2 text-sm text-foreground truncate">{deviceIDs?.evChargerId || "Not available / Not found"}</span>
                   </div>
                 </div>
               )}

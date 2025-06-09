@@ -30,6 +30,7 @@ export default function HomePage() {
           <AlertDescription>
             To get started, please configure your GivEnergy API key.
             You can do this by clicking the <Settings className="inline-block h-4 w-4 mx-1" /> settings icon in the header.
+            Once GivEnergy API Key Saved Refresh page to access Dashboard
           </AlertDescription>
         </Alert>
       )}

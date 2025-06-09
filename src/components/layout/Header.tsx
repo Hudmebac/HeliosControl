@@ -2,9 +2,11 @@
 "use client";
 
 import { AppLogo } from "@/components/layout/AppLogo";
+import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { Button } from "@/components/ui/button";
 import { Settings, RefreshCw, Loader2, Timer } from "lucide-react";
+import { Sun } from "lucide-react";
 import {
   Sheet,
   SheetTrigger,
@@ -85,6 +87,15 @@ export function Header() {
           <AppLogo className="h-6 w-6 mr-2 text-primary" />
           <h1 className="text-lg font-semibold font-headline">Helios Control</h1>
         </div>
+        <div className="flex items-center space-x-2">
+          <Button variant="ghost" size="icon" asChild aria-label="Link to Solar">
+            <Link href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
+              <Sun className="h-5 w-5" />
+            </Link>
+          </Button>
+        </div>
+
+
         <div className="flex flex-1 items-center justify-end space-x-2 md:space-x-4">
           {apiKey && isSettingsLoaded && (
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
