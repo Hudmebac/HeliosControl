@@ -1,7 +1,7 @@
 
 "use client"
 
-import { DashboardCard } from "./DashboardCard";
+import { DashboardCard, DashboardCardLink } from "./DashboardCard";
 import { useGivEnergyData } from "@/hooks/use-giv-energy-data";
 import { Home, Sun, BatteryCharging, Zap, Bolt, AlertTriangle, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, PowerOff, Power, PlugZap, Loader2 } from "lucide-react";
 import type { BatteryStatus } from "@/lib/types";
@@ -121,8 +121,8 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}`, valueColorClassName: hcColor },
     { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" />, valueColorClassName: solarColorClassName },
     { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle" },
-    { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: data.grid.flow === 'idle' ? <PowerOff className="h-6 w-6" /> : <PlugZap className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) },
-    { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: data.evCharger.status === 'charging' ? <Bolt className="h-6 w-6 text-green-500" /> : <Power className="h-6 w-6" />, description: data.evCharger.status },
+    { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: <Power className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) }, // Updated Grid Status icon
+    { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: <PlugZap className="h-6 w-6" />, description: data.evCharger.status }, // Updated EV Charger icon
   ];
 
   return (
