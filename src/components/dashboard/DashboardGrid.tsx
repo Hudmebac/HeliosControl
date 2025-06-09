@@ -122,7 +122,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" />, valueColorClassName: solarColorClassName },
     { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle" },
     { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: data.grid.flow === 'idle' ? <PowerOff className="h-6 w-6" /> : <PlugZap className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) },
-    { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: data.evCharger.status === 'charging' ? <Bolt className="h-6 w-6 text-green-500" /> : <Power className="h-6 w-6" />, description: data.evCharger.status.charAt(0).toUpperCase() + data.evCharger.status.slice(1) },
+    { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: data.evCharger.status === 'charging' ? <Bolt className="h-6 w-6 text-green-500" /> : <Power className="h-6 w-6" />, description: data.evCharger.status },
   ];
 
   return (

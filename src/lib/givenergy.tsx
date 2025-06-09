@@ -222,15 +222,24 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): EVChargerI
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
     // Direct mappings from OCPP 1.6 terms (or GivEnergy's interpretation)
-    if (lowerApiStatus === "available") return "disconnected"; 
-    if (lowerApiStatus === "preparing") return "preparing";
-    if (lowerApiStatus === "charging") return "charging";
-    if (lowerApiStatus === "suspendedevse") return "suspended_evse";
-    if (lowerApiStatus === "suspendedev") return "suspended_ev";
-    if (lowerApiStatus === "finishing") return "finishing"; 
-    if (lowerApiStatus === "reserved") return "reserved";
-    if (lowerApiStatus === "unavailable") return "unavailable"; 
-    if (lowerApiStatus === "faulted") return "faulted";
+    if (lowerApiStatus === "available") 
+      return <span className="text-black">The EV charger is not plugged into a vehicle</span>;  
+    if (lowerApiStatus === "preparing") 
+      return <span className="text-blue-500">The EV charger is plugged into a vehicle and is ready to start a charge</span>;  
+    if (lowerApiStatus === "charging") 
+      return <span className="text-green-500">The EV charger is charging the connected EV</span>;  
+    if (lowerApiStatus === "suspendedevse") 
+      return <span className="text-orange-400">The charging session has been stopped by the EV charger</span>;  
+    if (lowerApiStatus === "suspendedev") 
+      return <span className="text-green-500">The charging session has been stopped by the EV</span>;  
+    if (lowerApiStatus === "finishing") 
+      return <span className="text-orange-400">The charging session has finished, but the EV charger isn't ready to start a new charging session</span>;  
+    if (lowerApiStatus === "reserved") 
+      return <span className="text-red-500">The EV charger has been reserved for a future charging session</span>;  
+    if (lowerApiStatus === "unavailable") 
+      return <span className="text-red-500">The EV charger cannot start new charging sessions</span>;  
+    if (lowerApiStatus === "faulted") 
+      return <span className="text-red-500">The EV charger is reporting an error</span>;
     
     // GivEnergy specific terms that imply an idle/ready state when connected
     const idleLikeStates = [
