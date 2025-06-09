@@ -3,6 +3,7 @@
 
 import { useApiKey } from "@/hooks/use-api-key";
 import Link from "next/link";
+import { useIsMobile } from "@/hooks/use-mobile"; // Import the useIsMobile hook
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 // Using specific Lucide icons for new cards
 import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Zap } from "lucide-react";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button"; // Added for potential settings
 
 export default function HomePage() {
   const { apiKey, isLoading: isApiKeyHookLoading } = useApiKey();
+  const isMobile = useIsMobile(); // Use the useIsMobile hook to detect mobile
 
   if (isApiKeyHookLoading) {
     return (
@@ -20,6 +22,26 @@ export default function HomePage() {
       </div>
     );
   }
+
+  const handleGivEnergyCloudClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isMobile) {
+      event.preventDefault(); // Prevent default navigation
+      const appUrl = 'givenergy://'; // Custom URL scheme for GivEnergy app (assumed)
+      const storeUrl = 'https://play.google.com/store/apps/details?id=com.mobile.givenergy&utm_source=emea_Med&embedded=0';
+
+      // Attempt to open the app
+      window.location.href = appUrl;
+
+      // Set a timer to redirect to the store if the app doesn't open
+      // This is a heuristic and might not work perfectly across all devices/browsers
+      const timer = setTimeout(() => {
+        window.open(storeUrl, '_blank');
+      }, 300); // Adjust delay as needed
+
+      // Optional: Clear the timer if the user navigates away (app opens)
+      window.addEventListener('blur', () => clearTimeout(timer), { once: true });
+    }
+  };
 
   return (
     <div className="w-full space-y-6">
@@ -45,7 +67,13 @@ export default function HomePage() {
                 </p>
               </div>
             </a>
-            <a href="https://givenergy.cloud/dashboard" target="_blank" rel="noopener noreferrer">
+            <a
+              href={isMobile ? 'https://givenergy.cloud/dashboard' : 'https://givenergy.cloud/dashboard'} // Initial href (will be overridden by onClick)
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleGivEnergyCloudClick}
+              data-href-mobile={isMobile ? 'givenergy://' : undefined} // Store potential deep link URL
+            >
               <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer">
                 <img src="https://heliosaj.netlify.app/_next/image?url=%2Fimages%2FGEIcon.webp&w=32&q=75" alt="GivEnergy Icon" className="h-8 w-auto mb-3" /> {/* Image for GivEnergy Cloud */}
                 <h3 className="text-lg font-semibold">GivEnergy Cloud</h3>
