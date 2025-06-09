@@ -9,6 +9,7 @@ import { ApiKeyForm } from "@/components/api/ApiKeyForm";
 import { useApiKey } from "@/hooks/use-api-key";
 import { Loader2, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 // Note: The AccountCard defined here is specific to this file and different from src/components/account/AccountCard.tsx
 export function AccountCard() {
   const { isSettingsOpen, setIsSettingsOpen } = useAppSettings();
@@ -52,6 +53,58 @@ export function AuthenticationArea() {
       </CardHeader>
       <CardContent className="space-y-6">
         <ApiKeyForm />
+
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="how-to-api-key">
+            <AccordionTrigger className="flex items-center text-sm">
+              <Info className="mr-2 h-4 w-4 text-muted-foreground" />
+              How to Obtain Your GivEnergy API Key and Set Up Helios Control
+            </AccordionTrigger>
+            <AccordionContent className="text-sm text-muted-foreground space-y-3">
+              <p>Follow these simple steps to get your API key and integrate it into Helios Control:</p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Access the API Tokens Page:</strong> Go to{" "}
+                  <a
+                    href="https://givenergy.cloud/account-settings/api-tokens"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline"
+                  >
+                    GivEnergy Cloud API Tokens
+                  </a>
+                  .
+                </li>
+                <li>
+                  <strong>Generate a New Token:</strong> Click "Generate New Token" to create a new API key.
+                </li>
+                <li>
+                  <strong>Name Your Token:</strong> Give your token a descriptive name (e.g., "Helios Control").
+                </li>
+                <li>
+                  <strong>Set Expiry Date:</strong> Choose "No Expiry" to ensure continuous access.
+                </li>
+                <li>
+                  <strong>Select Full Control:</strong> Check the top checkbox labeled "API Full Control over everything available in the GivEnergy API".
+                </li>
+                <li>
+                  <strong>Create and Copy Your Token:</strong> Click "Create Token", then click the copy icon next to your new token or expand it to view and manually copy the full token.
+                </li>
+                <li>
+                  <strong>Enter Your API Key:</strong> Paste the copied token into the "GivEnergy API Key" box below.
+                </li>
+                <li>
+                  <strong>Refresh Your Page:</strong> Once the API key is saved, refresh the page to access your dashboard.
+                </li>
+              </ul>
+              <p className="flex items-center">
+                <Info className="mr-2 h-4 w-4 text-blue-500" />
+                This setup only needs to be done once! Your API key will be stored for future use.
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         {showDeviceIDsSection && (
           <>
             <Separator />
