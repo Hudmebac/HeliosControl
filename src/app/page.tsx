@@ -20,19 +20,24 @@ export default function HomePage() {
   }
 
   return (
-    <div className="w-full space-y-6">
-      {apiKey ? (
-        <DashboardGrid apiKey={apiKey} />
-      ) : (
-         <Alert variant="default" className="mt-8">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Welcome to Helios Control!</AlertTitle>
-          <AlertDescription>
-            To get started, please configure your GivEnergy API key.
-            You can do this by clicking the <Settings className="inline-block h-4 w-4 mx-1" /> settings icon in the header.
-            Once GivEnergy API Key Saved Refresh page to access Dashboard
-          </AlertDescription>
-        </Alert>
+<div className="w-full space-y-6">
+  {apiKey ? (
+    <DashboardGrid apiKey={apiKey} />
+  ) : (
+    <Alert variant="default" className="mt-8">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Welcome to Helios Control!</AlertTitle>
+      <AlertDescription>
+        To get started, please add your GivEnergy API key.
+        <br />
+        You can do this by clicking the{" "}
+        <Settings className="inline-block h-4 w-4 mx-1" /> settings icon in the header.
+        <br />
+        Once GivEnergy API Key has been saved, please refresh the page to access your dashboard.
+      </AlertDescription>
+    </Alert>
+
+
       )}
     </div>
   );
