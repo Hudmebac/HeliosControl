@@ -3,12 +3,17 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ArrowLeft } from "lucide-react";
 
 export default function HistoryPage() {
   return (
     <div className="w-full space-y-8 py-8">
+ <div className="absolute top-4 left-4">
+        <Button variant="ghost" asChild>
+          <Link href="/"><ArrowLeft className="h-4 w-4 mr-2" />Dashboard</Link>
+        </Button>
       <div className="text-center">
+ </div>
         <BarChart3 className="mx-auto h-16 w-16 text-primary mb-4" />
         <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Energy History
