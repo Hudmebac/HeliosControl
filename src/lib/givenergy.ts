@@ -212,7 +212,6 @@ export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     return _getPrimaryDeviceIDs(apiKey);
 }
 
-// This function now returns React.ReactNode for styled statuses
 function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.ReactNode {
     if (!apiStatus) return <span className="text-muted-foreground">Status Unknown</span>;
     const lowerApiStatus = apiStatus.toLowerCase().trim();
@@ -238,18 +237,16 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.Reac
     }
     
     console.warn(`Unknown EV Charger status from API: "${apiStatus}".`);
-    return <span className="text-muted-foreground">{apiStatus}</span>; // Display raw status if unknown
+    return <span className="text-muted-foreground">{apiStatus}</span>;
 }
 
 
 export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const { inverterSerial, evChargerId } = await getDeviceIDs(apiKey);
 
-  // Fetch instantaneous system data
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
   const rawData: RawSystemDataLatest = systemDataResponse.data;
 
-  // Fetch daily meter data
   let dailyTotals: DailyEnergyTotals = {};
   try {
     const meterDataResponse = await _fetchGivEnergyAPI<RawMeterDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/meter-data/latest`);
@@ -265,50 +262,38 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     };
   } catch (meterError) {
       console.warn("Could not fetch daily meter data (optional):", meterError);
-      // dailyTotals remains empty, this is acceptable
   }
 
-
-  // Safely parse instantaneous power values from system-data/latest, default to 0
-  const rawHomeConsumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
-  const rawSolarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
-  const rawGridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; // -ve for import, +ve for export
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; // -ve for charge, +ve for discharge
+  const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
+  const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
+  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
-  // Infer battery power for system balance: Home = Solar + GridImport - GridExport + BatteryDischarge - BatteryCharge
-  // So, BatteryDischarge - BatteryCharge = Home - Solar - GridImport + GridExport
-  // Or, BatteryPower (where +ve is discharge, -ve is charge) = Home - Solar + GridPower (where GridPower is -ve for import, +ve for export)
-  const inferredBatteryPowerWattsCalculation = rawHomeConsumptionWatts - rawSolarPowerWatts + rawGridPowerWatts;
-  
-  // Determine effective battery power: use inferred if valid, otherwise API direct value.
-  // This 'effectiveBatteryPowerFlow' will be stored in battery.rawPowerWatts for UI consistency.
-  let effectiveBatteryPowerFlow = apiBatteryPowerWatts; // Default to API value
+  const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
+
+  let effectiveBatteryPowerFlow = apiBatteryPowerWatts; 
+
   if (!isNaN(inferredBatteryPowerWattsCalculation)) {
-      // Add a tolerance check: if inferred and API values are very close, prefer API to avoid rapid flipping due to minor rounding.
-      // Also, if API reports significant flow, it might be more accurate than inference if other meters are involved.
-      const tolerance = 50; // 50W tolerance
-      if (Math.abs(inferredBatteryPowerWattsCalculation - apiBatteryPowerWatts) > tolerance && Math.abs(apiBatteryPowerWatts) < tolerance ) {
-          // If API says idle but inference says significant flow, trust inference.
+      const isApiReportingIdle = Math.abs(apiBatteryPowerWatts) < 50; 
+      const isInferenceSuggestingFlow = Math.abs(inferredBatteryPowerWattsCalculation) >= 50;
+
+      if (isApiReportingIdle && isInferenceSuggestingFlow) {
           effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
-      } else if (Math.abs(apiBatteryPowerWatts) >= tolerance) {
-          // If API reports significant flow, it's likely more direct.
-          effectiveBatteryPowerFlow = apiBatteryPowerWatts;
       } else {
-          // If both are small or API is preferred by tolerance, use API or the slightly adjusted inference.
-          // This path means API is likely idle or close to inferred.
-          effectiveBatteryPowerFlow = apiBatteryPowerWatts; // Defaulting to API if inference is not drastically different or API shows flow
+          effectiveBatteryPowerFlow = apiBatteryPowerWatts;
       }
+  } else {
+      effectiveBatteryPowerFlow = apiBatteryPowerWatts;
   }
 
-
   const homeConsumption: Metric = {
-    value: parseFloat((rawHomeConsumptionWatts / 1000).toFixed(2)),
+    value: parseFloat((consumptionWatts / 1000).toFixed(2)),
     unit: "kW",
   };
 
   const solarGeneration: Metric = {
-    value: parseFloat((rawSolarPowerWatts / 1000).toFixed(2)),
+    value: parseFloat((solarPowerWatts / 1000).toFixed(2)),
     unit: "kW",
   };
 
@@ -317,19 +302,19 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     unit: "%",
     percentage: batteryPercentage,
     charging: effectiveBatteryPowerFlow < -10 ? true : (effectiveBatteryPowerFlow > 10 ? false : undefined),
-    rawPowerWatts: effectiveBatteryPowerFlow, // Store the chosen effective power flow here
+    rawPowerWatts: effectiveBatteryPowerFlow,
   };
 
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
-    value: parseFloat((Math.abs(rawGridPowerWatts) / 1000).toFixed(2)),
+    value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
     unit: "kW",
-    flow: rawGridPowerWatts > 50 ? 'exporting' : (rawGridPowerWatts < -50 ? 'importing' : 'idle'),
+    flow: gridPowerWatts > 50 ? 'exporting' : (gridPowerWatts < -50 ? 'importing' : 'idle'),
   };
 
   let evCharger: EVChargerStatus = { 
     value: "N/A",
     unit: "kW",
-    status: mapEVChargerAPIStatus("unavailable"), // Default status
+    status: mapEVChargerAPIStatus("unavailable"),
   };
 
   if (evChargerId && apiKey) {
@@ -346,7 +331,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       console.warn(`Detailed EV status fetch failed for ${S_evChargerId}. Attempting fallback. Error: ${errorDetailed instanceof Error ? errorDetailed.message : String(errorDetailed)}`);
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
-        evApiStatusString = evBasicInfoResponse.data.status; // Basic info doesn't provide live power
+        evApiStatusString = evBasicInfoResponse.data.status; 
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
@@ -364,21 +349,21 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
     }
   }
-
-  return {
+  
+  const dataToReturn: RealTimeData = {
     homeConsumption,
     solarGeneration,
     battery,
     grid,
     evCharger,
     timestamp: new Date(rawData.time).getTime() || Date.now(),
-    rawHomeConsumptionWatts,
-    rawSolarPowerWatts,
-    rawGridPowerWatts,
-    // rawBatteryPowerWatts: apiBatteryPowerWatts, // raw value from API
-    // inferredRawBatteryPowerWatts: isNaN(inferredBatteryPowerWattsCalculation) ? undefined : inferredBatteryPowerWattsCalculation,
+    rawHomeConsumptionWatts: consumptionWatts,
+    rawSolarPowerWatts: solarPowerWatts,
+    rawGridPowerWatts: gridPowerWatts,
     today: dailyTotals,
   };
+
+  return dataToReturn;
 }
 
 export async function getAccountDetails(apiKey: string): Promise<AccountData> {
@@ -388,4 +373,3 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
-
