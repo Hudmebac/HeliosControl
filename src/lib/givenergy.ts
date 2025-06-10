@@ -314,6 +314,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
+<<<<<<< HEAD
   const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
   const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; 
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
@@ -329,6 +330,28 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         Math.abs(inferredBatteryPowerWattsCalculation) >= MIN_INFERRED_FLOW_TO_OVERRIDE) {
       effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
     }
+=======
+  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0;
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
+  const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
+
+  const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
+  let effectiveBatteryPowerFlow;
+  const minimalFlowThreshold = 10; // Watts, smaller than EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS
+
+  if (!isNaN(inferredBatteryPowerWattsCalculation)) {
+    if (Math.abs(inferredBatteryPowerWattsCalculation) >= minimalFlowThreshold && Math.abs(apiBatteryPowerWatts) < minimalFlowThreshold) {
+        effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
+    }
+    else if (Math.abs(inferredBatteryPowerWattsCalculation) >= EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS) {
+        effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
+    }
+    else {
+        effectiveBatteryPowerFlow = apiBatteryPowerWatts;
+    }
+  } else {
+    effectiveBatteryPowerFlow = apiBatteryPowerWatts;
+>>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
   }
 
 
@@ -351,8 +374,13 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     unit: "%",
     percentage: batteryPercentage,
     rawPowerWatts: effectiveBatteryPowerFlow,
+<<<<<<< HEAD
     energyKWh: currentEnergyKWh !== undefined ? parseFloat(currentEnergyKWh.toFixed(2)) : undefined,
     capacityKWh: actualCapacityKWh !== undefined ? parseFloat(actualCapacityKWh.toFixed(2)) : undefined,
+=======
+    energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
+    capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
+>>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
   };
 
   const GRID_IDLE_THRESHOLD_WATTS = 50;
