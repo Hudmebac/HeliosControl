@@ -116,11 +116,29 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     solarColorClassName = "text-[#FFA500]"; // Orange
   }
 
+  // Determine Battery Status description and color
+  let batteryDescription = data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle";
+  let batteryColorClassName = "text-muted-foreground"; // Default color
+
+  if (data.battery.charging) {
+    if (data.numericSolarGenerationKW > data.numericHomeConsumptionKW) {
+      batteryDescription = "Charging from Solar";
+      batteryColorClassName = "text-green-600";
+    } else if (data.grid.flow === 'importing') {
+      batteryDescription = "Charging from Grid";
+      batteryColorClassName = "text-orange-500";
+    } else {
+       batteryDescription = "Charging";
+    }
+  } else if (data.battery.percentage < 30) {
+    batteryDescription = "Discharging (Low)";
+    batteryColorClassName = "text-red-600";
+  }
 
   const actualCardData = [
-    { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}`, valueColorClassName: hcColor },
-    { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" />, valueColorClassName: solarColorClassName },
-    { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: data.battery.charging ? "Charging" : data.battery.charging === false ? "Discharging" : "Idle" },
+    { title: "Home Consumption", value: homeConsumptionFormatted.value, unit: homeConsumptionFormatted.unit, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(data.timestamp).toLocaleTimeString()}`, valueColorClassName: hcColor, iconColorClassName: hcColor }, // Update description to use actual timestamp and add icon color
+    { title: "Solar Generation", value: solarGenerationFormatted.value, unit: solarGenerationFormatted.unit, icon: <Sun className="h-6 w-6" />, valueColorClassName: solarColorClassName, iconColorClassName: solarColorClassName },
+    { title: "Battery Status", value: data.battery.value, unit: data.battery.unit, icon: getBatteryIcon(data.battery), description: batteryDescription, valueColorClassName: batteryColorClassName, iconColorClassName: batteryColorClassName },
     { title: "Grid Status", value: gridFormatted.value, unit: gridFormatted.unit, icon: <Power className="h-6 w-6" />, description: data.grid.flow.charAt(0).toUpperCase() + data.grid.flow.slice(1) }, // Updated Grid Status icon
     { title: "EV Charger", value: evChargerFormatted.value, unit: evChargerFormatted.unit, icon: <PlugZap className="h-6 w-6" />, description: data.evCharger.status }, // Updated EV Charger icon
   ];
@@ -129,7 +147,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {actualCardData.map((card, index) => (
         <DashboardCard
-          key={index}
+          key={card.title === "Home Consumption" ? card.description : index}
           title={card.title}
           value={card.value}
           unit={card.unit}
@@ -137,6 +155,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
           description={card.description}
           isLoading={isLoading && !data} // Pass isLoading only if there's no data yet
           valueColorClassName={card.valueColorClassName}
+          iconColorClassName={card.iconColorClassName} // Pass icon color class name
         />
       ))}
     </div>

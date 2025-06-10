@@ -57,7 +57,8 @@ export function useGivEnergyData(apiKey: string | null) {
       }
       console.error("Error in useGivEnergyData fetchData:", e);
       setError(errorMessage);
-      setData(null); 
+      // Do NOT set data to null on error if data already exists
+      // setData(null); 
        if (isManualRefresh) {
         toast({
           title: "Refresh Failed",

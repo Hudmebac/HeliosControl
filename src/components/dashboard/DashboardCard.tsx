@@ -16,6 +16,7 @@ interface DashboardCardProps {
   className?: string;
   isLoading?: boolean;
   valueColorClassName?: string; // New prop for specific value color
+  iconColorClassName?: string; // New prop for icon color
 }
 
 const cardIcons: { [key: string]: ReactNode } = {
