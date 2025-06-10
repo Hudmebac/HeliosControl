@@ -1,52 +1,59 @@
-
-"use client"
-
 import type { ReactNode } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils"; // Assuming cn is for conditional class names
-import { Sun, Battery, Grid, Car, Home, Power } from "lucide-react"; // Import necessary icons
+import { Sun, Battery, Car, Home, Power } from "lucide-react"; // Import necessary icons
 
 interface DashboardCardProps {
   title: string;
-  value: string | number;
+  value: number | string;
   unit?: string;
-  icon: ReactNode;
+  solarValue?: number; // Added solar generation value for comparison
+  icon?: ReactNode;
   description?: string;
-  children?: ReactNode; // For additional content like small charts or status indicators
+  children?: ReactNode;
   className?: string;
   isLoading?: boolean;
-  valueColorClassName?: string; // New prop for specific value color
-  iconColorClassName?: string; // New prop for icon color
+  valueColorClassName?: string;
 }
 
-const cardIcons: { [key: string]: ReactNode } = {
-  "Home Consumption": <Home className="h-4 w-4 text-muted-foreground" />,
-  "Solar Generation": <Sun className="h-4 w-4 text-muted-foreground" />,
-  "Battery Status": <Battery className="h-4 w-4 text-muted-foreground" />,
-  "Grid Status": <Power className="h-4 w-4 text-muted-foreground" />, // Using Power for Pylon as it's a common representation
-  "EV Charger": <Car className="h-4 w-4 text-muted-foreground" />,
+const getHomeConsumptionIcon = (consumption: number, solarGeneration: number): ReactNode => {
+  let color = "text-green-500"; // Default: Less than solar generation
+  if (consumption > solarGeneration) color = "text-orange-500"; // Greater than solar generation
+  if (consumption > 3.5) color = "text-red-500"; // Greater than 3.5kW
+
+  return <Home className={`h-4 w-4 ${color}`} />;
 };
 
-export function DashboardCard({ title, value, unit, icon, description, children, className, isLoading, valueColorClassName }: DashboardCardProps) {
+const getBatteryIcon = (percentage: number): ReactNode => {
+  let color = "text-red-500";
+  if (percentage >= 25) color = "text-orange-800";
+  if (percentage >= 50) color = "text-orange-500";
+  if (percentage >= 75) color = "text-green-400";
+  if (percentage === 100) color = "text-green-800";
+
+  return <Battery className={`h-4 w-4 ${color}`} />;
+};
+
+export function DashboardCard({ title, value, unit, solarValue, icon, description, children, className, isLoading, valueColorClassName }: DashboardCardProps) {
+  const displayIcon =
+    title === "Battery Status" && typeof value === "number"
+      ? getBatteryIcon(value)
+      : title === "Home Consumption" && typeof value === "number" && typeof solarValue === "number"
+      ? getHomeConsumptionIcon(value, solarValue)
+      : icon;
+
   return (
     <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <div className="text-primary">{cardIcons[title] || icon}</div> {/* Use the mapping, fallback to passed icon */}
+        <div className="text-primary">{displayIcon}</div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-           <div className="h-10 w-3/4 bg-muted animate-pulse rounded-md"></div>
+          <div className="h-10 w-3/4 bg-muted animate-pulse rounded-md"></div>
         ) : (
           <div className={cn("text-2xl font-bold transition-colors duration-500 ease-in-out", valueColorClassName)}>
-            {typeof value === 'number' ? (
-              // Format numbers with consistent decimal places if needed,
-              // or handle based on unit/type if more complex formatting is required.
-              // For simplicity, displaying numbers as is for now.
-              value
-            ) : (
-              value
-            )}
+            {typeof value === "number" ? value : value}
             {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
           </div>
         )}
