@@ -30,7 +30,7 @@ const POWER_FLOW_THRESHOLD_WATTS = 50; // 50W threshold
 function getBatteryIcon(battery: BatteryStatus, batteryPowerFlowWatts: number) {
   const isCharging = batteryPowerFlowWatts < -POWER_FLOW_THRESHOLD_WATTS;
 
-  if (isCharging) return <BatteryCharging className="h-6 w-6 text-blue-500" />; // Generic charging icon, color on card will specify source
+  if (isCharging) return <BatteryCharging className="h-6 w-6 text-blue-500" />;
   if (battery.percentage > 80) return <BatteryFull className="h-6 w-6 text-green-500" />;
   if (battery.percentage > 40) return <BatteryMedium className="h-6 w-6 text-yellow-500" />;
   if (battery.percentage > 10) return <BatteryLow className="h-6 w-6 text-orange-500" />;
@@ -67,21 +67,21 @@ function getHomeConsumptionCardDetails(
 
     const epsilon = POWER_FLOW_THRESHOLD_WATTS; 
 
-    if (consumptionWatts <= epsilon) { // Very low consumption
-        if (solarWatts > epsilon) color = "text-green-500"; // Covered by solar (even if small)
-        else if (batteryDischargeWatts > epsilon) color = "text-orange-500"; // Covered by battery
-        else color = "text-muted-foreground"; // Truly idle or negligible
-    } else { // Significant consumption
-        if (gridImportWatts > consumptionWatts * 0.5 && gridImportWatts > epsilon) { // Primarily Grid
+    if (consumptionWatts <= epsilon) {
+        if (solarWatts > epsilon) color = "text-green-500";
+        else if (batteryDischargeWatts > epsilon) color = "text-orange-500";
+        else color = "text-muted-foreground";
+    } else {
+        if (gridImportWatts > consumptionWatts * 0.5 && gridImportWatts > epsilon) {
              color = "text-red-600";
-        } else if (solarWatts >= consumptionWatts - epsilon) { // Primarily Solar
+        } else if (solarWatts >= consumptionWatts - epsilon) {
              color = "text-green-500";
-        } else if (solarWatts + batteryDischargeWatts >= consumptionWatts - epsilon) { // Mix of Solar + Battery
-             color = solarWatts > epsilon ? "text-yellow-500" : "text-orange-500"; // Yellow if solar contributes, else orange for battery
-        } else if (batteryDischargeWatts > epsilon) { // Primarily Battery
+        } else if (solarWatts + batteryDischargeWatts >= consumptionWatts - epsilon) {
+             color = solarWatts > epsilon ? "text-yellow-500" : "text-orange-500";
+        } else if (batteryDischargeWatts > epsilon) {
              color = "text-orange-500";
-        } else { // Fallback or complex state, check if grid is covering the rest
-             color = gridImportWatts > epsilon ? "text-red-500" : "text-muted-foreground"; // Red if grid involved, else muted
+        } else {
+             color = gridImportWatts > epsilon ? "text-red-500" : "text-muted-foreground";
         }
     }
     return { title: "Home Consumption", ...formattedHC, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(timestamp).toLocaleTimeString()}`, valueColorClassName: color, className: "min-h-[120px]" };
@@ -89,60 +89,69 @@ function getHomeConsumptionCardDetails(
 
 function getSolarGenerationCardDetails(
     solarData: Metric,
-    dailySolarTotalKW: number | undefined,
+    dailySolarTotalKWh: number | undefined,
     timestamp: number
 ): CardDetails {
     const formattedSolar = formatPowerValue(solarData.value, solarData.unit);
     let color = "text-muted-foreground";
     const solarPowerW = (typeof solarData.value === 'number' ? (solarData.unit === 'kW' ? solarData.value * 1000 : solarData.value) : 0);
 
-    if (solarPowerW >= 3000) color = "text-orange-500"; // High generation
-    else if (solarPowerW >= 1000) color = "text-green-500"; // Medium generation
-    else if (solarPowerW > POWER_FLOW_THRESHOLD_WATTS) color = "text-yellow-500"; // Low generation
+    if (solarPowerW >= 3000) color = "text-orange-500";
+    else if (solarPowerW >= 1000) color = "text-green-500";
+    else if (solarPowerW > POWER_FLOW_THRESHOLD_WATTS) color = "text-yellow-500";
 
-    let description = `Updated: ${new Date(timestamp).toLocaleTimeString()}`;
-    if (typeof dailySolarTotalKW === 'number') {
-        description = `Today: ${dailySolarTotalKW.toFixed(1)} kWh / ${description}`;
+    const timeString = `Updated: ${new Date(timestamp).toLocaleTimeString()}`;
+    let dailyTotalString = "Today: N/A";
+    if (typeof dailySolarTotalKWh === 'number' && !isNaN(dailySolarTotalKWh)) {
+        dailyTotalString = `Today: ${dailySolarTotalKWh.toFixed(2)} kWh`;
     }
-    return { title: "Solar Generation", ...formattedSolar, icon: <Sun className="h-6 w-6" />, valueColorClassName: color, description, className: "min-h-[120px]" };
+    
+    const description = `${dailyTotalString} / ${timeString}`;
+
+    return { 
+        title: "Solar Generation", 
+        ...formattedSolar, 
+        icon: <Sun className="h-6 w-6" />, 
+        valueColorClassName: color, 
+        description, 
+        className: "min-h-[120px]" 
+    };
 }
 
 function getBatteryCardDetails(
     batteryInfo: BatteryStatus,
-    currentBatteryPowerWatts: number, // This is data.battery.rawPowerWatts (effective flow)
-    rawGridPowerWattsFromSystem: number, // This is data.rawGridPowerWatts
-    rawSolarPowerWattsFromSystem: number, // This is data.rawSolarPowerWatts
+    currentBatteryPowerWatts: number,
+    rawGridPowerWattsFromSystem: number,
+    rawSolarPowerWattsFromSystem: number,
     timestamp: number
 ): CardDetails {
-    const chargeLevelString = `${batteryInfo.percentage}%`; // Main value of the card
+    const chargeLevelString = `${batteryInfo.percentage}%`;
     let activityDescription = "";
-    let valueColorClassName = "text-muted-foreground"; // Color for the percentage text
+    let valueColorClassName = "text-muted-foreground";
 
     const absBatteryPowerKW = Math.abs(currentBatteryPowerWatts) / 1000;
     const powerRateString = `${absBatteryPowerKW.toFixed(2)} kW`;
 
     const isCharging = currentBatteryPowerWatts < -POWER_FLOW_THRESHOLD_WATTS;
     const isDischarging = currentBatteryPowerWatts > POWER_FLOW_THRESHOLD_WATTS;
+    const isGridImporting = rawGridPowerWattsFromSystem < -POWER_FLOW_THRESHOLD_WATTS;
+    const isSolarGenerating = rawSolarPowerWattsFromSystem > POWER_FLOW_THRESHOLD_WATTS;
+    const isGridExporting = rawGridPowerWattsFromSystem > POWER_FLOW_THRESHOLD_WATTS;
 
     if (isCharging) {
-        const isGridImportingForBattery = rawGridPowerWattsFromSystem < -POWER_FLOW_THRESHOLD_WATTS;
-        const isSolarGeneratingForBattery = rawSolarPowerWattsFromSystem > POWER_FLOW_THRESHOLD_WATTS;
-
-        // Prefer grid if significant grid import, even if some solar is present (e.g. Octopus Go)
-        if (isGridImportingForBattery && (Math.abs(rawGridPowerWattsFromSystem) > rawSolarPowerWattsFromSystem * 0.5 || !isSolarGeneratingForBattery)) {
+        if (isGridImporting && (Math.abs(rawGridPowerWattsFromSystem) > rawSolarPowerWattsFromSystem * 0.5 || !isSolarGenerating)) {
             activityDescription = `- Charging from Grid at ${powerRateString}`;
             valueColorClassName = "text-red-600";
-        } else if (isSolarGeneratingForBattery) {
+        } else if (isSolarGenerating) {
             activityDescription = `- Charging from Solar at ${powerRateString}`;
             valueColorClassName = "text-green-600";
-        } else { // Generic charging (e.g. small mixed source, or API reports charging but sources unclear)
+        } else {
             activityDescription = `- Charging at ${powerRateString}`;
-            valueColorClassName = "text-blue-500"; // A neutral charging color
+            valueColorClassName = "text-blue-500"; 
         }
     } else if (isDischarging) {
-        const isGridExporting = rawGridPowerWattsFromSystem > POWER_FLOW_THRESHOLD_WATTS;
         if (isGridExporting) {
-            activityDescription = `- Supplying Home / Exporting at ${powerRateString}`;
+            activityDescription = `- Discharging at ${powerRateString} (Grid Exporting)`;
             valueColorClassName = "text-blue-600";
         } else {
             activityDescription = `- Supplying Home at ${powerRateString}`;
@@ -150,30 +159,43 @@ function getBatteryCardDetails(
         }
     } else { // Idle or very low flow
         activityDescription = "- Idle";
-        // Color based on charge percentage when idle
-        if (batteryInfo.percentage >= 99) valueColorClassName = "text-green-500"; // Full
-        else if (batteryInfo.percentage >= 70) valueColorClassName = "text-green-400"; // Good
-        else if (batteryInfo.percentage >= 40) valueColorClassName = "text-yellow-500"; // Medium
-        else if (batteryInfo.percentage > 15) valueColorClassName = "text-orange-500"; // Low
-        else valueColorClassName = "text-red-600"; // Critical
+        if (batteryInfo.percentage >= 99) valueColorClassName = "text-green-500";
+        else if (batteryInfo.percentage >= 70) valueColorClassName = "text-green-400";
+        else if (batteryInfo.percentage >= 40) valueColorClassName = "text-yellow-500";
+        else if (batteryInfo.percentage > 15) valueColorClassName = "text-orange-500";
+        else valueColorClassName = "text-red-600";
     }
     
-    const kwhInfo = (typeof batteryInfo.energyKWh === 'number' && typeof batteryInfo.capacityKWh === 'number' && batteryInfo.capacityKWh > 0)
+    const kwhInfoString = (typeof batteryInfo.energyKWh === 'number' && typeof batteryInfo.capacityKWh === 'number' && batteryInfo.capacityKWh > 0)
         ? `Charge: ${batteryInfo.energyKWh.toFixed(2)} kWh / ${batteryInfo.capacityKWh.toFixed(2)} kWh`
-        : `Charge: N/A`;
+        : ``;
 
+    const finalDescriptionElements = [];
+    if (kwhInfoString) {
+      finalDescriptionElements.push(<span key="kwh">{kwhInfoString}</span>);
+    }
+    if (activityDescription) {
+      finalDescriptionElements.push(<span key="activity" className="block sm:inline sm:ml-1">{activityDescription}</span>);
+    }
+    finalDescriptionElements.push(<span key="time" className="block text-xs text-muted-foreground sm:inline sm:ml-1">({new Date(timestamp).toLocaleTimeString()})</span>);
+    
     const finalDescription = (
-        <>
-            <span>{kwhInfo}</span>
-            {activityDescription && <span className="ml-1">{activityDescription}</span>}
-            <span className="text-xs text-muted-foreground ml-1">({new Date(timestamp).toLocaleTimeString()})</span>
-        </>
+      <div>
+        {finalDescriptionElements.map((el, index) => (
+          <React.Fragment key={index}>
+            {el}
+            {index < finalDescriptionElements.length -1 && !el.key?.toString().includes("kwh") && finalDescriptionElements[index+1]?.key?.toString().includes("activity") ? "" : ""}
+            {index < finalDescriptionElements.length -1 && (el.key?.toString().includes("kwh") || el.key?.toString().includes("activity")) && index !== finalDescriptionElements.length -2 && <br className="sm:hidden"/>}
+          </React.Fragment>
+        ))}
+      </div>
     );
+
 
     return {
         title: "Battery Status",
-        value: chargeLevelString, // Percentage is the main value
-        unit: "", // Unit is part of percentage string
+        value: chargeLevelString,
+        unit: "",
         icon: getBatteryIcon(batteryInfo, currentBatteryPowerWatts),
         description: finalDescription,
         valueColorClassName: valueColorClassName,
@@ -216,34 +238,26 @@ function getGridCardDetails(
 
 function getEVChargerCardDetails(
     evData: EVChargerStatusType,
-    timestamp: number // Added timestamp for consistency, though not directly used in description text yet
+    timestamp: number
 ): CardDetails {
     const formattedEV = formatPowerValue(evData.value, evData.unit);
     let valueColor = "text-muted-foreground";
-    let icon = <PlugZap className="h-6 w-6" />; // Default icon
-
-    // evData.status is already a ReactNode from mapEVChargerAPIStatus
-    // To infer color, we need to check the underlying string or a more structured status
-    // For now, let's assume we can infer from the power value or a simplified status string if available.
+    let icon = <PlugZap className="h-6 w-6" />;
 
     const powerInWatts = typeof evData.value === 'number' ? (evData.unit === 'kW' ? evData.value * 1000 : evData.value) : 0;
 
-    if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) { // Charging
+    if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) {
         valueColor = "text-green-500";
         icon = <Bolt className="h-6 w-6 text-green-500" />;
-    } else {
-        // If not actively charging, use a generic icon/color or try to infer from status if it were structured
-        // For now, default to idle-like blue if status suggests connection without high power.
-        // This part is tricky without a raw status string here.
-        // The evData.status (ReactNode) makes it hard to check content.
-        // Assuming `mapEVChargerAPIStatus` would have set icon/color for faults.
-        // If we need more refined EV card logic, `mapEVChargerAPIStatus` might need to return a structured object.
-        valueColor = "text-blue-500"; // General "active but not charging hard" color
+    } else if (React.isValidElement(evData.status) && evData.status.props.className?.includes('text-red')) { // Heuristic for faulted
+        valueColor = "text-red-600";
+        icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
+    }
+    else {
+        valueColor = "text-blue-500";
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
     }
     
-    // If evData.status is a ReactNode, it should handle its own coloring.
-    // The valueColorClassName here is for the numerical power value.
     let descriptionNode: React.ReactNode = (
         <>
           {evData.status}
@@ -270,13 +284,11 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     );
   }
 
-  if (isLoading && !data) { // Handles initial loading before first data arrives
+  if (isLoading && !data) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4 flex flex-col">
-           {/* Placeholder for EnergyFlowVisual */}
           <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]"><CardContent className="p-6"><Loader2 className="h-8 w-8 animate-spin text-primary"/></CardContent></Card>
-           {/* Placeholder for EV Charger Card */}
           <DashboardCard title="EV Charger" value="0" unit="kW" icon={<PlugZap className="h-6 w-6"/>} isLoading={true} className="min-h-[120px]" />
         </div>
         <div className="md:col-span-1 space-y-4 flex flex-col">
@@ -288,7 +300,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     );
   }
   
-  if (!data) { // Handles cases where data is null post-loading (e.g. API key removed)
+  if (!data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
           <PackageOpen className="h-12 w-12 text-muted-foreground mb-4" />
@@ -309,7 +321,6 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Left Column */}
       <div className="md:col-span-2 space-y-4 flex flex-col">
         {data && <EnergyFlowVisual data={data} />}
         {evDetails && (
@@ -320,20 +331,19 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
             unit={evDetails.unit}
             icon={evDetails.icon}
             description={evDetails.description}
-            isLoading={isLoading && !data} // Show loading if data is being fetched for the first time
+            isLoading={isLoading && !data}
             valueColorClassName={evDetails.valueColorClassName}
             className={cn(evDetails.className, "flex-grow-0 flex-shrink-0")}
           />
         )}
       </div>
 
-      {/* Right Column */}
       <div className="md:col-span-1 space-y-4 flex flex-col">
         {standardCards.map((cardProps) => (
           <DashboardCard
             key={cardProps.title}
             {...cardProps}
-            isLoading={isLoading && !data} // Show loading if data is being fetched for the first time
+            isLoading={isLoading && !data}
             className={cn(cardProps.className, "flex-grow-0 flex-shrink-0")}
           />
         ))}
