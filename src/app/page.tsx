@@ -27,7 +27,7 @@ export default function HomePage() {
     if (isMobile) {
       event.preventDefault(); // Prevent default navigation
       const appUrl = 'givenergy://'; // Custom URL scheme for GivEnergy app (assumed)
-      const storeUrl = 'https://play.google.com/store/apps/details?id=com.mobile.givenergy&utm_source=emea_Med&embedded=0';
+      const storeUrl = 'https://play.google.com/store/apps/details?id=com.mobile.givenergy&utm_source=emea_Med';
 
       // Attempt to open the app
       window.location.href = appUrl;
