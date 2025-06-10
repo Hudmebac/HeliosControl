@@ -9,9 +9,11 @@ export type EVChargerInternalStatus = // This is now a ReactNode
 
 
 export interface BatteryStatus extends Metric {
-  charging?: boolean; 
+  charging?: boolean;
   percentage: number;
   rawPowerWatts: number; // Added to store the effective power flow for the battery
+  energyKWh?: number; // Current energy stored in kWh
+  capacityKWh?: number; // Total battery capacity in kWh
 }
 
 export interface EVChargerStatus extends Metric {
@@ -37,14 +39,13 @@ export interface RealTimeData {
   grid: Metric & { flow: 'importing' | 'exporting' | 'idle' };
   evCharger: EVChargerStatus;
   timestamp: number;
-  
+
   // Raw power values in Watts for internal calculations, always numbers (default 0)
   rawHomeConsumptionWatts: number;
-  rawSolarPowerWatts: number; 
+  rawSolarPowerWatts: number;
   rawGridPowerWatts: number; // Negative for import, positive for export
-  // Effective battery power (API or inferred) is now in battery.rawPowerWatts
-  // rawBatteryPowerWatts: number; // Direct from API, negative for charge
-  // inferredRawBatteryPowerWatts?: number; // Calculated, negative for charge
+  rawBatteryPowerWattsFromAPI: number; // Direct from API, negative for charge
+  inferredRawBatteryPowerWatts?: number; // Calculated, negative for charge
   today?: DailyEnergyTotals; // Optional daily totals from meter-data
 }
 
@@ -103,7 +104,7 @@ export interface GivEnergyPaginatedResponse<T> {
 
 // --- Raw API Response Types (internal to givenergy.ts) ---
 
-export interface GivEnergyAPIData<T> { 
+export interface GivEnergyAPIData<T> {
   data: T;
 }
 
@@ -120,8 +121,8 @@ export interface RawCommunicationDevice {
     info?: {
         battery_type: string;
         battery: {
-            nominal_capacity: number;
-            nominal_voltage: number;
+            nominal_capacity: number; // Ah
+            nominal_voltage: number; // V
             depth_of_discharge?: number;
         };
         model: string;

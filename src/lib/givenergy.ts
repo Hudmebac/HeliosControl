@@ -26,6 +26,9 @@ import type {
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
 const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1';
 
+// SIMULATED: In a real app, this should come from inverter settings or user configuration.
+const SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH = 13.5;
+
 
 async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?: RequestInit): Promise<T> {
   const headers = new Headers({
@@ -65,8 +68,8 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
     } else if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as {message: any}).message === 'string') {
       originalMessage = (error as {message: string}).message;
     }
-    
-    if (error instanceof TypeError && 
+
+    if (error instanceof TypeError &&
         (originalMessage.toLowerCase().includes('failed to fetch') ||
          originalMessage.toLowerCase().includes('networkerror') ||
          originalMessage.toLowerCase().includes('load failed'))) {
@@ -74,9 +77,9 @@ async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?:
       console.error("Throwing detailed network error from _fetchGivEnergyAPI (proxy call):", detailedMessage);
       throw new Error(detailedMessage);
     }
-    
+
     if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error for") || originalMessage.startsWith("Network error:")) {
-        throw error; 
+        throw error;
     }
 
     const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
@@ -107,7 +110,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let evChargerId: string | null = null;
 
   const allCommDevices: RawCommunicationDevice[] = [];
-  let commDevicesNextPageEndpoint: string | null = "/communication-device"; 
+  let commDevicesNextPageEndpoint: string | null = "/communication-device";
 
   try {
     while (commDevicesNextPageEndpoint) {
@@ -129,12 +132,12 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
         commDevicesNextPageEndpoint = null;
       }
     }
-    
+
     const primaryDevice = allCommDevices.find(device => device.inverter?.serial);
     if (primaryDevice && primaryDevice.inverter?.serial) {
         inverterSerial = primaryDevice.inverter.serial;
     }
-    
+
     if (!inverterSerial) {
       const numDevices = allCommDevices.length;
       const deviceSerialsText = allCommDevices.map(d => d.serial_number).join(', ') || 'none';
@@ -152,19 +155,19 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     }
     console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", originalMessage, error);
     if (originalMessage && (originalMessage.toLowerCase().includes('network error:') || originalMessage.startsWith('API Request Error:') || originalMessage.startsWith('API Request Failed via Proxy:') || originalMessage.startsWith('GivEnergy API error:') || originalMessage.startsWith('Failed to identify a primary inverter'))) {
-        throw error; 
+        throw error;
     }
     throw new Error(`Failed to retrieve essential device identifiers (communication devices pagination via proxy): ${originalMessage}`);
   }
 
-  if (inverterSerial) { 
+  if (inverterSerial) {
     const allEVChargers: RawEVCharger[] = [];
     let evChargersNextPageEndpoint: string | null = "/ev-charger";
     try {
       while (evChargersNextPageEndpoint) {
         const evChargersResponse = await _fetchGivEnergyAPI<RawEVChargersResponse>(apiKey, evChargersNextPageEndpoint);
         allEVChargers.push(...evChargersResponse.data);
-        
+
         if (evChargersResponse.links?.next) {
           const nextFullUrl = evChargersResponse.links.next;
           if (nextFullUrl.startsWith(GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING)) {
@@ -197,7 +200,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     }
   }
 
-  if (!inverterSerial) { 
+  if (!inverterSerial) {
     throw new Error("Inverter serial could not be determined after device discovery and EV charger search.");
   }
 
@@ -216,26 +219,26 @@ function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.Reac
     if (!apiStatus) return <span className="text-muted-foreground">Status Unknown</span>;
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
-    if (lowerApiStatus === "available") return <span className="text-gray-400">Disconnected</span>;  
-    if (lowerApiStatus === "preparing") return <span className="text-blue-500">Preparing</span>;  
-    if (lowerApiStatus === "charging") return <span className="text-green-500">Charging</span>;  
-    if (lowerApiStatus === "suspendedevse") return <span className="text-yellow-600">Paused (Charger)</span>;  
-    if (lowerApiStatus === "suspendedev") return <span className="text-yellow-500">Paused (Vehicle)</span>;  
-    if (lowerApiStatus === "finishing") return <span className="text-blue-400">Finishing</span>;  
-    if (lowerApiStatus === "reserved") return <span className="text-purple-500">Reserved</span>;  
-    if (lowerApiStatus === "unavailable") return <span className="text-red-600">Unavailable</span>;  
+    if (lowerApiStatus === "available") return <span className="text-gray-400">Disconnected</span>;
+    if (lowerApiStatus === "preparing") return <span className="text-blue-500">Preparing</span>;
+    if (lowerApiStatus === "charging") return <span className="text-green-500">Charging</span>;
+    if (lowerApiStatus === "suspendedevse") return <span className="text-yellow-600">Paused (Charger)</span>;
+    if (lowerApiStatus === "suspendedev") return <span className="text-yellow-500">Paused (Vehicle)</span>;
+    if (lowerApiStatus === "finishing") return <span className="text-blue-400">Finishing</span>;
+    if (lowerApiStatus === "reserved") return <span className="text-purple-500">Reserved</span>;
+    if (lowerApiStatus === "unavailable") return <span className="text-red-600">Unavailable</span>;
     if (lowerApiStatus === "faulted") return <span className="text-red-700">Faulted</span>;
-    
+
     const idleLikeStates = [
-        "eco", "eco+", "boost", "modbusslave", 
-        "vehicle connected", "standby", "paused", 
+        "eco", "eco+", "boost", "modbusslave",
+        "vehicle connected", "standby", "paused",
         "plugged in", "idle", "connected", "stopped", "ready",
-        "plugged_in_not_charging" 
+        "plugged_in_not_charging"
     ];
      if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
-        return <span className="text-blue-500">Idle / Connected</span>; 
+        return <span className="text-blue-500">Idle / Connected</span>;
     }
-    
+
     console.warn(`Unknown EV Charger status from API: "${apiStatus}".`);
     return <span className="text-muted-foreground">{apiStatus}</span>;
 }
@@ -266,16 +269,16 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
-  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
+  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0;
   const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
   const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
 
-  let effectiveBatteryPowerFlow = apiBatteryPowerWatts; 
+  let effectiveBatteryPowerFlow = apiBatteryPowerWatts;
 
   if (!isNaN(inferredBatteryPowerWattsCalculation)) {
-      const isApiReportingIdle = Math.abs(apiBatteryPowerWatts) < 50; 
+      const isApiReportingIdle = Math.abs(apiBatteryPowerWatts) < 50;
       const isInferenceSuggestingFlow = Math.abs(inferredBatteryPowerWattsCalculation) >= 50;
 
       if (isApiReportingIdle && isInferenceSuggestingFlow) {
@@ -297,12 +300,16 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     unit: "kW",
   };
 
+  const currentEnergyKWh = (batteryPercentage / 100) * SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH;
+
   const battery: BatteryStatus = {
-    value: batteryPercentage,
+    value: batteryPercentage, // This remains the primary display value for the card
     unit: "%",
     percentage: batteryPercentage,
     charging: effectiveBatteryPowerFlow < -10 ? true : (effectiveBatteryPowerFlow > 10 ? false : undefined),
     rawPowerWatts: effectiveBatteryPowerFlow,
+    energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
+    capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
   };
 
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
@@ -311,7 +318,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     flow: gridPowerWatts > 50 ? 'exporting' : (gridPowerWatts < -50 ? 'importing' : 'idle'),
   };
 
-  let evCharger: EVChargerStatus = { 
+  let evCharger: EVChargerStatus = {
     value: "N/A",
     unit: "kW",
     status: mapEVChargerAPIStatus("unavailable"),
@@ -331,13 +338,13 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       console.warn(`Detailed EV status fetch failed for ${S_evChargerId}. Attempting fallback. Error: ${errorDetailed instanceof Error ? errorDetailed.message : String(errorDetailed)}`);
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
-        evApiStatusString = evBasicInfoResponse.data.status; 
+        evApiStatusString = evBasicInfoResponse.data.status;
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
       }
     }
-    
+
     evCharger = {
       value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
       unit: "kW",
@@ -349,7 +356,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
     }
   }
-  
+
   const dataToReturn: RealTimeData = {
     homeConsumption,
     solarGeneration,
@@ -360,6 +367,8 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     rawHomeConsumptionWatts: consumptionWatts,
     rawSolarPowerWatts: solarPowerWatts,
     rawGridPowerWatts: gridPowerWatts,
+    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts,
+    inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
     today: dailyTotals,
   };
 
@@ -373,3 +382,4 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
+
