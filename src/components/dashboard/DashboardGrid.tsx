@@ -20,15 +20,15 @@ const getBatteryStatus = (battery: BatteryStatus) => {
     description = "Charging";
     color = "text-blue-500";
     icon = <BatteryCharging className="h-6 w-6 text-blue-500" />;
-  } else if (battery.percentage > 80) {
+  } else if (battery.percentage >99) {
     description = "Full";
     color = "text-green-500";
     icon = <BatteryFull className="h-6 w-6 text-green-500" />;
-  } else if (battery.percentage > 40) {
+  } else if (battery.percentage >50) {
     description = "Medium Charge";
     color = "text-orange-500";
     icon = <BatteryMedium className="h-6 w-6 text-orange-500" />;
-  } else if (battery.percentage > 10) {
+  } else if (battery.percentage > 30) {
     description = "Low Charge";
     color = "text-red-500";
     icon = <BatteryLow className="h-6 w-6 text-red-500" />;
