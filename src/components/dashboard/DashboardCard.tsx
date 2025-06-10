@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils"; // Assuming cn is for conditional class names
-import { Sun, Battery, Car, Home, Power } from "lucide-react"; // Import necessary icons
+import { Sun, Battery, Car, Home, Power, BatteryCharging, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning } from "lucide-react"; // Import necessary icons
 
 interface DashboardCardProps {
   title: string;
   value: number | string;
   unit?: string;
   solarValue?: number; // Added solar generation value for comparison
+  batteryCharging?: boolean; // New prop to check charge status
   icon?: ReactNode;
   description?: string;
   children?: ReactNode;
@@ -15,6 +16,16 @@ interface DashboardCardProps {
   isLoading?: boolean;
   valueColorClassName?: string;
 }
+
+const getBatteryIcon = (percentage: number, charging: boolean): ReactNode => {
+  if (charging) return <BatteryCharging className="h-6 w-6 text-blue-500" />;
+
+  if (percentage > 80) return <BatteryFull className="h-6 w-6 text-green-500" />;
+  if (percentage > 40) return <BatteryMedium className="h-6 w-6 text-orange-500" />;
+  if (percentage > 10) return <BatteryLow className="h-6 w-6 text-red-500" />;
+  
+  return <BatteryWarning className="h-6 w-6 text-red-700" />;
+};
 
 const getHomeConsumptionIcon = (consumption: number, solarGeneration: number): ReactNode => {
   let color = "text-green-500"; // Default: Less than solar generation
@@ -24,20 +35,10 @@ const getHomeConsumptionIcon = (consumption: number, solarGeneration: number): R
   return <Home className={`h-4 w-4 ${color}`} />;
 };
 
-const getBatteryIcon = (percentage: number): ReactNode => {
-  let color = "text-red-500";
-  if (percentage >= 25) color = "text-orange-800";
-  if (percentage >= 50) color = "text-orange-500";
-  if (percentage >= 75) color = "text-green-400";
-  if (percentage === 100) color = "text-green-800";
-
-  return <Battery className={`h-4 w-4 ${color}`} />;
-};
-
-export function DashboardCard({ title, value, unit, solarValue, icon, description, children, className, isLoading, valueColorClassName }: DashboardCardProps) {
+export function DashboardCard({ title, value, unit, solarValue, batteryCharging, icon, description, children, className, isLoading, valueColorClassName }: DashboardCardProps) {
   const displayIcon =
     title === "Battery Status" && typeof value === "number"
-      ? getBatteryIcon(value)
+      ? getBatteryIcon(value, batteryCharging || false)
       : title === "Home Consumption" && typeof value === "number" && typeof solarValue === "number"
       ? getHomeConsumptionIcon(value, solarValue)
       : icon;
