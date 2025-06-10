@@ -9,6 +9,7 @@ import { Home, Sun, BatteryCharging, Zap, Bolt, AlertTriangle, BatteryFull, Batt
 import type { BatteryStatus, Metric, RealTimeData, EVChargerStatus as EVChargerStatusType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card"; // Added import for Card and CardContent
 
 interface DashboardGridProps {
   apiKey: string;
