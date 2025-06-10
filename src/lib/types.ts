@@ -1,30 +1,34 @@
 
 export interface Metric {
-  value: number | string;
+  value: number | string; // Can be number (power) or string (percentage)
   unit: string;
 }
 
-export type EVChargerInternalStatus =
-  | 'charging'
-  | 'idle' // General term for connected but not charging and not faulted
-  | 'faulted'
-  | 'disconnected' // Equivalent to OCPP "Available" (i.e., not connected to EV)
-  | 'unavailable' // OCPP "Unavailable"
-  | 'preparing' // OCPP "Preparing"
-  | 'suspended_evse' // OCPP "SuspendedEVSE"
-  | 'suspended_ev' // OCPP "SuspendedEV"
-  | 'finishing' // OCPP "Finishing"
-  | 'reserved'; // OCPP "Reserved"
+export type EVChargerInternalStatus = // This is now a ReactNode
+  | React.ReactNode;
 
 
 export interface BatteryStatus extends Metric {
-  charging?: boolean; // true if charging, false if discharging, undefined if idle
+  charging?: boolean; 
   percentage: number;
+  rawPowerWatts: number; // Added to store the effective power flow for the battery
 }
 
 export interface EVChargerStatus extends Metric {
   status: EVChargerInternalStatus;
 }
+
+// For daily totals from meter-data/latest
+export interface DailyEnergyTotals {
+  solar?: number; // kWh
+  gridImport?: number; // kWh
+  gridExport?: number; // kWh
+  batteryCharge?: number; // kWh
+  batteryDischarge?: number; // kWh
+  consumption?: number; // kWh
+  acCharge?: number; // kWh (often EV charging total for the day)
+}
+
 
 export interface RealTimeData {
   homeConsumption: Metric;
@@ -33,11 +37,15 @@ export interface RealTimeData {
   grid: Metric & { flow: 'importing' | 'exporting' | 'idle' };
   evCharger: EVChargerStatus;
   timestamp: number;
-  // New numeric fields for easier calculations
-  numericHomeConsumptionKW: number;
-  numericSolarGenerationKW: number;
-  numericBatteryDischargeKW: number; // Power being discharged from the battery (kW, always positive or 0)
-  numericGridImportKW: number;      // Power being imported from the grid (kW, always positive or 0)
+  
+  // Raw power values in Watts for internal calculations, always numbers (default 0)
+  rawHomeConsumptionWatts: number;
+  rawSolarPowerWatts: number; 
+  rawGridPowerWatts: number; // Negative for import, positive for export
+  // Effective battery power (API or inferred) is now in battery.rawPowerWatts
+  // rawBatteryPowerWatts: number; // Direct from API, negative for charge
+  // inferredRawBatteryPowerWatts?: number; // Calculated, negative for charge
+  today?: DailyEnergyTotals; // Optional daily totals from meter-data
 }
 
 export interface GivEnergyIDs {
@@ -95,8 +103,7 @@ export interface GivEnergyPaginatedResponse<T> {
 
 // --- Raw API Response Types (internal to givenergy.ts) ---
 
-// For non-paginated single-object data responses
-export interface GivEnergyAPIData<T> { // Corrected export
+export interface GivEnergyAPIData<T> { 
   data: T;
 }
 
@@ -145,34 +152,34 @@ export interface RawEVCharger {
     alias: string;
     online: boolean;
     went_offline_at: string | null;
-    status: string;
+    status: string; // This is often a basic status string like "CHARGING" or "AVAILABLE"
 }
 export type RawEVChargersResponse = GivEnergyPaginatedResponse<RawEVCharger>;
 
 
 export interface RawSystemDataLatest {
   time: string;
-  status: string;
+  status: string; // Inverter status (e.g. "Normal")
   solar: { power: number; arrays: { array: number; voltage: number; current: number; power: number }[] };
   grid: { voltage: number; current: number; power: number; frequency: number };
-  battery: { percent: number; power: number; temperature: number };
+  battery: { percent: number; power: number; temperature: number }; // battery.power: -ve for charge, +ve for discharge
   inverter: {
     temperature: number;
-    power: number;
+    power: number; // Total power output from inverter
     output_voltage: number;
     output_frequency: number;
     eps_power: number;
   };
-  consumption: number;
+  consumption: number; // Home consumption in Watts
 }
 export type RawSystemDataLatestResponse = GivEnergyAPIData<RawSystemDataLatest>;
 
 
-export interface RawEVChargerStatus {
-    mode: string;
-    status: string;
+export interface RawEVChargerStatus { // From /ev-charger/{uuid}/status
+    mode: string; // e.g. "ECO", "BOOST"
+    status: string; // More detailed OCPP status e.g. "Charging", "Available", "SuspendedEV"
     charge_session: {
-        status: string;
+        status: string; // e.g. "ACTIVE", "STOPPED"
         power: number | null; // Watts, can be null
         kwh_delivered: number;
         start_time: string | null;
@@ -181,4 +188,37 @@ export interface RawEVChargerStatus {
     vehicle_connected: boolean;
 }
 export type RawEVChargerStatusResponse = GivEnergyAPIData<RawEVChargerStatus>;
+
+// Type for /inverter/{serial}/meter-data/latest
+export interface RawMeterDataLatest {
+    time: string;
+    today: {
+        solar: number; // kWh
+        grid: {
+            import: number; // kWh
+            export: number; // kWh
+        };
+        battery: {
+            charge: number; // kWh
+            discharge: number; // kWh
+        };
+        consumption: number; // kWh
+        ac_charge: number; // kWh
+    };
+    total: { // Lifetime totals
+        solar: number;
+        grid: {
+            import: number;
+            export: number;
+        };
+        battery: {
+            charge: number;
+            discharge: number;
+        };
+        consumption: number;
+        ac_charge: number;
+    };
+    is_metered: boolean;
+}
+export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
 
