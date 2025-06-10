@@ -85,7 +85,13 @@ export function Header() {
       <div className="container flex h-16 max-w-screen-2xl items-center">
         <div className="mr-4 flex items-center">
           <AppLogo className="h-6 w-6 mr-2 text-primary" />
-          <h1 className="text-lg font-semibold font-headline">Helios Control</h1>
+          <h1 
+            className="text-lg font-semibold font-headline cursor-pointer"
+            onClick={() => window.location.reload()}
+            aria-label="Refresh Page"
+          >
+            Helios Control
+          </h1>
         </div>
         <div className="flex items-center space-x-2">
           <Button variant="ghost" size="icon" asChild aria-label="Link to Solar">
