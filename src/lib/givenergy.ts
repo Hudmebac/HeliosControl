@@ -28,6 +28,7 @@ const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1'
 
 // SIMULATED: In a real app, this should come from inverter settings or user configuration.
 const SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH = 13.5;
+const EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS = 50; // Threshold for "significant flow" for inference
 
 
 async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?: RequestInit): Promise<T> {
@@ -267,27 +268,31 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       console.warn("Could not fetch daily meter data (optional):", meterError);
   }
 
+  // Safely parse all raw power values, defaulting to 0 if not a number
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
-  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0;
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
+  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; // -ve for import, +ve for export
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; // Direct from API
+
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
+  // Calculate inferred battery power: Home - Solar + Grid (where Grid is directional)
+  // Result: +ve for discharge, -ve for charge
   const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
 
-  let effectiveBatteryPowerFlow = apiBatteryPowerWatts;
+  let effectiveBatteryPowerFlow;
 
   if (!isNaN(inferredBatteryPowerWattsCalculation)) {
-      const isApiReportingIdle = Math.abs(apiBatteryPowerWatts) < 50;
-      const isInferenceSuggestingFlow = Math.abs(inferredBatteryPowerWattsCalculation) >= 50;
-
-      if (isApiReportingIdle && isInferenceSuggestingFlow) {
-          effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
-      } else {
-          effectiveBatteryPowerFlow = apiBatteryPowerWatts;
-      }
-  } else {
+    if (Math.abs(inferredBatteryPowerWattsCalculation) >= EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS) {
+      // Inference suggests significant flow, prioritize it.
+      effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
+    } else {
+      // Inference suggests idle or very low flow, so use the API's report for battery.
       effectiveBatteryPowerFlow = apiBatteryPowerWatts;
+    }
+  } else {
+    // Inference calculation failed (NaN), fall back to API's report for battery.
+    effectiveBatteryPowerFlow = apiBatteryPowerWatts;
   }
 
   const homeConsumption: Metric = {
@@ -303,11 +308,10 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const currentEnergyKWh = (batteryPercentage / 100) * SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH;
 
   const battery: BatteryStatus = {
-    value: batteryPercentage, // This remains the primary display value for the card
+    value: batteryPercentage,
     unit: "%",
     percentage: batteryPercentage,
-    charging: effectiveBatteryPowerFlow < -10 ? true : (effectiveBatteryPowerFlow > 10 ? false : undefined),
-    rawPowerWatts: effectiveBatteryPowerFlow,
+    rawPowerWatts: effectiveBatteryPowerFlow, // This is the crucial value for UI logic
     energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
     capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
   };
@@ -315,7 +319,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
     value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
     unit: "kW",
-    flow: gridPowerWatts > 50 ? 'exporting' : (gridPowerWatts < -50 ? 'importing' : 'idle'),
+    flow: gridPowerWatts > EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS ? 'exporting' : (gridPowerWatts < -EFFECTIVE_FLOW_INFERENCE_THRESHOLD_WATTS ? 'importing' : 'idle'),
   };
 
   let evCharger: EVChargerStatus = {
@@ -360,15 +364,15 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const dataToReturn: RealTimeData = {
     homeConsumption,
     solarGeneration,
-    battery,
+    battery, // Contains battery.rawPowerWatts = effectiveBatteryPowerFlow
     grid,
     evCharger,
     timestamp: new Date(rawData.time).getTime() || Date.now(),
     rawHomeConsumptionWatts: consumptionWatts,
     rawSolarPowerWatts: solarPowerWatts,
     rawGridPowerWatts: gridPowerWatts,
-    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts,
-    inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
+    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, // Keep for debugging if needed
+    inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined, // Keep for debugging
     today: dailyTotals,
   };
 
@@ -382,4 +386,3 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
-
