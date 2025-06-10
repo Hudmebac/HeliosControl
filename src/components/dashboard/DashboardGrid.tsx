@@ -1,11 +1,12 @@
 
 "use client"
 
+import * as React from "react"; // Added this line
 import { DashboardCard } from "./DashboardCard";
 import { EnergyFlowVisual } from "./EnergyFlowVisual"; // Import the visual flow component
 import { useGivEnergyData } from "@/hooks/use-giv-energy-data";
 import { Home, Sun, BatteryCharging, Zap, Bolt, AlertTriangle, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, PowerOff, Power, PlugZap, Loader2, Lightbulb, PackageOpen, Flame } from "lucide-react";
-import type { BatteryStatus, Metric, RealTimeData } from "@/lib/types";
+import type { BatteryStatus, Metric, RealTimeData, EVChargerStatus as EVChargerStatusType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -18,14 +19,14 @@ interface CardDetails {
   value: string | number;
   unit?: string;
   icon: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode; // Changed to ReactNode to support JSX
   valueColorClassName?: string;
   className?: string;
 }
 
 function getBatteryIcon(battery: BatteryStatus, batteryPowerFlowWatts: number) {
   const isCharging = batteryPowerFlowWatts < -50; // More than 50W charging
-  const isDischarging = batteryPowerFlowWatts > 50; // More than 50W discharging
+  // const isDischarging = batteryPowerFlowWatts > 50; // More than 50W discharging
 
   if (isCharging) return <BatteryCharging className="h-6 w-6 text-blue-500" />; // Consistent blue for charging
   // For discharging or idle, icon based on percentage
@@ -55,25 +56,31 @@ function getHomeConsumptionCardDetails(
     hcData: Metric,
     rawGridWatts: number,
     rawSolarWatts: number,
-    rawBatteryWatts: number, // effective battery power flow
+    effectiveBatteryPowerWatts: number,
     timestamp: number
 ): CardDetails {
     const formattedHC = formatPowerValue(hcData.value, hcData.unit);
     let color = "";
     const consumptionWatts = (typeof hcData.value === 'number' ? hcData.value : 0) * (hcData.unit === 'kW' ? 1000 : 1);
     const solarWatts = rawSolarWatts;
-    const batteryDischargeWatts = Math.max(0, rawBatteryWatts); // Positive if discharging
+    const batteryDischargeWatts = Math.max(0, effectiveBatteryPowerWatts); // Positive if discharging
     const gridImportWatts = Math.max(0, -rawGridWatts); // Positive if importing
 
     const epsilon = 10; // 10W threshold
 
-    if (consumptionWatts <= epsilon) {
+    if (consumptionWatts <= epsilon) { // Very low consumption
         if (solarWatts > epsilon) color = "text-green-600"; // Solar active, low consumption
-    } else {
-        if (gridImportWatts > epsilon) color = "text-red-600"; // Grid import
+        else if (batteryDischargeWatts > epsilon) color = "text-orange-500"; // Battery covering tiny load
+        // If grid is exporting, it's likely due to solar/battery, so color is less critical for HC
+    } else { // Significant consumption
+        if (gridImportWatts > epsilon) color = "text-red-600"; // Grid import is primary source for home
         else if (solarWatts >= consumptionWatts - epsilon) color = "text-green-600"; // Primarily solar
-        else if (solarWatts + batteryDischargeWatts >= consumptionWatts - epsilon) { // Solar + Battery
-             color = solarWatts > epsilon ? "text-orange-500" : "text-orange-600"; // Orange/Darker Orange
+        else if (solarWatts + batteryDischargeWatts >= consumptionWatts - epsilon) {
+             color = solarWatts > epsilon ? "text-orange-500" : "text-orange-600"; // Solar + Battery (Orange if solar contributes, Darker Orange if mostly battery)
+        } else {
+            // This case implies something is not adding up or there's a very small uncaptured flow
+            // Or it's all battery if solar is negligible
+            color = batteryDischargeWatts > epsilon ? "text-orange-600" : ""; // Fallback, or mainly battery
         }
     }
     return { title: "Home Consumption", ...formattedHC, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(timestamp).toLocaleTimeString()}`, valueColorClassName: color, className: "min-h-[120px]" };
@@ -100,47 +107,49 @@ function getSolarGenerationCardDetails(
 }
 
 function getBatteryCardDetails(
-    batteryData: BatteryStatus,
-    currentBatteryPowerWatts: number, // This is data.battery.rawPowerWatts (effective flow)
-    rawGridPowerWatts: number,
-    rawSolarPowerWatts: number,
-    homeConsumptionValue: number | string, // Used to check if home needs power
+    batteryInfo: BatteryStatus, // Contains percentage and direct API power (if needed for other things)
+    currentBatteryPowerWatts: number, // This is the *effective* flow (API or inferred)
+    rawGridPowerWattsFromSystem: number,
+    rawSolarPowerWattsFromSystem: number,
+    homeConsumptionActualValue: number | string,
     timestamp: number
 ): CardDetails {
-    const isCharging = currentBatteryPowerWatts < -50;
-    const isDischarging = currentBatteryPowerWatts > 50;
-    let statusDescription = "Idle";
+    const isCharging = currentBatteryPowerWatts < -50; // Effective power is negative for charging
+    const isDischarging = currentBatteryPowerWatts > 50; // Effective power is positive for discharging
+    let statusDescription: React.ReactNode = "Idle"; // Changed to ReactNode
     let valueColor = "text-muted-foreground";
 
-    const homeNeedsPower = (typeof homeConsumptionValue === 'number' && homeConsumptionValue > 0.05); // Home consumption > 50W
+    const homeNeedsPower = (typeof homeConsumptionActualValue === 'number' && homeConsumptionActualValue > 0.05); // Home consumption > 50W (0.05kW)
 
     if (isCharging) {
-        statusDescription = "Charging";
-        valueColor = "text-blue-500"; // Blue for any charging
-        // Refine description based on source
-        const isGridImporting = rawGridPowerWatts < -50;
-        const isSolarGenerating = rawSolarPowerWatts > 50;
-        if (isGridImporting && (!isSolarGenerating || Math.abs(rawGridPowerWatts) > rawSolarPowerWatts)) {
-            statusDescription = "Charging from Grid";
+        valueColor = "text-blue-500"; // General charging
+        const chargingPowerKW = Math.abs(currentBatteryPowerWatts) / 1000;
+        statusDescription = `Charging at ${chargingPowerKW.toFixed(2)} kW`;
+
+        const isGridImportingForBattery = rawGridPowerWattsFromSystem < -50;
+        const isSolarGeneratingForBattery = rawSolarPowerWattsFromSystem > 50;
+
+        if (isGridImportingForBattery && (!isSolarGeneratingForBattery || Math.abs(rawGridPowerWattsFromSystem) > rawSolarPowerWattsFromSystem * 0.8)) { // Grid is primary charger
+            statusDescription = <span className="text-orange-500">Charging from Grid at {chargingPowerKW.toFixed(2)} kW</span>;
             valueColor = "text-orange-500";
-        } else if (isSolarGenerating) {
-            statusDescription = "Charging from Solar";
+        } else if (isSolarGeneratingForBattery) {
+            statusDescription = <span className="text-green-600">Charging from Solar at {chargingPowerKW.toFixed(2)} kW</span>;
             valueColor = "text-green-600";
         }
     } else if (isDischarging) {
-        statusDescription = "Discharging";
-        valueColor = "text-orange-600"; // Orange for any discharging
+        valueColor = "text-orange-600"; // General discharging
+        const dischargingPowerKW = currentBatteryPowerWatts / 1000;
+        statusDescription = `Discharging at ${dischargingPowerKW.toFixed(2)} kW`;
         if (homeNeedsPower) {
-           statusDescription = "Supplying to Home";
+           statusDescription = <span className="text-orange-600">Supplying Home at {dischargingPowerKW.toFixed(2)} kW</span>;
         }
-        // Could add "Supplying to Grid" if exporting and battery is main source, but flow visual covers this.
     } else { // Idle or very low flow
-      if (batteryData.percentage >= 99) statusDescription = "Full";
-      else if (batteryData.percentage <=15) statusDescription = "Low Charge";
+      if (batteryInfo.percentage >= 99) statusDescription = "Full";
+      else if (batteryInfo.percentage <=15) statusDescription = "Low Charge";
     }
 
-    const chargeLevelString = `${batteryData.percentage}%`;
-    return { title: "Battery Status", value: chargeLevelString, unit: "", icon: getBatteryIcon(batteryData, currentBatteryPowerWatts), description: statusDescription, valueColorClassName: valueColor, className: "min-h-[120px]" };
+    const chargeLevelString = `${batteryInfo.percentage}%`;
+    return { title: "Battery Status", value: chargeLevelString, unit: "", icon: getBatteryIcon(batteryInfo, currentBatteryPowerWatts), description: statusDescription, valueColorClassName: valueColor, className: "min-h-[120px]" };
 }
 
 function getGridCardDetails(
@@ -164,31 +173,35 @@ function getGridCardDetails(
 }
 
 function getEVChargerCardDetails(
-    evData: EVChargerStatus,
+    evData: EVChargerStatusType, // Use the more specific type from lib/types
     timestamp: number
 ): CardDetails {
     const formattedEV = formatPowerValue(evData.value, evData.unit);
     let color = "text-muted-foreground";
     let icon = <PlugZap className="h-6 w-6" />; // Default
 
-    if (evData.status === "charging") {
+    // Ensure evData.status is a string before using .includes() or other string methods
+    const statusString = React.isValidElement(evData.status) ? "JSX_Element" : String(evData.status || "unknown").toLowerCase();
+
+
+    if (statusString.includes("charging")) { // More robust check
         color = "text-green-500";
         icon = <Bolt className="h-6 w-6 text-green-500" />;
-    } else if (evData.status === "faulted" || evData.status === "unavailable") {
+    } else if (statusString.includes("faulted") || statusString.includes("unavailable")) {
         color = "text-red-500";
         icon = <AlertTriangle className="h-6 w-6 text-red-500" />;
-    } else if (evData.status === "idle" || evData.status === "preparing") {
+    } else if (statusString.includes("idle") || statusString.includes("preparing") || statusString.includes("plugged") || statusString.includes("ready")) {
         color = "text-blue-500"; // Plugged in, ready or preparing
     }
     // 'disconnected' uses default color and icon
 
-    let description = `Status: ${evData.status.toString()}`; // evData.status is pre-formatted ReactNode
+    let description: React.ReactNode = `Status: ${statusString}`;
     if (React.isValidElement(evData.status)) { // If it's already a ReactNode (JSX)
-        description = ''; // The status itself is the description
+        description = evData.status; // Use the JSX directly
     }
 
 
-    return { title: "EV Charger", ...formattedEV, icon, description: React.isValidElement(evData.status) ? evData.status : description, valueColorClassName: color, className: "min-h-[120px]" };
+    return { title: "EV Charger", ...formattedEV, icon, description, valueColorClassName: color, className: "min-h-[120px]" };
 }
 
 
@@ -234,6 +247,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
 
   const homeDetails = getHomeConsumptionCardDetails(data.homeConsumption, data.rawGridPowerWatts, data.rawSolarPowerWatts, data.battery.rawPowerWatts, data.timestamp);
   const solarDetails = getSolarGenerationCardDetails(data.solarGeneration, data.today?.solar?.energy?.total, data.timestamp);
+  // For battery card, use data.battery.rawPowerWatts which is the effective (API or inferred) power
   const batteryDetails = getBatteryCardDetails(data.battery, data.battery.rawPowerWatts, data.rawGridPowerWatts, data.rawSolarPowerWatts, data.homeConsumption.value, data.timestamp);
   const gridDetails = getGridCardDetails(data.grid, data.today?.grid?.energy?.import_total, data.today?.grid?.energy?.export_total, data.timestamp);
   const evDetails = getEVChargerCardDetails(data.evCharger, data.timestamp);
