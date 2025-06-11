@@ -38,15 +38,20 @@ function getBatteryIcon(battery: BatteryStatus, batteryPowerFlowWatts: number) {
 }
 
 const formatPowerValue = (originalValue: number | string, originalUnit: string): { value: string | number; unit: string } => {
-  if (typeof originalValue === 'number' && (originalUnit === "kW" || originalUnit === "W")) {
-    const valueInWatts = originalUnit === "kW" ? originalValue * 1000 : originalValue;
-    if (Math.abs(valueInWatts) < 1000) {
-        return { value: Math.round(valueInWatts), unit: "W" };
-    }
+  if (typeof originalValue !== 'number' || (originalUnit !== "kW" && originalUnit !== "W")) {
+    // Return non-numeric values or values with unknown units as is
+    return { value: originalValue, unit: originalUnit };
+  }
+
+  const valueInWatts = originalUnit === "kW" ? originalValue * 1000 : originalValue;
+
+  if (Math.abs(valueInWatts) < 1000) {
+    return { value: Math.round(valueInWatts), unit: "W" };
+  } else {
     const valueInKW = valueInWatts / 1000;
+    // Show integer if it's a whole number after conversion, otherwise 2 decimal places
     return { value: Number.isInteger(valueInKW) ? valueInKW : parseFloat(valueInKW.toFixed(2)), unit: "kW" };
   }
-  return { value: originalValue, unit: originalUnit };
 };
 
 
@@ -66,29 +71,24 @@ function getHomeConsumptionCardDetails(
     const batterySourceWatts = Math.max(0, effectiveBatteryPowerWatts); // Only consider discharge as a source
     const gridImportSourceWatts = Math.max(0, -rawGridWatts); // Only consider import as a source
 
-    const epsilon = POWER_FLOW_THRESHOLD_WATTS;
+    const epsilon = POWER_FLOW_THRESHOLD_WATTS; // 50W
 
     if (consumptionWatts > 3500) {
         hcColor = "text-red-600";
-    }
-    else if (gridImportSourceWatts > epsilon) {
+    } else if (gridImportSourceWatts > epsilon) {
         hcColor = "text-red-500";
-    }
-    else if (consumptionWatts <= epsilon && solarSourceWatts > epsilon) {
+    } else if (consumptionWatts <= epsilon && solarSourceWatts > epsilon) { // Negligible consumption, solar is generating
         hcColor = "text-green-500";
-    }
-    else if (consumptionWatts <= epsilon && batterySourceWatts > epsilon && solarSourceWatts <= epsilon) {
+    } else if (consumptionWatts <= epsilon && batterySourceWatts > epsilon && solarSourceWatts <= epsilon) { // Negligible consumption, battery supplying, no solar
         hcColor = "text-orange-700";
-    }
-    else if (solarSourceWatts >= (consumptionWatts - epsilon) && consumptionWatts > epsilon) {
+    } else if (solarSourceWatts >= (consumptionWatts - epsilon) && consumptionWatts > epsilon) { // Solar Only
         hcColor = "text-green-500";
-    }
-    else if (solarSourceWatts > epsilon && batterySourceWatts > epsilon && (solarSourceWatts + batterySourceWatts >= (consumptionWatts - epsilon)) && consumptionWatts > epsilon) {
+    } else if (solarSourceWatts > epsilon && batterySourceWatts > epsilon && (solarSourceWatts + batterySourceWatts >= (consumptionWatts - epsilon)) && consumptionWatts > epsilon) { // Solar + Battery
         hcColor = "text-orange-500";
-    }
-    else if (batterySourceWatts >= (consumptionWatts - epsilon) && solarSourceWatts <= epsilon && consumptionWatts > epsilon) {
+    } else if (batterySourceWatts >= (consumptionWatts - epsilon) && solarSourceWatts <= epsilon && consumptionWatts > epsilon) { // Battery Only
         hcColor = "text-orange-700";
     }
+
 
     return {
         title: "Home Consumption",
@@ -143,8 +143,8 @@ function getBatteryCardDetails(
     let activityDescription = "";
     let valueColorClassName = "text-muted-foreground"; 
 
-    const absBatteryPowerKW = Math.abs(currentBatteryPowerWatts) / 1000;
-    const powerRateString = `${absBatteryPowerKW.toFixed(2)} kW`;
+    const { value: formattedPowerRateValue, unit: formattedPowerRateUnit } = formatPowerValue(Math.abs(currentBatteryPowerWatts), "W");
+    const powerRateString = `${formattedPowerRateValue} ${formattedPowerRateUnit}`;
 
     const isCharging = currentBatteryPowerWatts < -POWER_FLOW_THRESHOLD_WATTS;
     const isDischarging = currentBatteryPowerWatts > POWER_FLOW_THRESHOLD_WATTS;
@@ -160,7 +160,7 @@ function getBatteryCardDetails(
             activityDescription = `- Charging from Solar at ${powerRateString}`;
             valueColorClassName = "text-green-600"; 
         } else {
-            activityDescription = `- Charging at ${powerRateString}`;
+            activityDescription = `- Charging at ${powerRateString}`; // Fallback if sources are ambiguous
             valueColorClassName = "text-blue-500"; 
         }
     } else if (isDischarging) {
@@ -257,22 +257,39 @@ function getEVChargerCardDetails(
     let valueColor = "text-muted-foreground";
     let icon = <PlugZap className="h-6 w-6" />;
 
-    const powerInWatts = typeof evData.value === 'number' ? (evData.unit === 'kW' ? evData.value * 1000 : evData.value) : 0;
+    // Use the numeric value in Watts (if available) for color logic
+    let powerInWatts = 0;
+    if (typeof evData.value === 'number') {
+        powerInWatts = evData.unit === 'kW' ? evData.value * 1000 : evData.value;
+    }
+
 
     if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) { 
         valueColor = "text-green-500";
         icon = <Bolt className="h-6 w-6 text-green-500" />;
     } else if (React.isValidElement(evData.status)) {
+        // Attempt to infer status from the ReactNode's class or content if needed
         const statusString = (evData.status.props.children as string)?.toLowerCase();
         if (statusString && statusString.includes('fault')) {
             valueColor = "text-red-600";
             icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
         } else { 
-             valueColor = "text-blue-500";
+             valueColor = "text-blue-500"; // Default for non-charging, non-faulted
              icon = <PlugZap className="h-6 w-6 text-blue-500" />;
         }
     }
-    else { 
+    // If evData.value was "N/A", powerInWatts is 0, so it might fall into blue if status is not fault
+    else if (evData.value === "N/A" && React.isValidElement(evData.status)) {
+        const statusString = (evData.status.props.children as string)?.toLowerCase();
+        if (statusString && statusString.includes('fault')) {
+            valueColor = "text-red-600";
+            icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
+        } else {
+            valueColor = "text-blue-500";
+            icon = <PlugZap className="h-6 w-6 text-blue-500" />;
+        }
+    }
+     else { // Default if status is not a React element (e.g. raw string) or value is not "N/A" but power is low
         valueColor = "text-blue-500";
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
     }
@@ -389,3 +406,4 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
   );
 }
 
+    
