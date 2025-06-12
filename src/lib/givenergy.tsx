@@ -263,20 +263,36 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
   const rawData: RawSystemDataLatest = systemDataResponse.data;
 
+  const formatPower = (watts: number): { value: number | string; unit: string } => {
+    const absWatts = Math.abs(watts);
+    if (absWatts >= 1000) {
+      return {
+        value: parseFloat((watts / 1000).toFixed(2)),
+        unit: "kW",
+      };
+    } else {
+      return {
+        value: Math.round(watts), // Round to nearest Watt
+        unit: "W",
+      };
+    }
+  };
+
   const homeConsumption: Metric = {
-    value: parseFloat((rawData.consumption / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(rawData.consumption),
   };
 
   const solarGeneration: Metric = {
-    value: parseFloat((rawData.solar.power / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(rawData.solar.power),
   };
 
   const batteryPowerWatts = rawData.battery.power;
   const batteryPercentage = rawData.battery.percent;
   const battery: BatteryStatus = {
-    value: batteryPercentage,
+    value: batteryPercentage, // Battery value is always percentage for this context
+    rawPowerWatts: batteryPowerWatts, // Keep raw power for internal flow logic
+    // The actual displayed power for the battery node in the visualizer
+    // will be derived from batteryPowerWatts and formatted using formatPower
     unit: "%",
     percentage: batteryPercentage,
     charging: batteryPowerWatts < -10 ? true : (batteryPowerWatts > 10 ? false : undefined),
@@ -284,8 +300,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const gridPowerWatts = rawData.grid.power;
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
-    value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(gridPowerWatts),
     flow: gridPowerWatts > 50 ? 'exporting' : (gridPowerWatts < -50 ? 'importing' : 'idle'),
   };
 
@@ -333,9 +348,8 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     }
     
     evCharger = {
-      value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
-      unit: "kW",
-      status: mapEVChargerAPIStatus(evApiStatus),
+      ...(typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts) ? formatPower(evPowerInWatts) : { value: "N/A", unit: "kW" }), // Format EV power if available
+      status: mapEVChargerAPIStatus(evApiStatus), // Keep existing status mapping
     };
 
   } else {
