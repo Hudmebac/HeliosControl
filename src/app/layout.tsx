@@ -20,7 +20,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="icon" href="/favicon.ico" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased min-h-screen bg-background text-foreground flex flex-col" suppressHydrationWarning={true}>
@@ -28,7 +28,7 @@ export default function RootLayout({
           <Header />
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}
-          </main>
+          </main>          
           <Toaster />
         </ThemeProvider>
       </body>
