@@ -362,7 +362,7 @@ const EVChargerPage = () => {
       </div>
 
       <Tabs defaultValue="overview" className="w-full" >
-        <TabsList className="grid w-full grid-cols-5" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
+        <TabsList className="flex w-full overflow-x-auto grid-cols-5" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
           <TabsTrigger value="overview" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Overview</TabsTrigger>
           <TabsTrigger value="schedule" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Schedule</TabsTrigger>
           <TabsTrigger value="control" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Instant Control</TabsTrigger>
