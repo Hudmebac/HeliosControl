@@ -342,12 +342,13 @@ const EVChargerPage = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
+      <Tabs defaultValue="overview" className="w-full" >
+        <TabsList className="grid w-full grid-cols-5" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
           <TabsTrigger value="overview" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Overview</TabsTrigger>
           <TabsTrigger value="schedule" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Schedule</TabsTrigger>
           <TabsTrigger value="control" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Instant Control</TabsTrigger>
           <TabsTrigger value="analytics" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Analytics</TabsTrigger>
+ <TabsTrigger value="settings" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <Card className="mt-4" style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text, borderColor: themes[theme as keyof typeof themes]?.primary }}>
@@ -486,84 +487,87 @@ const EVChargerPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
-
-      <Card className="mt-8" style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text, borderColor: themes[theme as keyof typeof themes]?.primary }}>
-        <CardHeader>
-          <CardTitle className="flex items-center" style={{ color: themes[theme as keyof typeof themes]?.primary }}>
-            <Settings className="mr-2" size={24} />
+       <TabsContent value="settings">
+           <Card className="mt-4" style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text, borderColor: themes[theme as keyof typeof themes]?.primary }}>
+ <CardHeader>
+ <CardTitle className="flex items-center" style={{ color: themes[theme as keyof typeof themes]?.primary }}>
+ <Settings className="mr-2" size={24} />
             Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div>
+ </CardTitle>
+ </CardHeader>
+ <CardContent>
+ <div className="space-y-6">
+ <div>
               <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Solar Charging</h4>
-              {/* Assuming a toggle component exists, replace with actual component */}
-              <label className="flex items-center cursor-pointer">
-                <div className="relative">
+ {/* Assuming a toggle component exists, replace with actual component */}
+ <label className="flex items-center cursor-pointer">
+ <div className="relative">
                   <input type="checkbox" className="sr-only" checked={settings.solarCharging} onChange={(e) => handleToggleSolarCharging(e.target.checked)} />
-                  <div className={`block w-14 h-8 rounded-full ${settings.solarCharging ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.solarCharging ? 'transform translate-x-6' : ''}`}></div>
-                </div>
-                <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Solar Charging (SuperEco Mode)</div>
-              </label>
-            </div>
+ <div className={`block w-14 h-8 rounded-full ${settings.solarCharging ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
+ <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.solarCharging ? 'transform translate-x-6' : ''}`}></div>
+ </div>
+ <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Solar Charging (SuperEco Mode)</div>
+ </label>
+ </div>
 
-            <div>
+ <div>
               <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Plug and Charge</h4>
-              {/* Assuming a toggle component exists, replace with actual component */}
-               <label className="flex items-center cursor-pointer">
-                <div className="relative">
+ {/* Assuming a toggle component exists, replace with actual component */}
+ <label className="flex items-center cursor-pointer">
+ <div className="relative">
                   <input type="checkbox" className="sr-only" checked={settings.plugAndCharge} onChange={(e) => handleTogglePlugAndCharge(e.target.checked)} />
-                  <div className={`block w-14 h-8 rounded-full ${settings.plugAndCharge ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.plugAndCharge ? 'transform translate-x-6' : ''}`}></div>
-                </div>
-                <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Plug and Charge</div>
-              </label>
-            </div>
+ <div className={`block w-14 h-8 rounded-full ${settings.plugAndCharge ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
+ <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.plugAndCharge ? 'transform translate-x-6' : ''}`}></div>
+ </div>
+ <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Plug and Charge</div>
+ </label>
+ </div>
 
-            <div>
+ <div>
               <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Home Battery Discharge to EVC (kW)</h4>
-              <div className="flex items-center space-x-4">
-                <Slider
+ <div className="flex items-center space-x-4">
+ <Slider
                   min={0}
                   max={10} // Adjust max value based on typical battery discharge limits
                   step={0.1}
-                  value={[settings.maxBatteryDischargeToEvc]}
-                  onValueChange={handleSetMaxBatteryDischargeToEvc}
-                  className="w-64"
-                  style={{ '--slider-thumb-background': themes[theme as keyof typeof themes]?.primary, '--slider-track-background': themes[theme as keyof typeof themes]?.accent } as React.CSSProperties}
-                />
-                <span className="text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>{settings.maxBatteryDischargeToEvc.toFixed(1)} kW</span>
-              </div>
-            </div>
+ value={[settings.maxBatteryDischargeToEvc]}
+ onValueChange={handleSetMaxBatteryDischargeToEvc}
+ className="w-64"
+                   style={{ '--slider-thumb-background': themes[theme as keyof typeof themes]?.primary, '--slider-track-background': themes[theme as keyof typeof themes]?.accent } as React.CSSProperties}
+ />
+ <span className="text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>{settings.maxBatteryDischargeToEvc.toFixed(1)} kW</span>
+ </div>
+ </div>
 
-            <div>
+ <div>
               <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Charge Rate Limit (Amps)</h4>
-               <div className="flex items-center space-x-4">
-                <Slider
+ <div className="flex items-center space-x-4">
+ <Slider
                   min={6}
                   max={32}
                   step={1}
-                  value={[settings.chargeRate]}
-                  onValueChange={handleSetChargeRate}
-                   className="w-64"
+ value={[settings.chargeRate]}
+ onValueChange={handleSetChargeRate}
+ className="w-64"
                    style={{ '--slider-thumb-background': themes[theme as keyof typeof themes]?.primary, '--slider-track-background': themes[theme as keyof typeof themes]?.accent } as React.CSSProperties}
-                />
-                <span className="text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>{settings.chargeRate} Amps</span>
-              </div>
-            </div>
+ />
+ <span className="text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>{settings.chargeRate} Amps</span>
+ </div>
+ </div>
 
-            <div>
+ <div>
               <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Other EV Charge Settings</h4>
-              {/* This section could dynamically list other available commands or provide input for less common settings */}
-              <p>Additional settings can be managed here.</p>
-            </div>
-          </div>
-          <p>Ability to manage Solar Charging, Plug and Charge, Home Battery, Charge Rate, Ev Charge Settings.</p>
-        </CardContent>
-      </Card>
+ {/* This section could dynamically list other available commands or provide input for less common settings */}
+ <p>Additional settings can be managed here.</p>
+ </div>
+ </div>
+ <p>Ability to manage Solar Charging, Plug and Charge, Home Battery, Charge Rate, Ev Charge Settings.</p>
+ </CardContent>
+ </Card>
+       </TabsContent>
+
+
+      </Tabs>
     </div>
   );
 };
