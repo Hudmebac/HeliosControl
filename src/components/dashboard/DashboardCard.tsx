@@ -53,10 +53,12 @@ export function DashboardCard({ title, value, unit, solarValue, batteryCharging,
         {isLoading ? (
           <div className="h-10 w-3/4 bg-muted animate-pulse rounded-md"></div>
         ) : (
-          <div className={cn("text-2xl font-bold transition-colors duration-500 ease-in-out", valueColorClassName)}>
-            {typeof value === "number" ? value : value}
-            {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
-          </div>
+            // Conditionally render the value div only if the value is not "N/A" and display the absolute value if it's a number
+          value !== "N/A" && (
+            <div className={cn("text-2xl font-bold transition-colors duration-500 ease-in-out", valueColorClassName)}>
+                {typeof value === "number" ? Math.abs(value) : value}
+              {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
+            </div>)
         )}
         {description && !isLoading && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
         {children && !isLoading && <div className="mt-2">{children}</div>}
