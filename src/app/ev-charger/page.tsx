@@ -43,6 +43,19 @@ const themes = {
 const EVChargerPage = () => {
   const [theme, setTheme] = useState('dark'); // Default to dark theme, remove next-themes dependency
   const [evChargerData, setEvChargerData] = useState<any>(null);
+
+  const evChargerStatusMap: { [key: string]: string } = {
+    Available: 'Available',
+    Preparing: 'Preparing to Charge',
+    Charging: 'Charging',
+    SuspendedEVSE: 'Charging Suspended (EVSE Side)',
+    SuspendedEV: 'Charging Suspended (EV Side)',
+    Finishing: 'Finishing Charge',
+    Reserved: 'Reserved',
+    Faulted: 'Faulted',
+    Unavailable: 'Unavailable',
+    Unknown: 'Unknown', // Added for clarity if status is null or undefined
+  };
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({
@@ -120,10 +133,17 @@ const EVChargerPage = () => {
       const chargerData = await chargerResponse.json();
 
       if (chargerData && chargerData.data && chargerData.data.length > 0) {
-        const chargerUuid = chargerData.data[0].uuid; // Assuming the first charger is the one we want
+        
         const chargerOnline = chargerData.data[0].online;
         const chargerStatus = chargerData.data[0].status;
+        const chargerType = chargerData.data[0].type;
+        const chargerSerialNumber = chargerData.data[0].serial_number;
+        const chargerUuid = chargerData.data[0].uuid; // Assuming the first charger is the one we want
+        const wentOfflineAt = chargerData.data[0].went_offline_at;
 
+        setEvChargerData(prevData => ({ ...prevData, uuid: chargerUuid, online: chargerOnline, status: chargerStatus, type: chargerType, serial_number: chargerSerialNumber, went_offline_at: wentOfflineAt }));
+
+        // Fetch latest meter data only if chargerUuid is available
         // Fetch latest meter data
         const meterResponse = await fetch(`/api/givenergy/ev-charger/${chargerUuid}/meter-data`);
         const meterData = await meterResponse.json();
@@ -152,8 +172,6 @@ const EVChargerPage = () => {
           setAnalyticsData(historicalMeterData.data); // Assuming analyticsData is used for summary
         }
 
-        setEvChargerData({ uuid: chargerUuid, online: chargerOnline, status: chargerStatus, current_power: currentPower });
-      } else {
         console.warn('No EV charger found.');
         setEvChargerData(null); // Set to null if no charger is found
       }
@@ -161,6 +179,7 @@ const EVChargerPage = () => {
       console.error('Error fetching EV charger data:', error);
       setEvChargerData(null); // Set to null on error
     }
+
   };
 
   // Separate effect to fetch settings and schedules when evChargerData is available
@@ -356,19 +375,32 @@ const EVChargerPage = () => {
               <CardTitle style={{ color: themes[theme as keyof typeof themes]?.primary }}>Overview</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center">
-                <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-                <span>Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</span>
-              </div>
-              <div className="flex items-center">
-                <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-                <span>Current Charging Status: {evChargerData?.status ? evChargerData.status.replace(/([A-Z])/g, ' $1').trim() : 'Unknown'}</span>
-              </div>
-              <div className="flex items-center">
-                <Power className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-                <span>Current Charging Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</span>
-              </div>
-            </CardContent>
+  <div className="flex items-center">
+    <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+    <span>Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</span>
+  </div>
+  <div className="flex items-center">
+    <Power className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+    <span>Current Charging Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</span>
+  </div>
+  <div className="flex items-center">
+    <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+    <span>EV Charger Status: {evChargerStatusMap[evChargerData?.status || 'Unknown']}</span>
+  </div>
+  <div className="flex items-center">
+    <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+    <span>Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</span>
+  </div>
+  <div className="flex items-center">
+    <span>Type: {evChargerData?.type || 'N/A'}</span>
+  </div>
+  <div className="flex items-center">
+    <span>Serial Number: {evChargerData?.serial_number || 'N/A'}</span>
+  </div>
+  <div className="flex items-center">
+    <span>UUID: {evChargerData?.uuid || 'N/A'}</span>
+  </div>
+</CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="schedule">
