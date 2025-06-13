@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile"; // Import the useIsMobile hook
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 // Using specific Lucide icons for new cards
-import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Zap } from "lucide-react";
+import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Zap, Car } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button"; // Added for potential settings button
 
@@ -82,6 +82,15 @@ export default function HomePage() {
                 </p>
               </div>
             </a>
+ <Link href="/ev-charger" passHref>
+ <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00', backgroundColor: '#0a0a0a', color: '#c0c0c0' }}>
+ <Car className="h-8 w-8 mb-3" style={{ color: '#ff8c00' }} /> {/* Icon for EV Charger */}
+ <h3 className="text-lg font-semibold" style={{ color: '#c0c0c0' }}>EV Charger</h3>
+ <p className="text-sm text-center" style={{ color: '#c0c0c0' }}>
+ Manage and monitor your EV charger.
+ </p>
+ </div>
+ </Link>
           </div>
 
 
