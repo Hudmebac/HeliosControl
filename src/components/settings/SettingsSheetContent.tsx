@@ -25,9 +25,21 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
+import { useApiKey } from "@/hooks/use-api-key";
 
 export function SettingsSheetContent() {
   const { refreshInterval, setRefreshInterval, refreshIntervalOptions, isSettingsLoaded } = useAppSettings();
+  const { inverterSerial, evChargerId } = useApiKey();
+
+  const handleCopyToClipboard = (text: string | null) => {
+    if (text) {
+      navigator.clipboard.writeText(text);
+    } else {
+      console.warn('Nothing to copy.');
+    }
+  };
 
   return (
     <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -46,6 +58,35 @@ export function SettingsSheetContent() {
             </AccordionTrigger>
             <AccordionContent className="pt-4">
               <AuthenticationArea />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="system-identifiers">
+            <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+              System Identifiers
+            </AccordionTrigger>
+            <AccordionContent className="pt-4 space-y-4">
+              <div>
+                <Label className="font-medium">Inverter Serial Number:</Label>
+                <div className="flex items-center gap-2">
+ <span className="text-sm text-muted-foreground break-all">{inverterSerial || 'N/A'}</span>
+                  <Button variant="ghost" size="icon" onClick={() => handleCopyToClipboard(inverterSerial)} aria-label="Copy Inverter Serial Number">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator /> {/* Add a separator for better visual separation */}
+
+              <div>
+                <Label className="font-medium">EV Charger ID (UUID):</Label>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-muted-foreground break-all">{evChargerId || 'N/A'}</span>
+                  <Button variant="ghost" size="icon" onClick={() => handleCopyToClipboard(evChargerId)} aria-label="Copy EV Charger ID (UUID)">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </AccordionContent>
           </AccordionItem>
 

@@ -8,7 +8,7 @@ import { Sun, Moon, Contrast, ArrowLeft, PlugZap, CalendarDays, Power, LineChart
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { useTheme, themes } from '@/hooks/use-theme';
+import { themes } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 
 
@@ -373,32 +373,42 @@ const EVChargerPage = () => {
               <CardTitle style={{ color: themes[theme as keyof typeof themes]?.primary }}>Overview</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-  <div className="flex items-center">
-    <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-    <span>Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</span>
-  </div>
-  <div className="flex items-center">
-    <Power className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-    <span>Current Charging Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</span>
-  </div>
-  <div className="flex items-center">
-    <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-    <span>EV Charger Status: {evChargerStatusMap[evChargerData?.status || 'Unknown']}</span>
-  </div>
-  <div className="flex items-center">
-    <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
-    <span>Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</span>
-  </div>
-  <div className="flex items-center">
-    <span>Type: {evChargerData?.type || 'N/A'}</span>
-  </div>
-  <div className="flex items-center">
-    <span>Serial Number: {evChargerData?.serial_number || 'N/A'}</span>
-  </div>
-  <div className="flex items-center">
-    <span>UUID: {evChargerData?.uuid || 'N/A'}</span>
-  </div>
-</CardContent>
+ {evChargerData ? (
+ <>
+ <div className="flex items-center">
+ <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</span>
+ </div>
+ <div className="flex items-center">
+ <Power className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>Current Charging Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</span>
+ </div>
+ <div className="flex items-center">
+ <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>EV Charger Status: {evChargerStatusMap[evChargerData?.status || 'Unknown']}</span>
+ </div>
+ <div className="flex items-center">
+ <CalendarDays className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</span>
+ </div>
+ <div className="flex items-center">
+ <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>Type: {evChargerData?.type || 'N/A'}</span>
+ </div>
+ <div className="flex items-center">
+ <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>Serial Number: {evChargerData?.serial_number || 'N/A'}</span>
+ </div>
+ <div className="flex items-center">
+ <PlugZap className="mr-2" size={24} color={themes[theme as keyof typeof themes]?.primary} />
+ <span>UUID: {evChargerData?.uuid || 'N/A'}</span>
+ </div>
+ </>
+ ) : (
+ <p>No EV charger data found or could not be loaded. Please check your API key and charger connection.</p>
+ )
+ }
+            </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="schedule">
@@ -436,7 +446,7 @@ const EVChargerPage = () => {
                   </div>
                   <div>
                     <label htmlFor="endTime" className="block text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>End Time</label>
-                    <input type="time" id="endTime" name="endTime" className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof themes]?.secondary }} />
+                    <input type="time" id="endTime" name="endTime" className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
                   </div>
                 </div>
                 <div>
@@ -470,7 +480,7 @@ const EVChargerPage = () => {
               <Button
                 onClick={handleStartCharge}
                 style={{
-                  backgroundColor: themes[theme as keyof typeof themes]?.accent,
+ backgroundColor: themes[theme as keyof typeof themes]?.accent,
                   color: themes[theme as keyof typeof themes]?.secondary,
                 }}
               >
@@ -479,7 +489,7 @@ const EVChargerPage = () => {
               <Button
                 onClick={handleStopCharge}
                 style={{
-                  backgroundColor: themes[theme as keyof typeof themes]?.accent,
+ backgroundColor: themes[theme as keyof typeof themes]?.accent,
                   color: themes[theme as keyof typeof themes]?.secondary,
                 }}
               >
