@@ -9,39 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Sun, Moon, Contrast, ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Define theme colors
 import { Slider } from '@/components/ui/slider';
-
-const themes = {
-  light: {
-    primary: '#FFA500', // Orange
-    secondary: '#FFFFFF', // White
-    accent: '#C0C0C0', // Silver
-    text: '#000000', // Black
-  },
-  dark: {
-    primary: '#FFA500', // Orange
-    secondary: '#000000', // Black
-    accent: '#C0C0C0', // Silver
-    text: '#FFFFFF', // White
-  },
-  'high-contrast-light': {
-    primary: '#FF4500', // OrangeRed
-    secondary: '#FFFFFF', // White
-    accent: '#000000', // Black
-    text: '#000000', // Black
-  },
-  'high-contrast-dark': {
-    primary: '#FF4500', // OrangeRed
-    secondary: '#000000', // Black
-    accent: '#FFFF00', // Yellow
-    text: '#FFFFFF', // White
-  },
-};
+import { useTheme, themes } from '@/hooks/use-theme';
 
 
 const EVChargerPage = () => {
-  const [theme, setTheme] = useState('dark'); // Default to dark theme, remove next-themes dependency
+  const [theme, setTheme] = useState<'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark'>('light'); // Initialize with a default theme
   const [evChargerData, setEvChargerData] = useState<any>(null);
 
   const evChargerStatusMap: { [key: string]: string } = {
@@ -59,7 +32,7 @@ const EVChargerPage = () => {
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({
-    solarCharging: false,
+    solarCharging: false, // This setting likely comes from the inverter, not the EV charger
     plugAndCharge: false,
     maxBatteryDischargeToEvc: 0,
     chargeRate: 6, // Default minimum charge rate
@@ -209,7 +182,6 @@ const EVChargerPage = () => {
     // Implement Start Charge API call
 
     fetchEvChargerData(); // Initial fetch of charger data
-
   }, []); // Empty dependency array means this effect runs once on mount
 
   // Separate effect to fetch settings and schedules when evChargerData is available
@@ -349,8 +321,8 @@ const EVChargerPage = () => {
   };
 
   return (
-    <div className={`min-h-screen p-8`} style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text }}>
-      <div className="flex justify-between items-center mb-8">
+    <div className={`min-h-screen p-8`} >
+      <div className="flex justify-between items-center mb-8" >
         <h1 className="text-3xl font-bold" style={{ color: themes[theme as keyof typeof themes]?.primary }}>EV Charger</h1>
         <div className="flex items-center space-x-4"> {/* Keep this div for the Dashboard button */}
           <Link href="/" passHref>
@@ -361,14 +333,43 @@ const EVChargerPage = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full" >
-        <TabsList className="flex w-full overflow-x-auto grid-cols-5" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
-          <TabsTrigger value="overview" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Overview</TabsTrigger>
-          <TabsTrigger value="schedule" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Schedule</TabsTrigger>
-          <TabsTrigger value="control" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Instant Control</TabsTrigger>
-          <TabsTrigger value="analytics" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Analytics</TabsTrigger>
- <TabsTrigger value="settings" style={{ color: themes[theme as keyof typeof themes]?.secondary }}>Settings</TabsTrigger>
-        </TabsList>
+      <div className="mb-8">
+        <label htmlFor="theme-select" className="mr-4 font-medium">Select Theme:</label>
+        <select id="theme-select" value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark')}
+                className="p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>
+          {Object.keys(themes).map(themeKey => (
+            <option key={themeKey} value={themeKey}>{themeKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+          ))}
+        </select>
+      </div>
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="flex w-full overflow-x-auto grid-cols-5">
+          <TabsTrigger value="overview" className="data-[state=active]:text-primary data-[state=inactive]:text-text" style={{
+              color: themes[theme as keyof typeof themes]?.text,
+              backgroundColor: themes[theme as keyof typeof themes]?.secondary,
+              '--radix-tabs-trigger-background-color': themes[theme as keyof typeof themes]?.secondary, // Ensure background is secondary
+            }}>Overview</TabsTrigger>
+          <TabsTrigger value="schedule" className="data-[state=active]:text-primary data-[state=inactive]:text-text"  style={{
+              color: themes[theme as keyof typeof themes]?.text,
+              backgroundColor: themes[theme as keyof typeof themes]?.secondary,
+              '--radix-tabs-trigger-background-color': themes[theme as keyof typeof themes]?.secondary, // Ensure background is secondary
+            }}>Schedule</TabsTrigger>
+          <TabsTrigger value="control" className="data-[state=active]:text-primary data-[state=inactive]:text-text"  style={{
+              color: themes[theme as keyof typeof themes]?.text,
+              backgroundColor: themes[theme as keyof typeof themes]?.secondary,
+              '--radix-tabs-trigger-background-color': themes[theme as keyof typeof themes]?.secondary, // Ensure background is secondary
+            }}>Instant Control</TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:text-primary data-[state=inactive]:text-text"  style={{
+ color: themes[theme as keyof typeof themes]?.text,
+              backgroundColor: themes[theme as keyof typeof themes]?.secondary,
+              '--radix-tabs-trigger-background-color': themes[theme as keyof typeof themes]?.secondary, // Ensure background is secondary
+            }}>Analytics</TabsTrigger>
+ <TabsTrigger value="settings"  style={{
+ color: themes[theme as keyof typeof themes]?.text,
+              backgroundColor: themes[theme as keyof typeof themes]?.secondary,
+            }}>Settings</TabsTrigger>
+ </TabsList>
         <TabsContent value="overview">
           <Card className="mt-4" style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text, borderColor: themes[theme as keyof typeof themes]?.primary }}>
             <CardHeader>
