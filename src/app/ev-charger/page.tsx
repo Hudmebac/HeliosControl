@@ -1,17 +1,15 @@
 'use client';
-
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button'; // Assuming Button component
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Sun, Moon, Contrast, ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useTheme, themes } from '@/hooks/use-theme';
+import { useApiKey } from '@/hooks/use-api-key';
 
 
 const EVChargerPage = () => {
@@ -39,6 +37,8 @@ const EVChargerPage = () => {
     chargeRate: 6, // Default minimum charge rate
   });
   const [chartData, setChartData] = useState<any[]>([]); // Initialize chartData state
+
+  const { inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
 
   // Define data fetching function for settings
   const fetchSettings = async (chargerUuid: string | null) => {
@@ -100,39 +100,56 @@ const EVChargerPage = () => {
   };
 
   // Define data fetching functions outside of useEffect
-  const fetchEvChargerData = async () => {
+  const fetchEvChargerData = useCallback(async () => {
     try {
       // Fetch charger UUID and online status
       const chargerResponse = await fetch('/api/givenergy/ev-charger');
       const chargerData = await chargerResponse.json();
 
-      if (chargerData && chargerData.data && chargerData.data.length > 0) {
-        
-        const chargerOnline = chargerData.data[0].online;
-        const chargerStatus = chargerData.data[0].status;
-        const chargerType = chargerData.data[0].type;
-        const chargerSerialNumber = chargerData.data[0].serial_number;
-        const chargerUuid = chargerData.data[0].uuid; // Assuming the first charger is the one we want
-        const wentOfflineAt = chargerData.data[0].went_offline_at;
+      let chargerUuid = null;
+      if (chargerData && chargerData.data && chargerData.data.length > 0 && chargerData.data[0].uuid) {
+        // Use the UUID from the first charger in the list if available
+        chargerUuid = chargerData.data[0].uuid;
+      } else if (storedEvChargerId) {
+        // If no UUID from the list, use the stored EV charger ID
+        console.log(`No charger found in list, using stored ID: ${storedEvChargerId}`);
+        chargerUuid = storedEvChargerId;
+      }
 
-        setEvChargerData(prevData => ({ ...prevData, uuid: chargerUuid, online: chargerOnline, status: chargerStatus, type: chargerType, serial_number: chargerSerialNumber, went_offline_at: wentOfflineAt }));
+      if (chargerUuid) {
+        // Now fetch details for the identified charger
+        const specificChargerResponse = await fetch(`/api/givenergy/ev-charger/${chargerUuid}`);
+        const specificChargerData = await specificChargerResponse.json();
 
-        // Fetch latest meter data only if chargerUuid is available
-        // Fetch latest meter data
+        if (specificChargerData && specificChargerData.data) {
+          const chargerDetails = specificChargerData.data;
+
+          setEvChargerData(prevData => ({
+            ...prevData,
+            uuid: chargerDetails.uuid,
+            online: chargerDetails.online,
+            status: chargerDetails.status,
+            type: chargerDetails.type,
+            serial_number: chargerDetails.serial_number,
+            went_offline_at: chargerDetails.went_offline_at
+          }));
+
+          // Fetch latest meter data
         const meterResponse = await fetch(`/api/givenergy/ev-charger/${chargerUuid}/meter-data`);
         const meterData = await meterResponse.json();
         let currentPower = null;
         if (meterData && meterData.data && meterData.data.length > 0) {
-          const latestMeterReading = meterData.data[0];
-          // Assuming measurand_id 13 is Power.Active.Import (kW)
-          const powerMeasurand = latestMeterReading.readings.find((reading: any) => reading.measurand_id === 13);
-          if (powerMeasurand) {
-            currentPower = powerMeasurand.value;
-          }
+            const latestMeterReading = meterData.data[0];
+            // Assuming measurand_id 13 is Power.Active.Import (kW)
+            const powerMeasurand = latestMeterReading.readings.find((reading: any) => reading.measurand_id === 13);
+            if (powerMeasurand) {
+              currentPower = powerMeasurand.value;
+            }
+             setEvChargerData(prevData => ({ ...prevData, current_power: currentPower }));
         }
 
         // Fetch historical meter data for analytics
-        const historicalMeterResponse = await fetch(`/api/givenergy/ev-charger/${chargerUuid}/meter-data?page=1&pageSize=100`); // Fetching last 100 readings
+        const historicalMeterResponse = await fetch(`/api/givenergy/ev-charger/${chargerUuid}/meter-data?page=1&pageSize=50`); // Fetching last 50 readings for chart
         const historicalMeterData = await historicalMeterResponse.json();
         if (historicalMeterData && historicalMeterData.data) {
           const formattedData = historicalMeterData.data.map((reading: any) => {
@@ -145,44 +162,23 @@ const EVChargerPage = () => {
           setChartData(formattedData.reverse());
           setAnalyticsData(historicalMeterData.data); // Assuming analyticsData is used for summary
         }
-
-        console.warn('No EV charger found.');
-        setEvChargerData(null); // Set to null if no charger is found
+      } else {
+         console.error('Failed to fetch specific EV charger details using UUID:', chargerUuid);
+         setEvChargerData(null); // Clear state on error
       }
+      } else {
+         console.warn('No EV charger UUID available from list or stored ID.');
+         setEvChargerData(null); // Clear state if no UUID is available
+      }
+
     } catch (error) {
       console.error('Error fetching EV charger data:', error);
       setEvChargerData(null); // Set to null on error
-    }
+   }
+  }, []); // Empty dependency array means this effect runs once on mount
 
-  };
-
-  // Separate effect to fetch settings and schedules when evChargerData is available
+  // Separate effect to fetch initial data on mount
   useEffect(() => {
-
-  const fetchSettings = async () => {
-      if (evChargerData?.uuid) { // Use evChargerData from state
-          try {
-              // Fetch plug and charge status (command_id 616)
-              const plugAndChargeResponse = await fetch(`/api/givenergy/ev-charger/${evChargerData.uuid}/commands/616`);
-              const plugAndChargeData = await plugAndChargeResponse.json();
-              const plugAndChargeEnabled = plugAndChargeData?.data?.value === 1;
-
-              // Fetch charge rate limit (command_id 621)
-              const chargeRateResponse = await fetch(`/api/givenergy/ev-charger/${evChargerData.uuid}/commands/621`);
-              const chargeRateData = await chargeRateResponse.json();
-              const chargeRateLimit = chargeRateData?.data?.value;
-
-              setSettings(prevSettings => ({ ...prevSettings, plugAndCharge: plugAndChargeEnabled, chargeRate: chargeRateLimit }));
-          } catch (error) {
-              console.error('Error fetching settings:', error);
-          }
-      } else {
-        console.warn('Cannot fetch settings without a charger UUID.');
-      }
-  };
-    // Implement Start Charge API call
-
-    fetchEvChargerData(); // Initial fetch of charger data
   }, []); // Empty dependency array means this effect runs once on mount
 
   // Separate effect to fetch settings and schedules when evChargerData is available
@@ -304,7 +300,7 @@ const EVChargerPage = () => {
     }
   };
 
-  const handleSetChargeRate = async (value: number[]) => {
+  const handleSetChargeRate = useCallback(async (value: number[]) => {
     setSettings(prevSettings => ({ ...prevSettings, chargeRate: value[0] }));
     // Call adjust-charge-power-limit API
     console.log('Setting charge rate:', value[0]);
@@ -319,7 +315,7 @@ const EVChargerPage = () => {
     } catch (error) {
       console.error('Error setting charge rate:', error);
     }
-  };
+  }, [evChargerData?.uuid]);
 
   return (
     <div className={`min-h-screen p-8`} >
