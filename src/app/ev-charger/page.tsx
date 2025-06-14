@@ -441,7 +441,15 @@ const EVChargerPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: themes[theme as keyof typeof themes]?.text }}>Days of Week</label>
-                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                  <label key="All" className="inline-flex items-center mr-4">
+ <input type="checkbox" className="form-checkbox" name="days" value="All" style={{ color: themes[theme as keyof typeof themes]?.primary }}
+                        onChange={(e) => {
+ const checkboxes = document.querySelectorAll('input[name="days"]');
+ checkboxes.forEach((checkbox: any) => { checkbox.checked = e.target.checked; });
+                        }}/>
+ <span className="ml-2">All</span>
+ </label>
+ {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                     <label key={day} className="inline-flex items-center mr-4">
                       <input type="checkbox" className="form-checkbox" name="days" value={day} style={{ color: themes[theme as keyof typeof themes]?.primary }} />
                       <span className="ml-2">{day}</span>
