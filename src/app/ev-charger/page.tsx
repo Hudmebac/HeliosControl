@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Sun, Moon, Contrast, ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
+import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useTheme, themes } from '@/hooks/use-theme';
 
@@ -531,27 +532,20 @@ const EVChargerPage = () => {
  <CardContent>
  <div className="space-y-6">
  <div>
-              <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Solar Charging</h4>
- {/* Assuming a toggle component exists, replace with actual component */}
+ <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Solar Charging</h4>
  <label className="flex items-center cursor-pointer">
- <div className="relative">
-                  <input type="checkbox" className="sr-only" checked={settings.solarCharging} onChange={(e) => handleToggleSolarCharging(e.target.checked)} />
- <div className={`block w-14 h-8 rounded-full ${settings.solarCharging ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
- <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.solarCharging ? 'transform translate-x-6' : ''}`}></div>
- </div>
+ <Switch
+ checked={settings.solarCharging}
+ onCheckedChange={handleToggleSolarCharging}
+ />
  <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Solar Charging (SuperEco Mode)</div>
  </label>
  </div>
 
  <div>
-              <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Plug and Charge</h4>
- {/* Assuming a toggle component exists, replace with actual component */}
+ <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Plug and Charge</h4>
  <label className="flex items-center cursor-pointer">
- <div className="relative">
-                  <input type="checkbox" className="sr-only" checked={settings.plugAndCharge} onChange={(e) => handleTogglePlugAndCharge(e.target.checked)} />
- <div className={`block w-14 h-8 rounded-full ${settings.plugAndCharge ? themes[theme as keyof typeof themes]?.primary : themes[theme as keyof typeof themes]?.accent}`}></div>
- <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${settings.plugAndCharge ? 'transform translate-x-6' : ''}`}></div>
- </div>
+ <Switch checked={settings.plugAndCharge} onCheckedChange={handleTogglePlugAndCharge} />
  <div className="ml-3 text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Enable Plug and Charge</div>
  </label>
  </div>
