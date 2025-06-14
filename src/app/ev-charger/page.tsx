@@ -583,13 +583,11 @@ const EVChargerPage = () => {
  </div>
 
  <div>
-              <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Other EV Charge Settings</h4>
+              <h4 className="text-lg font-semibold mb-2" style={{ color: themes[theme as keyof typeof themes]?.primary }}>More Settings Coming Soon</h4>
  {/* This section could dynamically list other available commands or provide input for less common settings */}
- <p>Additional settings can be managed here.</p>
+  </div>
  </div>
- </div>
- <p>Ability to manage Solar Charging, Plug and Charge, Home Battery, Charge Rate, Ev Charge Settings.</p>
- </CardContent>
+  </CardContent>
  </Card>
        </TabsContent>
 
