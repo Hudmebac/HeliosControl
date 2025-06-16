@@ -134,22 +134,14 @@ function getSolarGenerationCardDetails(
         const consumptionKWh = dailyTotals.consumption || 0;
         const gridImportKWh = dailyTotals.gridImport || 0;
         const batteryDischargeKWh = dailyTotals.batteryDischarge || 0;
-        const batteryChargeKWh = dailyTotals.batteryCharge || 0; // Total energy charged to battery
+        const batteryChargeKWh = dailyTotals.batteryCharge || 0;
 
-        // 1. Estimate solar used directly by home
         const consumptionMetByNonGridNonBattery = Math.max(0, consumptionKWh - gridImportKWh - batteryDischargeKWh);
         solarUsedForHomeKWh = Math.min(solarTotalGeneratedKWh, consumptionMetByNonGridNonBattery);
 
-        // 2. Solar remaining after direct home use
         const solarRemainingAfterHomeUse = Math.max(0, solarTotalGeneratedKWh - solarUsedForHomeKWh);
-
-        // 3. Estimate solar used to charge battery
-        // This assumes solar is prioritized for battery charging from the remaining solar,
-        // and it cannot exceed the total amount charged into the battery today from any source.
         solarChargedToBatteryKWh = Math.min(solarRemainingAfterHomeUse, batteryChargeKWh);
         
-        // 4. Estimate solar exported to grid
-        // This is what's left of solar after home use and contributing to battery charging.
         const solarRemainingAfterHomeAndBatteryContribution = Math.max(0, solarRemainingAfterHomeUse - solarChargedToBatteryKWh);
         solarExportedToGridKWh = solarRemainingAfterHomeAndBatteryContribution;
     }
@@ -159,7 +151,7 @@ function getSolarGenerationCardDetails(
         descriptionParts.push(<div key="s2h">{`Solar to Home: ${solarUsedForHomeKWh.toFixed(2)} kWh`}</div>);
         descriptionParts.push(<div key="s2b">{`Solar to Battery: ${solarChargedToBatteryKWh.toFixed(2)} kWh`}</div>);
         descriptionParts.push(<div key="s2g">{`Solar to Grid: ${solarExportedToGridKWh.toFixed(2)} kWh`}</div>);
-        descriptionParts.push(<div key="stotal" className="font-medium">{`Today's Generation: ${solarTotalGeneratedKWh.toFixed(2)} kWh`}</div>);
+        descriptionParts.push(<div key="stotal" className="font-medium pt-1 border-t border-border/50 mt-1">{`Today's Generation: ${solarTotalGeneratedKWh.toFixed(2)} kWh`}</div>);
     } else {
         descriptionParts.push(<div key="stotal-na" className="font-medium">{`Today's Generation: N/A`}</div>);
     }
@@ -167,7 +159,7 @@ function getSolarGenerationCardDetails(
     
     const descriptionNode = (
       <div className="space-y-0.5 text-xs">
-        {descriptionParts}
+        {descriptionParts.map((el, index) => <div key={index}>{el}</div>)}
       </div>
     );
 
@@ -177,7 +169,7 @@ function getSolarGenerationCardDetails(
         icon: <Sun className="h-6 w-6" />,
         valueColorClassName: color,
         description: descriptionNode,
-        className: "min-h-[120px]" // Consider adjusting if content grows too much
+        className: "min-h-[120px]"
     };
 }
 
@@ -186,6 +178,7 @@ function getBatteryCardDetails(
     currentBatteryPowerWatts: number,
     rawGridPowerWattsFromSystem: number,
     rawSolarPowerWattsFromSystem: number,
+    dailyTotals: DailyEnergyTotals | undefined,
     timestamp: number
 ): CardDetails {
     const chargeLevelString = `${batteryInfo.percentage}%`;
@@ -220,7 +213,7 @@ function getBatteryCardDetails(
             activityDescription = `- Supplying Home at ${powerRateString}`;
             valueColorClassName = "text-orange-500";
         }
-    } else { // Idle or very low flow
+    } else { 
         activityDescription = "- Idle";
         if (batteryInfo.percentage >= 99) valueColorClassName = "text-green-500";
         else if (batteryInfo.percentage >= 70) valueColorClassName = "text-green-400";
@@ -231,26 +224,58 @@ function getBatteryCardDetails(
 
     const kwhInfoString = (typeof batteryInfo.energyKWh === 'number' && typeof batteryInfo.capacityKWh === 'number' && batteryInfo.capacityKWh > 0)
         ? `Charge: ${batteryInfo.energyKWh.toFixed(2)} kWh / ${batteryInfo.capacityKWh.toFixed(2)} kWh`
-        : ``;
-
-    const finalDescriptionElements: React.ReactNode[] = [];
-    if (kwhInfoString) {
-      finalDescriptionElements.push(<span key="kwh">{kwhInfoString}</span>);
-    }
+        : `Charge: N/A`;
+    
+    const descriptionElements: React.ReactNode[] = [];
+    descriptionElements.push(<span key="kwhCap">{kwhInfoString}</span>);
     if (activityDescription) {
-      finalDescriptionElements.push(<span key="activity" className="block sm:inline sm:ml-1">{activityDescription}</span>);
+      descriptionElements.push(<span key="activity" className="block sm:inline sm:ml-1">{activityDescription}</span>);
     }
-    finalDescriptionElements.push(<span key="time" className="block text-xs text-muted-foreground sm:inline sm:ml-1">({new Date(timestamp).toLocaleTimeString()})</span>);
+    descriptionElements.push(<span key="time" className="block text-xs text-muted-foreground sm:inline sm:ml-1">({new Date(timestamp).toLocaleTimeString()})</span>);
+
+    if (dailyTotals) {
+        const solarTotalGeneratedKWh = dailyTotals.solar || 0;
+        const consumptionKWh = dailyTotals.consumption || 0;
+        const gridImportKWh = dailyTotals.gridImport || 0;
+        const batteryChargeTotalKWh = dailyTotals.batteryCharge || 0;
+        const batteryDischargeTotalKWh = dailyTotals.batteryDischarge || 0;
+
+        const consumptionMetByNonGridNonBattery = Math.max(0, consumptionKWh - gridImportKWh - batteryDischargeTotalKWh);
+        const solarUsedForHomeKWh = Math.min(solarTotalGeneratedKWh, consumptionMetByNonGridNonBattery);
+        const solarRemainingAfterHomeUse = Math.max(0, solarTotalGeneratedKWh - solarUsedForHomeKWh);
+        const solarToBatteryKWh = Math.min(solarRemainingAfterHomeUse, batteryChargeTotalKWh);
+        const gridToBatteryKWh = Math.max(0, batteryChargeTotalKWh - solarToBatteryKWh);
+
+        const homeDemandMetByBatteryOrGrid = Math.max(0, consumptionKWh - solarUsedForHomeKWh);
+        const batteryToHomeKWh = Math.min(batteryDischargeTotalKWh, homeDemandMetByBatteryOrGrid);
+        const batteryToGridKWh = Math.max(0, batteryDischargeTotalKWh - batteryToHomeKWh);
+
+        descriptionElements.push(<div key="chargeHeader" className="font-semibold mt-2 pt-1 border-t border-border/50">Battery In Today:</div>);
+        descriptionElements.push(<div key="s2b" className="pl-2">{`Solar to Battery: ${solarToBatteryKWh.toFixed(2)} kWh`}</div>);
+        descriptionElements.push(<div key="g2b" className="pl-2">{`Grid to Battery: ${gridToBatteryKWh.toFixed(2)} kWh`}</div>);
+        descriptionElements.push(<div key="totalCharge" className="pl-2 font-medium">{`Total Charged: ${batteryChargeTotalKWh.toFixed(2)} kWh`}</div>);
+
+        descriptionElements.push(<div key="dischargeHeader" className="font-semibold mt-1 pt-1 border-t border-border/50">Battery Out Today:</div>);
+        descriptionElements.push(<div key="b2h" className="pl-2">{`Battery to Home: ${batteryToHomeKWh.toFixed(2)} kWh`}</div>);
+        descriptionElements.push(<div key="b2g" className="pl-2">{`Battery to Grid: ${batteryToGridKWh.toFixed(2)} kWh`}</div>);
+        descriptionElements.push(<div key="totalDischarge" className="pl-2 font-medium">{`Total Discharged: ${batteryDischargeTotalKWh.toFixed(2)} kWh`}</div>);
+    }
 
     const finalDescription = (
-      <div className="text-xs">
-        {finalDescriptionElements.map((el, index) => (
-          <React.Fragment key={index}>
-            {el}
-            {index < finalDescriptionElements.length -1 && !el.key?.toString().includes("kwh") && finalDescriptionElements[index+1]?.key?.toString().includes("activity") ? "" : ""}
-            {index < finalDescriptionElements.length -1 && (el.key?.toString().includes("kwh") || el.key?.toString().includes("activity")) && index !== finalDescriptionElements.length -2 && <br className="sm:hidden"/>}
-          </React.Fragment>
-        ))}
+      <div className="text-xs space-y-0.5">
+        {descriptionElements.map((el, index) => {
+            if (React.isValidElement(el) && (el.key?.toString().startsWith("kwh") || el.key?.toString().startsWith("activity") || el.key?.toString().startsWith("time"))) {
+                // Original inline flow for the first line
+                return (
+                    <React.Fragment key={el.key}>
+                        {el}
+                        {index < descriptionElements.length -1 && !descriptionElements[index+1]?.key?.toString().includes("Header") && index !== descriptionElements.length -1 && (el.key?.toString().includes("kwh") || el.key?.toString().includes("activity")) ? " " : ""}
+                    </React.Fragment>
+                );
+            }
+            // New elements are already divs
+            return el; 
+        })}
       </div>
     );
 
@@ -282,22 +307,21 @@ function getGridCardDetails(
     } else if (gridData.flow === 'exporting' && (typeof gridData.value === 'number' && gridData.value * (gridData.unit === 'kW' ? 1000 : 1) > POWER_FLOW_THRESHOLD_WATTS)) {
         color = "text-blue-500";
     }
+    
+    const descriptionElements: React.ReactNode[] = [];
+    descriptionElements.push(<div key="flow">{flowDescription}</div>);
 
-
-    let dailyTotals = "";
-    if (typeof dailyGridImportKWh === 'number' && typeof dailyGridExportKWh === 'number') {
-        dailyTotals = `I: ${dailyGridImportKWh.toFixed(1)} kWh / E: ${dailyGridExportKWh.toFixed(1)} kWh`;
-    } else if (typeof dailyGridImportKWh === 'number') {
-        dailyTotals = `I: ${dailyGridImportKWh.toFixed(1)} kWh`;
-    } else if (typeof dailyGridExportKWh === 'number') {
-        dailyTotals = `E: ${dailyGridExportKWh.toFixed(1)} kWh`;
+    if (typeof dailyGridImportKWh === 'number' && !isNaN(dailyGridImportKWh)) {
+        descriptionElements.push(<div key="dailyImport">{`Today's Import: ${dailyGridImportKWh.toFixed(2)} kWh`}</div>);
     }
+     if (typeof dailyGridExportKWh === 'number' && !isNaN(dailyGridExportKWh)) {
+        descriptionElements.push(<div key="dailyExport">{`Today's Export: ${dailyGridExportKWh.toFixed(2)} kWh`}</div>);
+    }
+    descriptionElements.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
     
     const descriptionNode = (
       <div className="space-y-0.5 text-xs">
-        <div>{flowDescription}</div>
-        {dailyTotals && <div>{`Today (${dailyTotals})`}</div>}
-        <div className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>
+        {descriptionElements.map((el, index) => <div key={index}>{el}</div> )}
       </div>
     );
 
@@ -319,12 +343,12 @@ function getEVChargerCardDetails(
     if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) {
         valueColor = "text-green-500";
         icon = <Bolt className="h-6 w-6 text-green-500" />;
-    } else if (React.isValidElement(evData.status) && evData.status.props.className?.includes('text-red')) { // Heuristic for faulted
+    } else if (React.isValidElement(evData.status) && evData.status.props.className?.includes('text-red')) { 
         valueColor = "text-red-600";
         icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
     }
     else {
-        valueColor = "text-blue-500"; // Default for idle/connected states if not charging/faulted
+        valueColor = "text-blue-500"; 
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
     }
     
@@ -355,17 +379,15 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
   }
 
   if (isLoading && !data) {
-    // Enhanced loading skeleton
     return (
       <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 space-y-4 flex flex-col">
             <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]">
               <CardContent className="p-6 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </CardContent>
             </Card>
-             {/* Skeleton for EV Charger card if it's shown below the flow viz */}
             <DashboardCard 
               title="EV Charger" 
               value="0" 
@@ -414,7 +436,14 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     data.timestamp
   );
   const solarDetails = getSolarGenerationCardDetails(data.solarGeneration, data.today, data.timestamp);
-  const batteryDetails = getBatteryCardDetails(data.battery, data.battery.rawPowerWatts, data.rawGridPowerWatts, data.rawSolarPowerWatts, data.timestamp);
+  const batteryDetails = getBatteryCardDetails(
+    data.battery, 
+    data.battery.rawPowerWatts, 
+    data.rawGridPowerWatts, 
+    data.rawSolarPowerWatts, 
+    data.today, 
+    data.timestamp
+  );
   const gridDetails = getGridCardDetails(data.grid, data.today?.gridImport, data.today?.gridExport, data.timestamp);
   const evDetails = getEVChargerCardDetails(data.evCharger, data.timestamp);
 
@@ -453,4 +482,3 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     </div>
   );
 }
-
