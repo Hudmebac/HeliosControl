@@ -32,7 +32,6 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     } catch (jsonError) {
       console.error('Error parsing JSON from successful GivEnergy response:', jsonError, 'URL:', targetUrl);
       // If JSON parsing fails despite correct content-type, return a success status but indicate parsing issue.
-      // This scenario should be rare.
       return NextResponse.json({ success: true, message: 'Command accepted, but response parsing failed.', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
     }
   } else {
@@ -79,7 +78,6 @@ export async function POST(
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
   const searchParams = requestUrl.search;
-
   const targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}${searchParams}`;
   const authToken = request.headers.get('Authorization');
 
@@ -88,32 +86,21 @@ export async function POST(
   }
 
   let requestBody;
-  try {
-    // Only attempt to parse body if Content-Type indicates JSON or if it's not explicitly empty
-    const contentType = request.headers.get('Content-Type');
-    if (contentType && contentType.includes('application/json')) {
-        requestBody = await request.json();
-    } else {
-        // For other content types or no content type, pass undefined or handle as needed.
-        // GivEnergy commands often expect JSON, so this path might be less common for typical command payloads.
-        // If an empty body is expected, ensure it's handled.
-        const textBody = await request.text(); // Check if there's any text body at all
-        if (textBody) {
-            try {
-                requestBody = JSON.parse(textBody); // Attempt to parse if not empty, for flexibility
-            } catch (e) {
-                 console.warn(`POST request to ${targetUrl} had non-JSON body: ${textBody.substring(0,100)}...`);
-                 // If it's not JSON and not empty, it might be an issue or an intended non-JSON payload.
-                 // For GivEnergy, typically bodies are JSON. If it was meant to be empty, request.json() would fail.
-                 // This path handles cases where content might exist but isn't application/json.
-                 // If the intent was an empty body, JSON.stringify(undefined) below results in no body.
-            }
-        }
+  const contentType = request.headers.get('Content-Type');
+
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      requestBody = await request.json();
+    } catch (error: any) {
+      console.error('Error parsing JSON request body for POST proxy:', error, 'URL:', targetUrl);
+      return NextResponse.json({ error: 'Invalid JSON in request body.', details: error.message }, { status: 400 });
     }
-  } catch (error) {
-    console.error('Error parsing request body for POST proxy:', error, 'URL:', targetUrl);
-    // If parsing fails but body might be optional or intended to be empty,
-    // requestBody will remain undefined, which is fine for JSON.stringify(undefined)
+  } else {
+    // GivEnergy control commands typically require a JSON body.
+    // If the command doesn't need a body, this is fine. If it does, GivEnergy API will likely error out.
+    // For stricter handling, one might return a 400 error here if a body is always expected.
+    console.warn(`POST request to ${targetUrl} received without 'application/json' Content-Type or with an empty body. Proceeding, but GivEnergy API might reject if body is required.`);
+    requestBody = undefined; // Or attempt to read as text if other content types are possible for some commands
   }
 
   try {
@@ -124,11 +111,12 @@ export async function POST(
         'Content-Type': 'application/json', // GivEnergy API generally expects JSON for POST
         'Accept': 'application/json',
       },
-      body: requestBody ? JSON.stringify(requestBody) : undefined, // Send body if it exists
+      body: requestBody ? JSON.stringify(requestBody) : undefined,
     });
     return await handleGivEnergyResponse(apiResponse, targetUrl);
   } catch (error: any) {
-    console.error('Error in GivEnergy POST proxy:', error, 'URL:', targetUrl);
-    return NextResponse.json({ error: 'Proxy POST request failed', details: error.message }, { status: 500 });
+    console.error('Error in GivEnergy POST proxy during fetch or response handling:', error, 'URL:', targetUrl);
+    // Use 502 Bad Gateway if the proxy successfully made a request but got an invalid response or network error to upstream
+    return NextResponse.json({ error: 'Proxy POST request to GivEnergy failed', details: error.message }, { status: 502 });
   }
 }
