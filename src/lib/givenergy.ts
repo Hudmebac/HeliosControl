@@ -26,19 +26,11 @@ import type {
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
 const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1';
 
-<<<<<<< HEAD
 async function _fetchGivEnergyAPI<T>(
   apiKey: string,
   endpoint: string,
   options?: RequestInit & { suppressErrorForStatus?: number[] }
 ): Promise<T> {
-=======
-// SIMULATED: In a real app, this should come from inverter settings or user configuration.
-const SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH = 13.5;
-
-
-async function _fetchGivEnergyAPI<T>(apiKey: string, endpoint: string, options?: RequestInit): Promise<T> {
->>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
   const headers = new Headers({
     "Authorization": `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -322,8 +314,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
-<<<<<<< HEAD
-<<<<<<< HEAD
   const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
   const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; 
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
@@ -339,37 +329,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         Math.abs(inferredBatteryPowerWattsCalculation) >= MIN_INFERRED_FLOW_TO_OVERRIDE) {
       effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
     }
-=======
-  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0;
-=======
-  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; // -ve for import, +ve for export
-<<<<<<< HEAD
->>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
-=======
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; // -ve for charge, +ve for discharge
->>>>>>> 9970785 (git checkout original)
-  const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
-
-  const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
-  let effectiveBatteryPowerFlow = apiBatteryPowerWatts;
-
-  const API_REPORTED_IDLE_THRESHOLD = 20; // Watts
-  const MIN_INFERRED_FLOW_TO_OVERRIDE = 20; // Watts
-
-  if (!isNaN(inferredBatteryPowerWattsCalculation)) {
-    if (Math.abs(apiBatteryPowerWatts) < API_REPORTED_IDLE_THRESHOLD &&
-        Math.abs(inferredBatteryPowerWattsCalculation) >= MIN_INFERRED_FLOW_TO_OVERRIDE) {
-      effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
-    }
-<<<<<<< HEAD
-  } else {
-    // Fallback to API if inference calculation resulted in NaN
-    effectiveBatteryPowerFlow = apiBatteryPowerWatts;
->>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
-=======
-    // else, default effectiveBatteryPowerFlow remains apiBatteryPowerWatts
->>>>>>> 9970785 (git checkout original)
   }
 
 
@@ -391,33 +350,12 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: batteryPercentage,
     unit: "%",
     percentage: batteryPercentage,
-<<<<<<< HEAD
-<<<<<<< HEAD
     rawPowerWatts: effectiveBatteryPowerFlow,
-<<<<<<< HEAD
     energyKWh: currentEnergyKWh !== undefined ? parseFloat(currentEnergyKWh.toFixed(2)) : undefined,
     capacityKWh: actualCapacityKWh !== undefined ? parseFloat(actualCapacityKWh.toFixed(2)) : undefined,
-=======
-=======
-    rawPowerWatts: effectiveBatteryPowerFlow, // Use the refined effective power flow
->>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
-=======
-    rawPowerWatts: effectiveBatteryPowerFlow,
->>>>>>> 9970785 (git checkout original)
-    energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
-    capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
->>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
   };
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   const GRID_IDLE_THRESHOLD_WATTS = 50;
-=======
-  const GRID_IDLE_THRESHOLD_WATTS = 50; // Threshold for grid to be considered idle.
->>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
-=======
-  const GRID_IDLE_THRESHOLD_WATTS = 50; 
->>>>>>> 9970785 (git checkout original)
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
     value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
     unit: "kW",
@@ -504,6 +442,3 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
-
-
-    
