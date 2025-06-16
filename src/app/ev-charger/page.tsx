@@ -59,6 +59,9 @@ const EVChargerPage = () => {
   const [chargingSessionsPage, setChargingSessionsPage] = useState(1);
   const [hasMoreChargingSessions, setHasMoreChargingSessions] = useState(true);
 
+  const chargePowerLimitPresets = [8.5, 10, 12, 16, 24, 32];
+
+
   const getAuthHeaders = useCallback(() => {
     if (!apiKey) return {};
     return {
@@ -704,17 +707,22 @@ const EVChargerPage = () => {
               ) : (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="charge-power-limit-slider">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value || 'N/A'}</Label>
-                  <Slider
-                    id="charge-power-limit-slider"
-                    min={commandChargePowerLimit?.min || 6}
-                    max={commandChargePowerLimit?.max || 32}
-                    step={1}
-                    value={[commandChargePowerLimit?.value || (commandChargePowerLimit?.unit === 'A' ? 16 : 3600)]}
-                    onValueChange={(value) => handleAdjustChargePowerLimit(value[0])}
-                    disabled={!commandChargePowerLimit}
-                  />
-                   <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value || "N/A"} {commandChargePowerLimit?.unit}</p>
+                  <Label htmlFor="charge-power-limit-presets">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value || 'N/A'}</Label>
+                  <div className="flex flex-wrap gap-2 mt-1" id="charge-power-limit-presets">
+                    {chargePowerLimitPresets.map((limit) => (
+                      <Button
+                        key={limit}
+                        variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
+                        onClick={() => handleAdjustChargePowerLimit(limit)}
+                        disabled={!commandChargePowerLimit}
+                        className="min-w-[60px]"
+                      >
+                        {limit}{commandChargePowerLimit?.unit || 'A'}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value || "N/A"} {commandChargePowerLimit?.unit}</p>
+                  <p className="text-xs text-muted-foreground">Min: {commandChargePowerLimit?.min || "N/A"} {commandChargePowerLimit?.unit}, Max: {commandChargePowerLimit?.max || "N/A"} {commandChargePowerLimit?.unit}</p>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -920,3 +928,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
