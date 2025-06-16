@@ -9,7 +9,7 @@ import { Sun, Moon, Contrast, ArrowLeft, PlugZap, CalendarDays, Power, LineChart
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { themes } from '@/hooks/use-theme';
+import { themes, useTheme } from '@/hooks/use-theme'; // Added useTheme import
 import { useApiKey } from '@/hooks/use-api-key';
 
 
@@ -597,5 +597,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
-    

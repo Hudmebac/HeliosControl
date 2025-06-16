@@ -334,7 +334,7 @@ function getGridCardDetails(
     );
 
 
-    return { title: "Grid Status", ...formattedGrid, icon: <Power className="h-6 w-6" />, description: descriptionNode, valueColorClassName: color, className: "min-h-[120px]" };
+    return { title: "Grid Status", ...formattedGrid, value: Math.abs(formattedGrid.value as number), icon: <Power className="h-6 w-6" />, description: descriptionNode, valueColorClassName: color, className: "min-h-[120px]" };
 }
 
 
@@ -381,7 +381,20 @@ function getEVChargerCardDetails(
      else { // Default if status is not a React element (e.g. raw string) or value is not "N/A" but power is low
         valueColor = "text-blue-500";
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
-    }
+    }    
+
+    const evChargerStatusMap: { [key: string]: string } = {
+        Available: 'Available',
+        Preparing: 'Preparing to Charge',
+        Charging: 'Charging',
+        SuspendedEVSE: 'Suspended (EVSE)',
+        SuspendedEV: 'Suspended (EV)',
+        Finishing: 'Finishing Charge',
+        Reserved: 'Reserved',
+        Unavailable: 'Unavailable',
+        Faulted: 'Faulted',
+        Unknown: 'Unknown Status', // Added a fallback for unexpected values
+    };
     
     const descriptionElements: React.ReactNode[] = [];
     descriptionElements.push(<div key="status">{evData.status}</div>);
@@ -405,7 +418,7 @@ function getEVChargerCardDetails(
 
     return { title: "EV Charger", ...formattedEV, icon, description: descriptionNode, valueColorClassName: valueColor, className: "min-h-[120px]" };
 }
-
+    
 
 export function DashboardGrid({ apiKey }: DashboardGridProps) {
   const { data, isLoading, error, refetch } = useGivEnergyData(apiKey);
