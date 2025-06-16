@@ -343,30 +343,33 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0;
 =======
   const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; // -ve for import, +ve for export
+<<<<<<< HEAD
 >>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
   const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
+=======
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; // -ve for charge, +ve for discharge
+>>>>>>> 9970785 (git checkout original)
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
   const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
+  let effectiveBatteryPowerFlow = apiBatteryPowerWatts;
 
-  let effectiveBatteryPowerFlow: number;
-
-  const API_REPORTED_IDLE_THRESHOLD = 20; // Watts. If API reports battery flow within +/- this, consider it 'idle' or unreliable for small flows.
-  const MIN_INFERRED_FLOW_TO_OVERRIDE = 20; // Watts. If inferred flow is at least this much, and API reports idle, use inferred.
+  const API_REPORTED_IDLE_THRESHOLD = 20; // Watts
+  const MIN_INFERRED_FLOW_TO_OVERRIDE = 20; // Watts
 
   if (!isNaN(inferredBatteryPowerWattsCalculation)) {
     if (Math.abs(apiBatteryPowerWatts) < API_REPORTED_IDLE_THRESHOLD &&
         Math.abs(inferredBatteryPowerWattsCalculation) >= MIN_INFERRED_FLOW_TO_OVERRIDE) {
-      // API reports idle/low, but inference suggests battery *should* be active. Trust inference.
       effectiveBatteryPowerFlow = inferredBatteryPowerWattsCalculation;
-    } else {
-      // API reports a flow, or inference also suggests idle/low. Trust API in these cases.
-      effectiveBatteryPowerFlow = apiBatteryPowerWatts;
     }
+<<<<<<< HEAD
   } else {
     // Fallback to API if inference calculation resulted in NaN
     effectiveBatteryPowerFlow = apiBatteryPowerWatts;
 >>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
+=======
+    // else, default effectiveBatteryPowerFlow remains apiBatteryPowerWatts
+>>>>>>> 9970785 (git checkout original)
   }
 
 
@@ -389,6 +392,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     unit: "%",
     percentage: batteryPercentage,
 <<<<<<< HEAD
+<<<<<<< HEAD
     rawPowerWatts: effectiveBatteryPowerFlow,
 <<<<<<< HEAD
     energyKWh: currentEnergyKWh !== undefined ? parseFloat(currentEnergyKWh.toFixed(2)) : undefined,
@@ -397,16 +401,23 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 =======
     rawPowerWatts: effectiveBatteryPowerFlow, // Use the refined effective power flow
 >>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
+=======
+    rawPowerWatts: effectiveBatteryPowerFlow,
+>>>>>>> 9970785 (git checkout original)
     energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
     capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
 >>>>>>> 040edb3 (If Home Consumption > Solar and there is no significant Grid import then)
   };
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   const GRID_IDLE_THRESHOLD_WATTS = 50;
 =======
   const GRID_IDLE_THRESHOLD_WATTS = 50; // Threshold for grid to be considered idle.
 >>>>>>> d13230b (this is still happening "Supplying Home..." or "Charging from Solar...")
+=======
+  const GRID_IDLE_THRESHOLD_WATTS = 50; 
+>>>>>>> 9970785 (git checkout original)
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
     value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
     unit: "kW",
@@ -478,7 +489,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     rawHomeConsumptionWatts: consumptionWatts,
     rawSolarPowerWatts: solarPowerWatts,
     rawGridPowerWatts: gridPowerWatts,
-    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, // Keep for debugging/reference if needed
+    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, 
     inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
     today: dailyTotals,
   };

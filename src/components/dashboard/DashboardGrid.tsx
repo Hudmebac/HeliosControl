@@ -91,7 +91,6 @@ function getHomeConsumptionCardDetails(
         hcColor = "text-orange-700";
     }
 
-<<<<<<< HEAD
     const timeString = `Updated: ${new Date(timestamp).toLocaleTimeString()}`;
     const descriptionElements: React.ReactNode[] = [];
 
@@ -111,8 +110,6 @@ function getHomeConsumptionCardDetails(
         ))}
       </div>
     );
-=======
->>>>>>> ed8e66b (When displaying kW less than 1 kW eg 0.54 kW should be displayed as eg 5)
 
     return {
         title: "Home Consumption",
@@ -429,9 +426,6 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4 flex flex-col">
           <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]"><CardContent className="p-6 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary"/></CardContent></Card>
-<<<<<<< HEAD
-          <DashboardCard title="EV Charger" value="0" unit="kW" icon={<PlugZap className="h-6 w-6"/>} isLoading={true} className="min-h-[120px]" />
-=======
           <DashboardCard 
               title="EV Charger" 
               value="0" 
@@ -439,7 +433,6 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
               icon={<PlugZap className="h-6 w-6"/>} 
               isLoading={true} 
               className="min-h-[120px]" />
->>>>>>> 96d62cf (Reconstruct "Battery Status" card.)
         </div>
         <div className="md:col-span-1 space-y-4 flex flex-col">
           {["Home Consumption", "Solar Generation", "Battery Status", "Grid Status"].map(title => (
