@@ -11,12 +11,14 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useTheme, themes } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
+import { useToast } from '@/hooks/use-toast';
 
 
 const EVChargerPage = () => {
   const [evChargerData, setEvChargerData] = useState<any>(null);
   const [isLoadingEvData, setIsLoadingEvData] = useState(true);
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
+  const { toast } = useToast();
 
   const evChargerStatusMap: { [key: string]: string } = {
     Available: 'Available',
@@ -188,6 +190,32 @@ const EVChargerPage = () => {
     }
   }, [evChargerData?.uuid, apiKey, fetchSettings, fetchSchedules]);
 
+  const handleApiError = async (response: Response, operationName: string) => {
+    let errorPayload: { error?: string; message?: string; details?: any } = {
+      message: `Error ${operationName}: Request failed with status ${response.status}`,
+    };
+    try {
+      const parsedJson = await response.json();
+      if (typeof parsedJson === 'object' && parsedJson !== null) {
+        if (parsedJson.error || parsedJson.message) {
+          errorPayload = { ...parsedJson, ...errorPayload }; // Prioritize parsed error/message
+        } else {
+          errorPayload.details = parsedJson; // Parsed but no standard error fields
+        }
+      } else {
+         errorPayload.details = "Response was not a standard JSON error object.";
+      }
+    } catch (e) {
+      errorPayload.details = "Response was not valid JSON.";
+    }
+    console.error(`Error in ${operationName}:`, errorPayload.error || errorPayload.message, errorPayload.details ? errorPayload.details : '');
+    toast({
+      variant: "destructive",
+      title: `${operationName.charAt(0).toUpperCase() + operationName.slice(1)} Failed`,
+      description: String(errorPayload.error || errorPayload.message || "An unknown error occurred."),
+    });
+  };
+
   const handleStartCharge = async () => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Starting charge...');
@@ -198,20 +226,25 @@ const EVChargerPage = () => {
         body: JSON.stringify({ value: 1 }), 
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Start charge request failed with status ${response.status}` }));
-        console.error('Error starting charge:', errorData);
-        // Optionally, show a toast message with errorData.error
+        await handleApiError(response, 'starting charge');
         return;
       }
       try {
-        const data = await response.json();
-        console.log('Start charge response:', data);
+        // Attempt to parse JSON, but don't fail if it's empty for success
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Start charge response:', data);
+        } else {
+          console.log('Start charge command successful, no JSON content in response.');
+        }
       } catch (e) {
-        console.log('Start charge command successful, no JSON content in response.');
+        console.log('Start charge command successful, response was not valid JSON (may be empty).');
       }
       fetchEvChargerData(); 
     } catch (error) {
-      console.error('Error starting charge:', error);
+      console.error('Network or unexpected error starting charge:', error);
+      toast({ variant: "destructive", title: "Start Charge Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -225,19 +258,24 @@ const EVChargerPage = () => {
         body: JSON.stringify({ value: 1 }), 
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Stop charge request failed with status ${response.status}` }));
-        console.error('Error stopping charge:', errorData);
+        await handleApiError(response, 'stopping charge');
         return;
       }
       try {
-        const data = await response.json();
-        console.log('Stop charge response:', data);
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Stop charge response:', data);
+        } else {
+          console.log('Stop charge command successful, no JSON content in response.');
+        }
       } catch (e) {
-        console.log('Stop charge command successful, no JSON content in response.');
+         console.log('Stop charge command successful, response was not valid JSON (may be empty).');
       }
       fetchEvChargerData(); 
     } catch (error) {
-      console.error('Error stopping charge:', error);
+      console.error('Network or unexpected error stopping charge:', error);
+      toast({ variant: "destructive", title: "Stop Charge Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -252,18 +290,23 @@ const EVChargerPage = () => {
         body: JSON.stringify({ value: checked ? 2 : 0 }), 
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Toggle solar charging failed with status ${response.status}` }));
-        console.error('Error toggling solar charging:', errorData);
+        await handleApiError(response, 'toggling solar charging');
         return;
       }
       try {
-        const data = await response.json();
-        console.log('Solar charging toggle response:', data);
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Solar charging toggle response:', data);
+        } else {
+          console.log('Toggle solar charging successful, no JSON content in response.');
+        }
       } catch (e) {
-        console.log('Toggle solar charging successful, no JSON content in response.');
+        console.log('Toggle solar charging successful, response was not valid JSON (may be empty).');
       }
     } catch (error) {
-      console.error('Error toggling solar charging:', error);
+      console.error('Network or unexpected error toggling solar charging:', error);
+      toast({ variant: "destructive", title: "Solar Charging Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -278,18 +321,23 @@ const EVChargerPage = () => {
         body: JSON.stringify({ value: checked ? 1 : 0 }),
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Toggle plug and charge failed with status ${response.status}` }));
-        console.error('Error toggling plug and charge:', errorData);
+         await handleApiError(response, 'toggling plug and charge');
         return;
       }
       try {
-        const data = await response.json();
-        console.log('Plug and charge toggle response:', data);
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Plug and charge toggle response:', data);
+        } else {
+          console.log('Toggle plug and charge successful, no JSON content in response.');
+        }
       } catch (e) {
-        console.log('Toggle plug and charge successful, no JSON content in response.');
+        console.log('Toggle plug and charge successful, response was not valid JSON (may be empty).');
       }
     } catch (error) {
-      console.error('Error toggling plug and charge:', error);
+      console.error('Network or unexpected error toggling plug and charge:', error);
+      toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -304,20 +352,57 @@ const EVChargerPage = () => {
         body: JSON.stringify({ value: value[0] * 1000 }), 
       });
        if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Set max battery discharge failed with status ${response.status}` }));
-        console.error('Error setting max battery discharge:', errorData);
+        await handleApiError(response, 'setting max battery discharge');
         return;
       }
       try {
-        const data = await response.json();
-        console.log('Max battery discharge to EVC response:', data);
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Max battery discharge to EVC response:', data);
+        } else {
+          console.log('Set max battery discharge successful, no JSON content in response.');
+        }
       } catch (e) {
-        console.log('Set max battery discharge successful, no JSON content in response.');
+        console.log('Set max battery discharge successful, response was not valid JSON (may be empty).');
       }
     } catch (error) {
-      console.error('Error setting max battery discharge to EVC:', error);
+      console.error('Network or unexpected error setting max battery discharge to EVC:', error);
+      toast({ variant: "destructive", title: "Battery Discharge Error", description: "An unexpected error occurred." });
     }
   };
+  
+  const handleSetChargeRate = useCallback(async (value: number[]) => {
+    if (!apiKey || !evChargerData?.uuid) return;
+    setSettings(prevSettings => ({ ...prevSettings, chargeRate: value[0] }));
+    console.log('Setting charge rate:', value[0]);
+    try {
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, { 
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ value: value[0] }),
+      });
+      if (!response.ok) {
+        await handleApiError(response, 'setting charge rate');
+        return;
+      }
+      try {
+        const textResponse = await response.text();
+        if (textResponse) {
+          const data = JSON.parse(textResponse);
+          console.log('Set charge rate response:', data);
+        } else {
+          console.log('Set charge rate successful, no JSON content in response.');
+        }
+      } catch (e) {
+        console.log('Set charge rate successful, response was not valid JSON (may be empty).');
+      }
+    } catch (error) {
+      console.error('Network or unexpected error setting charge rate:', error);
+      toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
+    }
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
+
 
   const handleAddSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -331,7 +416,7 @@ const EVChargerPage = () => {
     //     headers: getAuthHeaders(),
     //     body: JSON.stringify(payload),
     //   });
-    //   if (!response.ok) { /* ... error handling ... */ }
+    //   if (!response.ok) { await handleApiError(response, 'adding schedule'); return; }
     //   // process response
     //   fetchSchedules(evChargerData.uuid);
     // } catch (error) { /* ... error handling ... */ }
@@ -346,36 +431,10 @@ const EVChargerPage = () => {
       //   headers: getAuthHeaders(),
       //   body: JSON.stringify({ value: scheduleId }), 
       // });
-      // if (!response.ok) { /* ... error handling ... */ }
+      // if (!response.ok) { await handleApiError(response, 'setting active schedule'); return; }
       // // process response
     // } catch (error) { /* ... error handling ... */ }
   };
-
-  const handleSetChargeRate = useCallback(async (value: number[]) => {
-    if (!apiKey || !evChargerData?.uuid) return;
-    setSettings(prevSettings => ({ ...prevSettings, chargeRate: value[0] }));
-    console.log('Setting charge rate:', value[0]);
-    try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, { 
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `Set charge rate failed with status ${response.status}` }));
-        console.error('Error setting charge rate:', errorData);
-        return;
-      }
-      try {
-        const data = await response.json();
-        console.log('Set charge rate response:', data);
-      } catch (e) {
-        console.log('Set charge rate successful, no JSON content in response.');
-      }
-    } catch (error) {
-      console.error('Error setting charge rate:', error);
-    }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders]);
 
 
   if (isLoadingApiKey || isLoadingEvData) {
@@ -598,3 +657,5 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
+      
