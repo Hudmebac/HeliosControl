@@ -10,13 +10,11 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     try {
       errorPayload = await apiResponse.json();
     } catch (parseError) {
-      // If parsing fails, construct a basic error payload
       errorPayload = {
         error: `GivEnergy API error: ${apiResponse.status} ${apiResponse.statusText}.`,
         details: `Target response status: ${apiResponse.status}. Response body was not valid JSON or was empty. URL: ${targetUrl}`
       };
     }
-    // Ensure errorPayload is an object and has a message/error
     if (typeof errorPayload !== 'object' || errorPayload === null) {
       errorPayload = { error: String(errorPayload) }; // Convert non-object to string error
     }
@@ -74,8 +72,8 @@ export async function GET(
     });
     return await handleGivEnergyResponse(apiResponse, targetUrl);
   } catch (error: any) {
-    console.error('Error in GivEnergy GET proxy:', error, 'URL:', targetUrl);
-    return NextResponse.json({ error: 'Proxy GET request failed', details: error.message }, { status: 500 });
+    console.error(`[PROXY GET /${slugPath}] Exception:`, error);
+    return NextResponse.json({ error: 'Proxy GET request failed', details: error.message, path: `/${slugPath}` }, { status: 500 });
   }
 }
 
@@ -94,44 +92,49 @@ export async function POST(
   const contentType = request.headers.get('Content-Type');
   let requestBody: any = null;
 
-  // GivEnergy POST commands typically expect a JSON body, even if it's just `{"value": ...}` or sometimes empty for simple triggers.
-  // We should ensure Content-Type is application/json if a body is present or expected.
-  // Some commands might not have a body (e.g. a simple trigger), others require specific JSON.
-  // The client-side code is responsible for sending the correct body structure.
   if (contentType && contentType.includes('application/json')) {
     try {
       requestBody = await request.json();
     } catch (error) {
-      console.error('Error parsing JSON body for POST request:', error, 'URL:', targetUrl);
-      return NextResponse.json({ error: 'Invalid JSON body provided' }, { status: 400 });
+      console.error(`[PROXY POST /${slugPath}] Error parsing JSON body:`, error, 'URL:', targetUrl);
+      return NextResponse.json({ error: 'Invalid JSON body provided', path: `/${slugPath}` }, { status: 400 });
     }
-  } else if (request.body) {
-    // If there's a body but Content-Type isn't JSON, this might be an issue depending on the specific GivEnergy endpoint.
-    // For commands, GivEnergy usually expects JSON.
-    // We could return 415 Unsupported Media Type, but for now, let's try to forward if body exists
-    // Or, if it's a known command that needs JSON, we can be stricter.
-    // For now, if a body exists and is not JSON, this might be an error.
-    // However, some POSTs might truly be empty. Let's assume client sends correct Content-Type.
-    // If content-type is not application/json and there's a body, it's likely problematic.
-    // For simplicity, the GivEnergy commands we're proxying usually require JSON, so if content-type is specified and not JSON,
-    // it's best to reject. If content-type is NOT specified but a body is sent, it's ambiguous.
-    // The client is sending `Content-Type: application/json`, so this path is less likely.
+  } else if (request.body && (!contentType || !contentType.includes('application/json'))) {
+    // If a body is present, Content-Type must be application/json.
+    // request.body is a stream, checking its presence is enough to know if a body was sent.
+    console.warn(`[PROXY POST /${slugPath}] POST request to ${targetUrl} received with body but Content-Type is not application/json. Actual: ${contentType}`);
+    return NextResponse.json({ error: 'Invalid Content-Type for POST request with body. Expected application/json.', path: `/${slugPath}` }, { status: 415 });
   }
-
+  // If no body is sent (e.g. requestBody is null because request.json() wasn't called or because it's a GET-like POST),
+  // and Content-Type wasn't application/json, it might be a command that doesn't require a body.
+  // The GivEnergy API will ultimately decide if the request is valid.
 
   try {
     const apiResponse = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Authorization': authToken,
-        'Content-Type': contentType || 'application/json', // Default to application/json if not set
+        // Ensure Content-Type is set if a body is present, default to application/json.
+        // If no body, Content-Type might not be strictly necessary for some simple GivEnergy commands,
+        // but it's safer to include it if the original request had it.
+        'Content-Type': contentType || (requestBody ? 'application/json' : ''),
         'Accept': 'application/json',
       },
       body: requestBody ? JSON.stringify(requestBody) : null, // Ensure body is stringified
     });
     return await handleGivEnergyResponse(apiResponse, targetUrl);
   } catch (error: any) {
-    console.error('Error in GivEnergy POST proxy:', error, 'URL:', targetUrl);
-    return NextResponse.json({ error: 'Proxy POST request failed', details: error.message }, { status: 500 });
+    // Enhanced logging for the main catch block in POST
+    console.error(`[PROXY POST /${slugPath}] Exception during processing:`, error);
+    if (error.name) console.error(`[PROXY POST /${slugPath}] Error Name: ${error.name}`);
+    if (error.message) console.error(`[PROXY POST /${slugPath}] Error Message: ${error.message}`);
+    // Stack trace can be very verbose, log it if needed for deep debugging
+    // if (error.stack) console.error(`[PROXY POST /${slugPath}] Error Stack: ${error.stack}`);
+
+    const errorMessageDetail = (error.message && (error.message.toLowerCase().startsWith('fetch failed') || error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED'))) ?
+      `Proxy POST request failed to connect to target API at ${targetUrl}. Detail: ${error.message}` :
+      `Proxy POST request to ${targetUrl} failed due to an unexpected error. Detail: ${error.message}`;
+    
+    return NextResponse.json({ error: 'Proxy POST request failed', details: errorMessageDetail, path: `/${slugPath}` }, { status: 500 });
   }
 }
