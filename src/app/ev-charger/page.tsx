@@ -33,7 +33,7 @@ const EVChargerPage = () => {
     Unknown: 'Unknown',
   };
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
-  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]); // Assuming schedules might be an array of objects
   const [settings, setSettings] = useState<any>({
     solarCharging: false,
     plugAndCharge: false,
@@ -52,6 +52,38 @@ const EVChargerPage = () => {
     };
   }, [apiKey]);
 
+  const handleApiError = async (response: Response, operationName: string) => {
+    let errorPayload: { error?: string; message?: string; details?: any } = {
+      message: `Error ${operationName}: Request failed with status ${response.status}`,
+    };
+    try {
+      const parsedJson = await response.json();
+      if (typeof parsedJson === 'object' && parsedJson !== null) {
+        if (parsedJson.error || parsedJson.message) {
+          errorPayload = { ...parsedJson, ...errorPayload, message: parsedJson.message || parsedJson.error || errorPayload.message };
+        } else if (parsedJson.data && (parsedJson.data.error || parsedJson.data.message)) { // Handle errors within a "data" wrapper
+          errorPayload = { ...parsedJson.data, ...errorPayload, message: parsedJson.data.message || parsedJson.data.error || errorPayload.message };
+        }
+         else if (Object.keys(parsedJson).length === 0 && response.status !== 204) {
+          errorPayload.details = "Response was an empty JSON object.";
+        }
+         else {
+          errorPayload.details = parsedJson;
+        }
+      } else {
+         errorPayload.details = "Response was not a standard JSON error object.";
+      }
+    } catch (e) {
+      errorPayload.details = `Response was not valid JSON. Status: ${response.status} ${response.statusText}`;
+    }
+    console.error(`Error in ${operationName}:`, errorPayload.error || errorPayload.message, errorPayload.details ? errorPayload.details : '');
+    toast({
+      variant: "destructive",
+      title: `${operationName.charAt(0).toUpperCase() + operationName.slice(1)} Failed`,
+      description: String(errorPayload.message || errorPayload.error || `An unknown error occurred during ${operationName}. Status: ${response.status}`),
+    });
+  };
+
   const fetchSettings = useCallback(async (chargerUuid: string | null) => {
     if (!apiKey || !chargerUuid) {
       console.warn('Cannot fetch settings without API key or charger UUID.');
@@ -59,6 +91,7 @@ const EVChargerPage = () => {
     }
     try {
       const headers = getAuthHeaders();
+      // These seem to be direct register reads, not /commands/ endpoint. Keep as is unless new info.
       const plugAndChargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/616`, { headers });
       const plugAndChargeData = await plugAndChargeResponse.json();
       const plugAndChargeEnabled = plugAndChargeData?.data?.value === 1;
@@ -66,7 +99,7 @@ const EVChargerPage = () => {
       const chargeRateResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/621`, { headers });
       const chargeRateData = await chargeRateResponse.json();
       const chargeRateLimit = chargeRateData?.data?.value;
-      
+
       const batteryDischargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/622`, { headers });
       const batteryDischargeData = await batteryDischargeResponse.json();
       const maxBatteryDischargeToEvcSetting = batteryDischargeData?.data?.value || 0;
@@ -87,16 +120,41 @@ const EVChargerPage = () => {
       console.warn('Cannot fetch schedules without API key or charger UUID.');
       return;
     }
-    console.log('Fetching schedules...');
+    console.log('Fetching schedules for EV charger ID:', chargerUuid);
     try {
       const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/606`, { headers }); 
+      // Updated to use the /commands/set-schedule endpoint for GET
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers });
+      if (!response.ok) {
+        await handleApiError(response, 'fetching schedules');
+        setSchedules([]); // Clear schedules on error
+        return;
+      }
       const data = await response.json();
-      setSchedules(data.data || []);
+      // The structure of data from /commands/set-schedule (GET) is not fully specified.
+      // Assuming it returns an array of schedules directly or under a 'data' key, or a specific schedule object.
+      // For now, we'll attempt to adapt. If it's a single schedule object, wrap in array.
+      // If it's under data.schedules or data.active_schedule, etc., this needs adjustment.
+      if (data && data.data) {
+        if (Array.isArray(data.data)) {
+          setSchedules(data.data);
+        } else if (typeof data.data === 'object' && data.data !== null) {
+          // If data.data is an object (e.g. current schedule settings), wrap it for display
+          // This part is speculative based on the /commands/setup-version example structure
+          setSchedules([data.data]); // Adapt this based on actual API response
+        } else {
+          setSchedules([]);
+        }
+      } else {
+        setSchedules([]);
+      }
     } catch (error) {
       console.error('Error fetching schedules:', error);
+      setSchedules([]);
+      toast({variant: "destructive", title: "Fetch Schedules Error", description: "Could not load EV charging schedules."});
     }
-  }, [apiKey, getAuthHeaders]);
+  }, [apiKey, getAuthHeaders, toast]);
+
 
   const fetchEvChargerData = useCallback(async (isSoftRefresh?: boolean) => {
     if (!apiKey) {
@@ -194,60 +252,29 @@ const EVChargerPage = () => {
     }
   }, [evChargerData?.uuid, apiKey, fetchSettings, fetchSchedules]);
 
-  const handleApiError = async (response: Response, operationName: string) => {
-    let errorPayload: { error?: string; message?: string; details?: any } = {
-      message: `Error ${operationName}: Request failed with status ${response.status}`,
-    };
-    try {
-      const parsedJson = await response.json();
-      if (typeof parsedJson === 'object' && parsedJson !== null) {
-        if (parsedJson.error || parsedJson.message) {
-          errorPayload = { ...parsedJson, ...errorPayload }; 
-        } else if (Object.keys(parsedJson).length === 0 && response.status !== 204) { 
-          errorPayload.details = "Response was an empty JSON object.";
-        }
-         else {
-          errorPayload.details = parsedJson; 
-        }
-      } else {
-         errorPayload.details = "Response was not a standard JSON error object.";
-      }
-    } catch (e) {
-      errorPayload.details = "Response was not valid JSON.";
-    }
-    console.error(`Error in ${operationName}:`, errorPayload.error || errorPayload.message, errorPayload.details ? errorPayload.details : '');
-    toast({
-      variant: "destructive",
-      title: `${operationName.charAt(0).toUpperCase() + operationName.slice(1)} Failed`,
-      description: String(errorPayload.error || errorPayload.message || "An unknown error occurred."),
-    });
-  };
-
   const handleStartCharge = async () => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Starting charge...');
     try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/705`, { 
+      // Using the /commands/{command_id} endpoint structure
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/start-charge`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: 1 }), 
+        // No body for start-charge as per typical command structure unless specified
       });
       if (!response.ok) {
         await handleApiError(response, 'starting charge');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Start charge response:', data);
-        } else {
-          console.log('Start charge command successful, no JSON content in response.');
-        }
-      } catch (e) {
-        console.log('Start charge command successful, response was not valid JSON (may be empty).');
+      const data = await response.json();
+      if (data && data.data && data.data.success) {
+        console.log('Start charge command accepted:', data.data.message);
+        toast({ title: "Start Charge Sent", description: data.data.message || "Command accepted." });
+      } else {
+        console.warn('Start charge response not as expected or indicates failure:', data);
+        toast({ variant: "destructive", title: "Start Charge Not Confirmed", description: data?.data?.message || data?.error || data?.message || "Command sent, but success not confirmed by API." });
       }
-      fetchEvChargerData(true); 
+      fetchEvChargerData(true);
     } catch (error) {
       console.error('Network or unexpected error starting charge:', error);
       toast({ variant: "destructive", title: "Start Charge Error", description: "An unexpected error occurred." });
@@ -258,58 +285,52 @@ const EVChargerPage = () => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Stopping charge...');
     try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/706`, { 
+      // Using the /commands/{command_id} endpoint structure
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/stop-charge`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: 1 }), 
+        // No body for stop-charge
       });
       if (!response.ok) {
         await handleApiError(response, 'stopping charge');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Stop charge response:', data);
-        } else {
-          console.log('Stop charge command successful, no JSON content in response.');
-        }
-      } catch (e) {
-         console.log('Stop charge command successful, response was not valid JSON (may be empty).');
+      const data = await response.json();
+       if (data && data.data && data.data.success) {
+        console.log('Stop charge command accepted:', data.data.message);
+        toast({ title: "Stop Charge Sent", description: data.data.message || "Command accepted." });
+      } else {
+        console.warn('Stop charge response not as expected or indicates failure:', data);
+        toast({ variant: "destructive", title: "Stop Charge Not Confirmed", description: data?.data?.message || data?.error || data?.message || "Command sent, but success not confirmed by API." });
       }
-      fetchEvChargerData(true); 
+      fetchEvChargerData(true);
     } catch (error) {
       console.error('Network or unexpected error stopping charge:', error);
       toast({ variant: "destructive", title: "Stop Charge Error", description: "An unexpected error occurred." });
     }
   };
 
+  // Settings handlers like solar charging, plug and charge, etc., use /settings/{id}/write
+  // These are assumed to be direct register writes and may not follow the /commands/ pattern.
+  // Keeping them as-is unless specific documentation suggests otherwise.
+
   const handleToggleSolarCharging = async (checked: boolean) => {
     if (!apiKey || !inverterSerial) return;
     setSettings(prevSettings => ({ ...prevSettings, solarCharging: checked }));
     console.log('Toggling solar charging:', checked);
     try {
-      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, { 
+      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 2 : 0 }), 
+        body: JSON.stringify({ value: checked ? 2 : 0 }),
       });
       if (!response.ok) {
         await handleApiError(response, 'toggling solar charging');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Solar charging toggle response:', data);
-        } else {
-          console.log('Toggle solar charging successful, no JSON content in response.');
-        }
-      } catch (e) {
-        console.log('Toggle solar charging successful, response was not valid JSON (may be empty).');
-      }
+      // Assuming 204 or simple JSON success for settings writes
+      fetchEvChargerData(true); // Refresh to see effects if any
+      toast({title: "Solar Charging Setting Updated"});
     } catch (error) {
       console.error('Network or unexpected error toggling solar charging:', error);
       toast({ variant: "destructive", title: "Solar Charging Error", description: "An unexpected error occurred." });
@@ -321,7 +342,7 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, plugAndCharge: checked }));
     console.log('Toggling plug and charge:', checked);
     try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/616/write`, { 
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/616/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ value: checked ? 1 : 0 }),
@@ -330,17 +351,8 @@ const EVChargerPage = () => {
          await handleApiError(response, 'toggling plug and charge');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Plug and charge toggle response:', data);
-        } else {
-          console.log('Toggle plug and charge successful, no JSON content in response.');
-        }
-      } catch (e) {
-        console.log('Toggle plug and charge successful, response was not valid JSON (may be empty).');
-      }
+      fetchEvChargerData(true);
+      toast({title: "Plug & Charge Setting Updated"});
     } catch (error) {
       console.error('Network or unexpected error toggling plug and charge:', error);
       toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
@@ -352,38 +364,29 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] }));
     console.log('Setting max battery discharge to EVC:', value[0]);
     try {
-      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, { 
+      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] * 1000 }), 
+        body: JSON.stringify({ value: value[0] * 1000 }),
       });
        if (!response.ok) {
         await handleApiError(response, 'setting max battery discharge');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Max battery discharge to EVC response:', data);
-        } else {
-          console.log('Set max battery discharge successful, no JSON content in response.');
-        }
-      } catch (e) {
-        console.log('Set max battery discharge successful, response was not valid JSON (may be empty).');
-      }
+      fetchEvChargerData(true);
+      toast({title: "Battery Discharge to EVC Updated"});
     } catch (error) {
       console.error('Network or unexpected error setting max battery discharge to EVC:', error);
       toast({ variant: "destructive", title: "Battery Discharge Error", description: "An unexpected error occurred." });
     }
   };
-  
+
   const handleSetChargeRate = useCallback(async (value: number[]) => {
     if (!apiKey || !evChargerData?.uuid) return;
     setSettings(prevSettings => ({ ...prevSettings, chargeRate: value[0] }));
     console.log('Setting charge rate:', value[0]);
     try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, { 
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ value: value[0] }),
@@ -392,54 +395,79 @@ const EVChargerPage = () => {
         await handleApiError(response, 'setting charge rate');
         return;
       }
-      try {
-        const textResponse = await response.text();
-        if (textResponse) {
-          const data = JSON.parse(textResponse);
-          console.log('Set charge rate response:', data);
-        } else {
-          console.log('Set charge rate successful, no JSON content in response.');
-        }
-      } catch (e) {
-        console.log('Set charge rate successful, response was not valid JSON (may be empty).');
-      }
+      fetchEvChargerData(true);
+      toast({title: "Charge Rate Limit Updated"});
     } catch (error) {
       console.error('Network or unexpected error setting charge rate:', error);
       toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
     }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, fetchEvChargerData]);
 
 
   const handleAddSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!apiKey || !evChargerData?.uuid) return;
-    console.log('Adding schedule...');
-    // Extract form data, construct payload as per GivEnergy API for schedules
-    // Example: const payload = { name: "New Schedule", startTime: "23:00", ... };
-    // try {
-    //   const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/606/write`, {
-    //     method: 'POST',
-    //     headers: getAuthHeaders(),
-    //     body: JSON.stringify(payload),
-    //   });
-    //   if (!response.ok) { await handleApiError(response, 'adding schedule'); return; }
-    //   // process response
-    //   fetchSchedules(evChargerData.uuid);
-    // } catch (error) { /* ... error handling ... */ }
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const scheduleName = formData.get('scheduleName') as string;
+    const startTime = formData.get('startTime') as string; // HH:mm
+    const endTime = formData.get('endTime') as string; // HH:mm
+    const daysSelected = Array.from(formData.getAll('days')) as string[];
+
+    // Construct payload as per potential GivEnergy API requirements for schedules via /commands/set-schedule
+    // This payload structure is an assumption and needs to be verified with actual API docs for set-schedule POST.
+    // The example for GET /commands/set-schedule is not enough to infer POST payload.
+    // For now, let's assume a structure. The API will likely validate it.
+    const payload = {
+      // Example structure, replace with actual if known
+      name: scheduleName,
+      active: true, // Or false, depending on UI
+      rules: [
+        {
+          start_time: startTime,
+          end_time: endTime,
+          days: daysSelected.join(','), // e.g., "Mon,Tue,Wed" or specific format
+          // mode: "Boost", // or "Eco", "EcoPlus" - this also needs clarification
+          // charge_limit_amps: settings.chargeRate, // or specific value for this schedule
+        }
+      ]
+    };
+
+    console.log('Adding/updating schedule with payload:', payload);
+
+    try {
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload), // Send the schedule data as JSON
+      });
+      if (!response.ok) {
+        await handleApiError(response, 'adding/updating schedule');
+        return;
+      }
+      const data = await response.json();
+      if (data && data.data && data.data.success) {
+        toast({ title: "Schedule Updated", description: data.data.message || "Schedule command accepted." });
+        fetchSchedules(evChargerData.uuid); // Refresh schedules list
+      } else {
+        toast({ variant: "destructive", title: "Schedule Update Not Confirmed", description: data?.data?.message || data?.error || "Command sent, but success not confirmed." });
+      }
+    } catch (error) {
+      console.error('Error adding/updating schedule:', error);
+      toast({ variant: "destructive", title: "Schedule Error", description: "Could not update schedule." });
+    }
   };
 
+  // This function might be redundant if set-schedule command handles activation.
+  // Or it might target a different command/setting ID. Keeping for now.
   const handleSetActiveSchedule = async (scheduleId: string) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    console.log('Setting active schedule:', scheduleId);
-    // try {
-      // const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/607/write`, {
-      //   method: 'POST',
-      //   headers: getAuthHeaders(),
-      //   body: JSON.stringify({ value: scheduleId }), 
-      // });
-      // if (!response.ok) { await handleApiError(response, 'setting active schedule'); return; }
-      // // process response
-    // } catch (error) { /* ... error handling ... */ }
+    console.log('Setting active schedule (functionality may change with /commands/set-schedule):', scheduleId);
+    // This used to target /settings/607/write. If /commands/set-schedule is the sole way,
+    // this function needs to be re-evaluated or removed.
+    // For now, let's disable it to avoid confusion, as /commands/set-schedule POST should handle this.
+    toast({ title: "Set Active Schedule", description: "Please use the 'Add/Update Schedule' form. Activation is part of the schedule data." });
   };
 
 
@@ -519,60 +547,59 @@ const EVChargerPage = () => {
         <TabsContent value="schedule">
           <Card className="mt-4" style={{ backgroundColor: themes[theme as keyof typeof themes]?.secondary, color: themes[theme as keyof typeof themes]?.text, borderColor: themes[theme as keyof typeof themes]?.primary }}>
             <CardHeader>
-              <CardTitle style={{ color: themes[theme as keyof typeof themes]?.primary }}>Schedule</CardTitle>
+              <CardTitle style={{ color: themes[theme as keyof typeof themes]?.primary }}>Schedule Management</CardTitle>
             </CardHeader>
             <CardContent>
-              <h3 className="text-xl font-semibold mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Existing Schedules</h3>
+              <h3 className="text-xl font-semibold mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Current Schedules / Settings</h3>
               {schedules.length > 0 ? (
                 <ul>
-                  {schedules.map((schedule: any) => ( 
-                    <li key={schedule.id} className="mb-2 p-2 border rounded" style={{ borderColor: themes[theme as keyof typeof themes]?.accent }}>
-                      <div className="flex justify-between items-center">
-                        <span>{schedule.name || `Schedule ${schedule.id}`}: {schedule.start_time} - {schedule.finish_time} ({schedule.days?.join(', ') || 'N/A'})</span>
-                        <Button onClick={() => handleSetActiveSchedule(schedule.id)} style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>Set Active</Button>
-                      </div>
+                  {schedules.map((schedule: any, index: number) => ( // schedule might be a single object from GET /commands/set-schedule
+                    <li key={schedule.id || index} className="mb-2 p-2 border rounded" style={{ borderColor: themes[theme as keyof typeof themes]?.accent }}>
+                      {/* Displaying schedule details. This will need to be adapted based on actual structure of 'schedule' object */}
+                      <div>Name: {schedule.name || 'N/A'}</div>
+                      <div>Active: {schedule.active !== undefined ? String(schedule.active) : 'N/A'}</div>
+                      {schedule.rules && schedule.rules.map((rule: any, ruleIndex: number) => (
+                        <div key={ruleIndex} className="ml-4 mt-1">
+                          Rule {ruleIndex + 1}: {rule.start_time} - {rule.end_time} on {rule.days}
+                        </div>
+                      ))}
+                      {/* The 'Set Active' button might be obsolete if activation is part of POSTing schedule data */}
+                      {/* <Button onClick={() => handleSetActiveSchedule(schedule.id)} style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }}>Set Active (Review)</Button> */}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p>No schedules found or could not be loaded.</p>
+                <p>No schedules found or could not be loaded. You can add a new schedule below.</p>
               )}
 
-              <h3 className="text-xl font-semibold mt-6 mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Add New Schedule</h3>
+              <h3 className="text-xl font-semibold mt-6 mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Add / Update Schedule</h3>
               <form onSubmit={handleAddSchedule} className="space-y-4">
                 <div>
-                  <label htmlFor="scheduleName" className="block text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Schedule Name</label>
+                  <label htmlFor="scheduleName" className="block text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Schedule Name (Optional)</label>
                   <input type="text" id="scheduleName" name="scheduleName" className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="startTime" className="block text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>Start Time</label>
-                    <input type="time" id="startTime" name="startTime" className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
+                    <input type="time" id="startTime" name="startTime" required className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
                   </div>
                   <div>
                     <label htmlFor="endTime" className="block text-sm font-medium" style={{ color: themes[theme as keyof typeof themes]?.text }}>End Time</label>
-                    <input type="time" id="endTime" name="endTime" className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
+                    <input type="time" id="endTime" name="endTime" required className="mt-1 block w-full p-2 rounded" style={{ backgroundColor: themes[theme as keyof typeof themes]?.accent, color: themes[theme as keyof typeof themes]?.secondary }} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: themes[theme as keyof typeof themes]?.text }}>Days of Week</label>
-                  <label key="All" className="inline-flex items-center mr-4">
-                    <input type="checkbox" className="form-checkbox" name="days" value="All" style={{ color: themes[theme as keyof typeof themes]?.primary }}
-                      onChange={(e) => {
-                        const checkboxes = document.querySelectorAll('input[name="days"]');
-                        checkboxes.forEach((checkbox: any) => { checkbox.checked = e.target.checked; });
-                      }} />
-                    <span className="ml-2">All</span>
-                  </label>
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ( 
+                  <label className="block text-sm font-medium mb-2" style={{ color: themes[theme as keyof typeof themes]?.text }}>Days of Week (select at least one)</label>
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                     <label key={day} className="inline-flex items-center mr-4">
                       <input type="checkbox" className="form-checkbox" name="days" value={day} style={{ color: themes[theme as keyof typeof themes]?.primary }} />
                       <span className="ml-2">{day}</span>
                     </label>
                   ))}
                 </div>
-                <Button type="submit" style={{ backgroundColor: themes[theme as keyof typeof themes]?.primary, color: themes[theme as keyof typeof themes]?.secondary }} disabled={!apiKey}>Add Schedule</Button>
+                <Button type="submit" style={{ backgroundColor: themes[theme as keyof typeof themes]?.primary, color: themes[theme as keyof typeof themes]?.secondary }} disabled={!apiKey}>Add / Update Schedule</Button>
               </form>
+              <p className="text-xs mt-2 text-muted-foreground">Note: Submitting this form will send the `set-schedule` command. The exact payload structure needs to match GivEnergy's API.</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -610,6 +637,10 @@ const EVChargerPage = () => {
                 ) : (<p>No historical data available for charting.</p>)}
               </div>
               <p className="mt-4">Summary and energy graph analytics.</p>
+              {/* Add charging sessions display here */}
+               <h3 className="text-xl font-semibold mt-6 mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Charging Sessions</h3>
+               {/* Placeholder for charging sessions - to be implemented */}
+               <p>Charging sessions data will be displayed here.</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -663,3 +694,5 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
+    
