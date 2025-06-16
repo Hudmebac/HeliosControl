@@ -143,6 +143,7 @@ const EVChargerPage = () => {
         if (Array.isArray(data.data)) {
           setSchedules(data.data);
         } else if (typeof data.data === 'object' && data.data !== null) {
+          // If API returns a single schedule object instead of array for GET (as per some GivEnergy patterns)
           setSchedules([data.data]);
         } else {
           setSchedules([]);
@@ -562,8 +563,10 @@ const EVChargerPage = () => {
 
     const payload = {
       name: scheduleName || "Unnamed Schedule", // API might require a name
-      active: true, 
+      active: true, // Assume new schedules are active, or provide a checkbox
       rules: [ { start_time: startTime, end_time: endTime, days: daysSelected.join(','), } ]
+      // Note: GivEnergy API for schedules might be more complex, e.g. supporting multiple rules per schedule,
+      // or specific format for days (Mon,Tue,Wed or bitmask). This is a basic interpretation.
     };
 
     try {
@@ -707,22 +710,22 @@ const EVChargerPage = () => {
               ) : (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="charge-power-limit-presets">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value || 'N/A'}</Label>
+                  <Label htmlFor="charge-power-limit-presets">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value ?? 12}</Label>
                   <div className="flex flex-wrap gap-2 mt-1" id="charge-power-limit-presets">
                     {chargePowerLimitPresets.map((limit) => (
                       <Button
                         key={limit}
-                        variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
+                        variant={commandChargePowerLimit?.value === limit ? "default" : (commandChargePowerLimit === null && limit === 12 ? "default" : "outline")}
                         onClick={() => handleAdjustChargePowerLimit(limit)}
-                        disabled={!commandChargePowerLimit}
+                        disabled={!commandChargePowerLimit && limit !==12}
                         className="min-w-[60px]"
                       >
                         {limit}{commandChargePowerLimit?.unit || 'A'}
                       </Button>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value || "N/A"} {commandChargePowerLimit?.unit}</p>
-                  <p className="text-xs text-muted-foreground">Min: {commandChargePowerLimit?.min || "N/A"} {commandChargePowerLimit?.unit}, Max: {commandChargePowerLimit?.max || "N/A"} {commandChargePowerLimit?.unit}</p>
+                  <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value ?? 12} {commandChargePowerLimit?.unit || 'A'}</p>
+                  <p className="text-xs text-muted-foreground">Min: {commandChargePowerLimit?.min || "N/A"} {commandChargePowerLimit?.unit || 'A'}, Max: {commandChargePowerLimit?.max || "N/A"} {commandChargePowerLimit?.unit || 'A'}</p>
                 </div>
 
                 <div className="flex items-center space-x-2">
