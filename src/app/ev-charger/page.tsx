@@ -239,7 +239,7 @@ const EVChargerPage = () => {
 
   const fetchEvChargerData = useCallback(async (isSoftRefresh?: boolean) => {
     if (!apiKey) {
-      setIsLoadingEvData(false);
+      if (!isSoftRefresh) setIsLoadingEvData(false);
       setEvChargerData(null);
       return;
     }
@@ -342,16 +342,19 @@ const EVChargerPage = () => {
 
   const handleStartCharge = async () => {
     if (!apiKey || !evChargerData?.uuid) return;
+    console.log("Starting charge...");
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/start-charge`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
+      console.log("Start charge response:", response);
       if (!response.ok) {
         await handleApiError(response, 'starting charge');
         return;
       }
       const data = await response.json();
+      console.log("Start charge data:", data);
       if (data && data.data && data.data.success) {
         toast({ title: "Start Charge Sent", description: data.data.message || "Command accepted." });
       } else {
@@ -366,16 +369,19 @@ const EVChargerPage = () => {
 
   const handleStopCharge = async () => {
     if (!apiKey || !evChargerData?.uuid) return;
+    console.log("Stopping charge...");
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/stop-charge`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
+      console.log("Stop charge response:", response);
       if (!response.ok) {
         await handleApiError(response, 'stopping charge');
         return;
       }
       const data = await response.json();
+      console.log("Stop charge data:", data);
        if (data && data.data && data.data.success) {
         toast({ title: "Stop Charge Sent", description: data.data.message || "Command accepted." });
       } else {
