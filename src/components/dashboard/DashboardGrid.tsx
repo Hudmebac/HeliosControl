@@ -56,6 +56,8 @@ function getHomeConsumptionCardDetails(
     rawGridWatts: number,
     rawSolarWatts: number,
     effectiveBatteryPowerWatts: number,
+    dailyTotalConsumptionKWh: number | undefined,
+    dailyGridImportKWh: number | undefined,
     timestamp: number
 ): CardDetails {
     const formattedHC = formatPowerValue(hcData.value, hcData.unit);
@@ -84,7 +86,36 @@ function getHomeConsumptionCardDetails(
              color = gridImportWatts > epsilon ? "text-red-500" : "text-muted-foreground";
         }
     }
-    return { title: "Home Consumption", ...formattedHC, icon: <Home className="h-6 w-6" />, description: `Updated: ${new Date(timestamp).toLocaleTimeString()}`, valueColorClassName: color, className: "min-h-[120px]" };
+
+    const timeString = `Updated: ${new Date(timestamp).toLocaleTimeString()}`;
+    let dailyConsumptionString = "";
+    if (typeof dailyTotalConsumptionKWh === 'number' && !isNaN(dailyTotalConsumptionKWh)) {
+        dailyConsumptionString = `Today's Consumption: ${dailyTotalConsumptionKWh.toFixed(1)} kWh`;
+    }
+    let dailyGridImportString = "";
+     if (typeof dailyGridImportKWh === 'number' && !isNaN(dailyGridImportKWh)) {
+        dailyGridImportString = `Grid Import: ${dailyGridImportKWh.toFixed(1)} kWh`;
+    }
+
+    const descriptionElements: React.ReactNode[] = [];
+    if (dailyConsumptionString) descriptionElements.push(<span key="totalConsumption">{dailyConsumptionString}</span>);
+    if (dailyGridImportString) descriptionElements.push(<span key="gridImport">{dailyGridImportString}</span>);
+    descriptionElements.push(<span key="time" className="text-xs text-muted-foreground">{timeString}</span>);
+
+
+    const description = (
+      <div className="space-y-0.5">
+        {descriptionElements.map((el, index) => (
+          <React.Fragment key={index}>
+            {el}
+            {index < descriptionElements.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+
+
+    return { title: "Home Consumption", ...formattedHC, icon: <Home className="h-6 w-6" />, description, valueColorClassName: color, className: "min-h-[120px]" };
 }
 
 function getSolarGenerationCardDetails(
@@ -288,7 +319,12 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4 flex flex-col">
-          <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]"><CardContent className="p-6"><Loader2 className="h-8 w-8 animate-spin text-primary"/></CardContent></Card>
+          {/* Placeholder for EnergyFlowVisual skeleton */}
+          <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]">
+            <CardContent className="p-6 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+            </CardContent>
+          </Card>
           <DashboardCard title="EV Charger" value="0" unit="kW" icon={<PlugZap className="h-6 w-6"/>} isLoading={true} className="min-h-[120px]" />
         </div>
         <div className="md:col-span-1 space-y-4 flex flex-col">
@@ -310,7 +346,15 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
   }
 
 
-  const homeDetails = getHomeConsumptionCardDetails(data.homeConsumption, data.rawGridPowerWatts, data.rawSolarPowerWatts, data.battery.rawPowerWatts, data.timestamp);
+  const homeDetails = getHomeConsumptionCardDetails(
+    data.homeConsumption, 
+    data.rawGridPowerWatts, 
+    data.rawSolarPowerWatts, 
+    data.battery.rawPowerWatts, 
+    data.today?.consumption,
+    data.today?.gridImport,
+    data.timestamp
+  );
   const solarDetails = getSolarGenerationCardDetails(data.solarGeneration, data.today?.solar, data.timestamp);
   const batteryDetails = getBatteryCardDetails(data.battery, data.battery.rawPowerWatts, data.rawGridPowerWatts, data.rawSolarPowerWatts, data.timestamp);
   const gridDetails = getGridCardDetails(data.grid, data.today?.gridImport, data.today?.gridExport, data.timestamp);
@@ -351,3 +395,4 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
     </div>
   );
 }
+
