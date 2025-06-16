@@ -4,12 +4,11 @@ import { type NextRequest, NextResponse } from 'next/server';
 const GIVENERGY_API_TARGET_BASE = 'https://api.givenergy.cloud/v1';
 
 async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string) {
-  if (!apiResponse.ok) {
+  if (!apiResponse.ok) { // This covers 4xx and 5xx errors from GivEnergy
     let errorPayload: { error?: string; message?: string; details?: any } = {};
     try {
       errorPayload = await apiResponse.json();
     } catch (parseError) {
-      // Non-JSON error response or empty body
       errorPayload = {
         error: `GivEnergy API error: ${apiResponse.status} ${apiResponse.statusText}.`,
         details: `Target response status: ${apiResponse.status}. Response body was not valid JSON or was empty. URL: ${targetUrl}`
@@ -25,7 +24,11 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     return NextResponse.json(errorPayload, { status: apiResponse.status });
   }
 
-  // For successful responses from GivEnergy
+  // Handle successful responses (2xx)
+  if (apiResponse.status === 204) { // Explicitly handle 204 No Content
+    return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (204 No Content).', originalStatus: apiResponse.statusText }, { status: 204 });
+  }
+
   const contentType = apiResponse.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     try {
@@ -34,11 +37,12 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     } catch (jsonError) {
       console.error('Error parsing JSON from successful GivEnergy response:', jsonError, 'URL:', targetUrl);
       // If JSON parsing fails despite correct content-type, return a success status but indicate parsing issue.
-      return NextResponse.json({ success: true, message: 'Command accepted, but response parsing failed.', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
+      // This could happen if GivEnergy returns 200 OK with empty body and application/json header.
+      return NextResponse.json({ success: true, message: 'Command accepted, but response parsing failed (e.g. empty JSON).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
     }
   } else {
-    // Handle successful non-JSON responses (e.g., empty body for control commands)
-    return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy.', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
+    // Handle successful non-JSON responses (e.g., empty body for some 200 OK control commands if Content-Type is not JSON)
+    return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (non-JSON response).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
   }
 }
 
