@@ -27,7 +27,7 @@ interface EnergyFlowVisualProps {
   data: RealTimeData | null;
 }
 
-const THRESHOLD_WATTS = 50; // 50W threshold to show a flow
+const THRESHOLD_WATTS = 5; // Lowered from 50W to 5W
 
 // Helper function to convert metric value to Watts
 const getWatts = (value: number | string, unit: string): number => {
