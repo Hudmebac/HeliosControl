@@ -52,6 +52,7 @@ export interface RealTimeData {
 export interface GivEnergyIDs {
   inverterSerial: string | null;
   evChargerId?: string | null;
+  batteryNominalCapacityKWh?: number | null; // Added for dynamic battery capacity
 }
 
 export type Theme = "light" | "dark" | "hc-light" | "hc-dark" | "system";
@@ -222,4 +223,3 @@ export interface RawMeterDataLatest {
     is_metered: boolean;
 }
 export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
-

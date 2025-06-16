@@ -26,10 +26,6 @@ import type {
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
 const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1';
 
-// SIMULATED: In a real app, this should come from inverter settings or user configuration.
-const SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH = 13.5;
-
-
 async function _fetchGivEnergyAPI<T>(
   apiKey: string,
   endpoint: string,
@@ -71,12 +67,14 @@ async function _fetchGivEnergyAPI<T>(
         detailMessage = "";
       }
 
+      // Ensure the error message starts with a parsable status for the outer catch
       const errorMessage = `API Request Error: ${response.status} ${response.statusText}${detailMessage ? ` - Detail: ${String(detailMessage)}` : ''}`;
+
 
       if (!suppressErrorForStatus.includes(response.status)) {
         console.error(`GivEnergy API error for ${fetchUrl}: ${response.status} ${response.statusText}`, errorBody);
       }
-      throw new Error(errorMessage); // Error is thrown regardless of suppression for logging
+      throw new Error(errorMessage);
     }
     return response.json() as Promise<T>;
   } catch (error: unknown) {
@@ -85,8 +83,7 @@ async function _fetchGivEnergyAPI<T>(
 
     if (error instanceof Error) {
       originalMessage = error.message;
-      // Regex to find "API Request Error: STATUS"
-      const match = originalMessage.match(/API Request Error: (\d+)/);
+      const match = originalMessage.match(/^API Request Error: (\d+)/);
       if (match && match[1]) {
         statusCodeFromError = parseInt(match[1], 10);
       }
@@ -96,36 +93,27 @@ async function _fetchGivEnergyAPI<T>(
       originalMessage = (error as {message: string}).message;
     }
 
-
+    // Check if this error's status code was meant to be suppressed
     if (statusCodeFromError && suppressErrorForStatus.includes(statusCodeFromError)) {
-        // If the status code is suppressed (e.g. a 404 for EV charger status),
-        // _fetchGivEnergyAPI itself should not log an error here.
-        // The calling function (e.g., getRealTimeData) is responsible for specific logging (e.g., console.info).
-    } else if (originalMessage.toLowerCase().includes('network error:') ||
-               originalMessage.startsWith('API Request Error:') || // Catches non-suppressed HTTP errors
-               originalMessage.startsWith('API Request Failed via Proxy:') || // Catches if already wrapped by this block in a recursive call
-               originalMessage.startsWith('GivEnergy API error for') || // Catches specific GivEnergy errors formatted by the proxy or earlier _fetch
-               originalMessage.startsWith('GivEnergy API error:')) {
-        // If the error message already indicates a specific type of handled/logged error,
-        // do not log the generic "API Request Failed via Proxy" again.
-        // The console.error in the `if (!response.ok)` block (if not suppressed) or the network error log would have handled it.
+        // Suppressed error, do not log the generic "API Request Failed via Proxy"
     } else if (error instanceof TypeError &&
         (originalMessage.toLowerCase().includes('failed to fetch') ||
          originalMessage.toLowerCase().includes('networkerror') ||
          originalMessage.toLowerCase().includes('load failed'))) {
-      // This specific check for TypeError related to network issues should have its own logging if needed,
-      // but it's often handled by the first condition `originalMessage.toLowerCase().includes('network error:')`
-      // which might be set by a wrapper. For now, let it be caught by the re-throw.
-      // If not caught by the above, we will log it before re-throwing.
       const detailedMessage = `Network error: Could not connect to the application's API proxy (${PROXY_API_BASE_URL}). Please check your internet connection and ensure the application server is running. (Original error: ${originalMessage})`;
       console.error("Network error detail from _fetchGivEnergyAPI (proxy call):", detailedMessage);
+    } else if (originalMessage.startsWith('API Request Error:') ||
+               originalMessage.toLowerCase().includes('network error:') ||
+               originalMessage.startsWith('API Request Failed via Proxy:') ||
+               originalMessage.startsWith('GivEnergy API error for') ||
+               originalMessage.startsWith('GivEnergy API error:')) {
+        // Error is already specific or a known type, rely on earlier logs or specific handling
+    } else {
+      // For truly unexpected errors not caught by the above, log the generic proxy error.
+      const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
+      console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
     }
-     else {
-      // This block is for truly unexpected errors that didn't match the patterns above
-      const wrappedErrorMessage = `API Request Failed via Proxy: ${originalMessage}`;
-      console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", wrappedErrorMessage);
-    }
-    throw error; // Re-throw the original error (or the newly constructed Error from if(!response.ok))
+    throw error; // Re-throw the original error so the calling function can handle it
   }
 }
 
@@ -145,6 +133,7 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
 async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
   let inverterSerial: string | null = null;
   let evChargerId: string | null = null;
+  let batteryNominalCapacityKWh: number | null = null;
 
   const allCommDevices: RawCommunicationDevice[] = [];
   let commDevicesNextPageEndpoint: string | null = "/communication-device";
@@ -173,7 +162,15 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     const primaryDevice = allCommDevices.find(device => device.inverter?.serial);
     if (primaryDevice && primaryDevice.inverter?.serial) {
         inverterSerial = primaryDevice.inverter.serial;
+        // Calculate battery capacity
+        const batteryInfo = primaryDevice.inverter.info?.battery;
+        if (batteryInfo && typeof batteryInfo.nominal_capacity === 'number' && typeof batteryInfo.nominal_voltage === 'number' && batteryInfo.nominal_capacity > 0 && batteryInfo.nominal_voltage > 0) {
+            batteryNominalCapacityKWh = (batteryInfo.nominal_capacity * batteryInfo.nominal_voltage) / 1000;
+        } else {
+            console.warn("Could not determine battery nominal capacity from primary device info. Nominal capacity details missing or invalid:", batteryInfo);
+        }
     }
+
 
     if (!inverterSerial) {
       const numDevices = allCommDevices.length;
@@ -251,7 +248,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     throw new Error("Inverter serial could not be determined after device discovery and EV charger search.");
   }
 
-  return { inverterSerial: inverterSerial!, evChargerId };
+  return { inverterSerial: inverterSerial!, evChargerId, batteryNominalCapacityKWh };
 }
 
 
@@ -292,7 +289,12 @@ export function mapEVChargerAPIStatus(apiStatus: string | undefined | null): Rea
 
 
 export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
-  const { inverterSerial, evChargerId } = await getDeviceIDs(apiKey);
+  const { inverterSerial, evChargerId, batteryNominalCapacityKWh } = await getDeviceIDs(apiKey);
+
+  if (!inverterSerial) {
+    // This case should ideally be caught by getDeviceIDs, but as a safeguard:
+    throw new Error("Inverter serial not found, cannot fetch real-time data.");
+  }
 
   const systemDataResponse = await _fetchGivEnergyAPI<RawSystemDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/system-data/latest`);
   const rawData: RawSystemDataLatest = systemDataResponse.data;
@@ -343,16 +345,18 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: parseFloat((solarPowerWatts / 1000).toFixed(2)),
     unit: "kW",
   };
+  
+  const actualCapacityKWh = batteryNominalCapacityKWh !== null && batteryNominalCapacityKWh > 0 ? batteryNominalCapacityKWh : undefined;
+  const currentEnergyKWh = actualCapacityKWh ? (batteryPercentage / 100) * actualCapacityKWh : undefined;
 
-  const currentEnergyKWh = (batteryPercentage / 100) * SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH;
 
   const battery: BatteryStatus = {
     value: batteryPercentage,
     unit: "%",
     percentage: batteryPercentage,
     rawPowerWatts: effectiveBatteryPowerFlow,
-    energyKWh: parseFloat(currentEnergyKWh.toFixed(2)),
-    capacityKWh: SIMULATED_BATTERY_NOMINAL_CAPACITY_KWH,
+    energyKWh: currentEnergyKWh !== undefined ? parseFloat(currentEnergyKWh.toFixed(2)) : undefined,
+    capacityKWh: actualCapacityKWh !== undefined ? parseFloat(actualCapacityKWh.toFixed(2)) : undefined,
   };
 
   const GRID_IDLE_THRESHOLD_WATTS = 50;
