@@ -104,7 +104,7 @@ function getHomeConsumptionCardDetails(
 
 
     const descriptionNode = (
-      <div className="space-y-0.5 text-xs">
+      <div className="space-y-0.5">
         {descriptionElements.map((el, index) => (
           <div key={index}>{el}</div>
         ))}
@@ -169,7 +169,7 @@ function getSolarGenerationCardDetails(
     descriptionParts.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
     
     const descriptionNode = (
-      <div className="space-y-0.5 text-xs">
+      <div className="space-y-0.5">
         {descriptionParts.map((el, index) => <div key={index}>{el}</div>)}
       </div>
     );
@@ -273,7 +273,7 @@ function getBatteryCardDetails(
     }
 
     const finalDescription = (
-      <div className="text-xs space-y-0.5">
+      <div className="space-y-0.5">
         {descriptionElements.map((el, index) => {
             if (React.isValidElement(el) && (el.key?.toString().startsWith("kwh") || el.key?.toString().startsWith("activity") || el.key?.toString().startsWith("time"))) {
                 return (
@@ -328,7 +328,7 @@ function getGridCardDetails(
     descriptionElements.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
     
     const descriptionNode = (
-      <div className="space-y-0.5 text-xs">
+      <div className="space-y-0.5">
         {descriptionElements.map((el, index) => <div key={index}>{el}</div> )}
       </div>
     );
@@ -398,7 +398,7 @@ function getEVChargerCardDetails(
     descriptionElements.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
 
     const descriptionNode = (
-      <div className="space-y-0.5 text-xs">
+      <div className="space-y-0.5">
         {descriptionElements.map((el, index) => <div key={index}>{el}</div> )}
       </div>
     );

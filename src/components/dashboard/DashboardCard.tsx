@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import React from "react"; // Import React for React.isValidElement
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils"; // Assuming cn is for conditional class names
 import { Sun, Battery, Car, Home, Power, BatteryCharging, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning } from "lucide-react"; // Import necessary icons
@@ -10,7 +11,7 @@ interface DashboardCardProps {
   solarValue?: number; // Added solar generation value for comparison
   batteryCharging?: boolean; // New prop to check charge status
   icon?: ReactNode;
-  description?: string;
+  description?: ReactNode;
   children?: ReactNode;
   className?: string;
   isLoading?: boolean;
@@ -60,7 +61,13 @@ export function DashboardCard({ title, value, unit, solarValue, batteryCharging,
               {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
             </div>)
         )}
-        {description && !isLoading && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
+        {description && !isLoading && (
+          React.isValidElement(description) || Array.isArray(description) ? (
+            <div className="text-xs text-muted-foreground pt-1">{description}</div>
+          ) : (
+            <p className="text-xs text-muted-foreground pt-1">{String(description)}</p>
+          )
+        )}
         {children && !isLoading && <div className="mt-2">{children}</div>}
       </CardContent>
     </Card>
