@@ -292,7 +292,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   const { inverterSerial, evChargerId, batteryNominalCapacityKWh } = await getDeviceIDs(apiKey);
 
   if (!inverterSerial) {
-    // This case should ideally be caught by getDeviceIDs, but as a safeguard:
     throw new Error("Inverter serial not found, cannot fetch real-time data.");
   }
 
@@ -335,15 +334,27 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     }
   }
 
+  const formatPower = (watts: number): { value: number | string; unit: string } => {
+    const absWatts = Math.abs(watts);
+    if (absWatts >= 1000) {
+      return {
+        value: parseFloat((watts / 1000).toFixed(2)),
+        unit: "kW",
+      };
+    } else {
+      return {
+        value: Math.round(watts), // Round to nearest Watt
+        unit: "W",
+      };
+    }
+  };
 
   const homeConsumption: Metric = {
-    value: parseFloat((consumptionWatts / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(consumptionWatts),
   };
 
   const solarGeneration: Metric = {
-    value: parseFloat((solarPowerWatts / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(solarPowerWatts),
   };
   
   const actualCapacityKWh = batteryNominalCapacityKWh !== null && batteryNominalCapacityKWh > 0 ? batteryNominalCapacityKWh : undefined;
@@ -361,8 +372,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const GRID_IDLE_THRESHOLD_WATTS = 50;
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
-    value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
-    unit: "kW",
+    ...formatPower(gridPowerWatts),
     flow: gridPowerWatts > GRID_IDLE_THRESHOLD_WATTS ? 'exporting' : (gridPowerWatts < -GRID_IDLE_THRESHOLD_WATTS ? 'importing' : 'idle'),
   };
 
@@ -370,12 +380,15 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: "N/A",
     unit: "kW",
     status: mapEVChargerAPIStatus("unavailable"),
+    dailyTotalKWh: dailyTotals.acCharge,
+    sessionKWhDelivered: undefined,
   };
 
   if (evChargerId && apiKey) {
     const S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown EV ID';
     let evPowerInWatts: number | null | undefined = null;
     let evApiStatusString: string | undefined | null = "unavailable";
+    let sessionKWh: number | undefined = undefined;
 
     try {
       const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(
@@ -386,6 +399,8 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       evPowerInWatts = rawDetailedEVData.charge_session?.power;
       evApiStatusString = rawDetailedEVData.status;
+      sessionKWh = rawDetailedEVData.charge_session?.kwh_delivered;
+
     } catch (errorDetailed: any) {
       if (errorDetailed?.message?.includes("API Request Error: 404") || errorDetailed?.message?.includes("Not Found")) {
          console.info(`Detailed EV status endpoint (/ev-charger/${S_evChargerId}/status) not found or returned 404. This is expected for some EV charger setups. Attempting fallback to basic EV info. Original error: ${errorDetailed.message}`);
@@ -395,6 +410,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
         evApiStatusString = evBasicInfoResponse.data.status;
+        // sessionKWh might not be available in basic info
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
@@ -402,14 +418,14 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     }
 
     evCharger = {
-      value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
-      unit: "kW",
+      ...(typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts) ? formatPower(evPowerInWatts) : { value: "N/A", unit: "kW" }),
       status: mapEVChargerAPIStatus(evApiStatusString),
+      dailyTotalKWh: dailyTotals.acCharge,
+      sessionKWhDelivered: typeof sessionKWh === 'number' ? parseFloat(sessionKWh.toFixed(1)) : undefined,
     };
 
   } else {
     if (!evChargerId) {
-        // This is an expected scenario if no EV charger is found.
         // console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
     }
   }
@@ -424,7 +440,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     rawHomeConsumptionWatts: consumptionWatts,
     rawSolarPowerWatts: solarPowerWatts,
     rawGridPowerWatts: gridPowerWatts,
-    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts,
+    rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, 
     inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
     today: dailyTotals,
   };
