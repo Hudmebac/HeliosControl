@@ -21,21 +21,19 @@ import {
   Zap,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import {
-  useMotionValue,
-  motion,
-  AnimatePresence,
-  useTransform,
-  useMotionTemplate,
-} from "framer-motion";
-
 import { cn } from "@/lib/utils";
 
 interface EnergyFlowVisualProps {
   data: RealTimeData | null;
 }
 
-const THRESHOLD_KW = 0.05; // 50W threshold to show a flow
+const THRESHOLD_WATTS = 50; // 50W threshold to show a flow
+
+// Helper function to convert metric value to Watts
+const getWatts = (value: number | string, unit: string): number => {
+  if (typeof value !== 'number') return 0;
+  return unit === 'kW' ? value * 1000 : value;
+};
 
 export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   if (!data) {
@@ -48,77 +46,113 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     );
   }
 
+  const formatPowerForDisplay = (valueInWatts: number | string): string => {
+    let watts: number;
+    if (typeof valueInWatts === 'string') {
+      watts = parseFloat(valueInWatts);
+      if (isNaN(watts)) return "N/A"; 
+    } else {
+      watts = valueInWatts;
+    }
+
+    const absWatts = Math.abs(watts);
+
+    if (absWatts < 1000) {
+      const roundedWatts = Math.round(watts);
+      return `${roundedWatts} W`;
+    } else {
+      const kW = watts / 1000;
+      return `${kW.toFixed(2)} kW`;
+    }
+  };
+
+
   const {
     solarGeneration,
     homeConsumption,
     grid,
- evCharger,
+    evCharger,
     battery,
+    rawGridPowerWatts, // Use this for grid direction
   } = data;
   
-  // Use effective battery power directly from data.battery.rawPowerWatts
-  // This value is pre-calculated in givenergy.ts to be the most representative flow
   const effectiveBatteryPowerWatts = battery.rawPowerWatts || 0;
 
-  const solarKW = typeof solarGeneration.value === 'number' ? solarGeneration.value : 0;
-  const homeKW = typeof homeConsumption.value === 'number' ? homeConsumption.value : 0;
+  // Convert all primary power figures to Watts for consistent internal logic
+  const solarGenerationWatts = getWatts(solarGeneration.value, solarGeneration.unit);
+  const homeConsumptionWatts = getWatts(homeConsumption.value, homeConsumption.unit);
+  const gridDisplayValueWatts = getWatts(grid.value, grid.unit); // This is already absolute from givenergy.ts formatPower
+
+  let evChargerPowerWatts = 0;
+  if (evCharger && typeof evCharger.value === 'number') {
+    evChargerPowerWatts = getWatts(evCharger.value, evCharger.unit);
+  }
+
+
+  const batteryIsCharging = effectiveBatteryPowerWatts < -THRESHOLD_WATTS;
+  const batteryIsDischarging = effectiveBatteryPowerWatts > THRESHOLD_WATTS;
+  const batteryAbsPowerW = Math.abs(effectiveBatteryPowerWatts);
+
+  // Use rawGridPowerWatts for determining import/export direction with threshold
+  const gridIsImporting = rawGridPowerWatts < -THRESHOLD_WATTS;
+  const gridIsExporting = rawGridPowerWatts > THRESHOLD_WATTS;
   
-  const batteryIsCharging = effectiveBatteryPowerWatts < -THRESHOLD_KW * 1000;
-  const batteryIsDischarging = effectiveBatteryPowerWatts > THRESHOLD_KW * 1000;
-  const batteryAbsPowerKW = Math.abs(effectiveBatteryPowerWatts) / 1000;
+  const isEVCharging = evChargerPowerWatts > THRESHOLD_WATTS && (evCharger?.status?.props?.children === 'Charging' || (typeof evCharger?.status === 'string' && evCharger.status.toLowerCase().includes('charging')));
+  const isEVAvailable = evCharger && evCharger.status?.props?.children !== 'Unavailable' && (typeof evCharger.status !== 'string' || !evCharger.status.toLowerCase().includes('unavailable'));
 
-  const gridPowerAbsKW = typeof grid.value === 'number' ? grid.value : 0;
-  const gridIsImporting = grid.flow === "importing" && gridPowerAbsKW > THRESHOLD_KW;
-  const gridIsExporting = grid.flow === "exporting" && gridPowerAbsKW > THRESHOLD_KW;
+
+  // Determine active flows in Watts
+  const solarToHomeW = Math.min(solarGenerationWatts, homeConsumptionWatts);
+  const isSolarToHome = solarToHomeW > THRESHOLD_WATTS;
+
+  // Grid contribution to home, considering solar already supplied to home
+  const remainingHomeDemandAfterSolarW = Math.max(0, homeConsumptionWatts - solarToHomeW);
+  const gridToHomeW = gridIsImporting ? Math.min(Math.abs(rawGridPowerWatts), remainingHomeDemandAfterSolarW) : 0;
+  const isGridToHome = gridToHomeW > THRESHOLD_WATTS;
+
+  // EV Charging sources in Watts
+  const solarAvailableForEVOrBatteryW = Math.max(0, solarGenerationWatts - solarToHomeW);
+  const evChargingFromSolarW = isEVCharging ? Math.min(solarAvailableForEVOrBatteryW, evChargerPowerWatts) : 0;
+  const isEVChargingFromSolar = evChargingFromSolarW > THRESHOLD_WATTS;
   
-  // EV Charger data
-  const evKW = typeof evCharger?.power === 'number' ? evCharger.power / 1000 : 0;
-  const isEVCharging = (evCharger?.status === 'charging' || evCharger?.status === 'charge_complete') && evKW > THRESHOLD_KW;
-  const isEVAvailable = evCharger && evCharger.status !== 'unavailable';
-  const evNodePowerText = isEVCharging ? `${formatKW(evKW)} kW` : "0.00 kW";
+  let remainingEVNeedsW = Math.max(0, evChargerPowerWatts - evChargingFromSolarW);
+  const gridAvailableForEVOrBatteryW = gridIsImporting ? Math.max(0, Math.abs(rawGridPowerWatts) - gridToHomeW) : 0;
+  const evChargingFromGridW = isEVCharging ? Math.min(gridAvailableForEVOrBatteryW, remainingEVNeedsW) : 0;
+  const isEVChargingFromGrid = evChargingFromGridW > THRESHOLD_WATTS;
 
+  remainingEVNeedsW = Math.max(0, remainingEVNeedsW - evChargingFromGridW);
+  const batteryDischargeAvailableForEVOrGridW = batteryIsDischarging ? batteryAbsPowerW : 0; // Simplified: total discharge available
+  const evChargingFromBatteryW = isEVCharging ? Math.min(batteryDischargeAvailableForEVOrGridW, remainingEVNeedsW) : 0;
+  const isEVChargingFromBattery = evChargingFromBatteryW > THRESHOLD_WATTS;
 
-  // Determine active flows
-  const solarToHomeKW = Math.min(solarKW, homeKW);
-  const isSolarToHome = solarToHomeKW > THRESHOLD_KW;
+  // Recalculate Battery flows considering EV priority (simplified)
+  // Battery to Home: what's left of home demand after solar and grid, met by battery (if discharging and not all going to EV)
+  const homeDemandAfterSolarAndGridW = Math.max(0, homeConsumptionWatts - solarToHomeW - gridToHomeW);
+  const batteryPowerForHomeOrGridW = Math.max(0, batteryAbsPowerW - evChargingFromBatteryW);
+  const batteryToHomeW = batteryIsDischarging ? Math.min(batteryPowerForHomeOrGridW, homeDemandAfterSolarAndGridW) : 0;
+  const isBatteryToHome = batteryToHomeW > THRESHOLD_WATTS;  
 
-  const gridToHomeKW = gridIsImporting ? Math.min(gridPowerAbsKW, homeKW - solarToHomeKW) : 0;
-  const isGridToHome = gridToHomeKW > THRESHOLD_KW;
+  // Solar to Battery: what's left of solar after home and EV, going to battery (if charging)
+  const solarRemainingAfterHomeAndEVW = Math.max(0, solarGenerationWatts - solarToHomeW - evChargingFromSolarW);
+  const solarToBatteryW = batteryIsCharging ? Math.min(solarRemainingAfterHomeAndEVW, batteryAbsPowerW) : 0;
+  const isSolarToBattery = solarToBatteryW > THRESHOLD_WATTS;
 
-  // Determine where EV power is coming from if charging
-  const evChargingFromSolarKW = isEVCharging && solarKW > THRESHOLD_KW ? Math.min(solarKW - solarToHomeKW, evKW) : 0;
-  const isEVChargingFromSolar = evChargingFromSolarKW > THRESHOLD_KW;
+  // Grid to Battery: what's left of grid import after home and EV, going to battery (if charging)
+  const gridRemainingAfterHomeAndEVW = gridIsImporting ? Math.max(0, Math.abs(rawGridPowerWatts) - gridToHomeW - evChargingFromGridW) : 0;
+  const gridToBatteryW = batteryIsCharging ? Math.min(gridRemainingAfterHomeAndEVW, batteryAbsPowerW) : 0;
+  const isGridToBattery = gridToBatteryW > THRESHOLD_WATTS;
 
-  const remainingEVNeedsKW = evKW - evChargingFromSolarKW;
+  // Export flows in Watts
+  // Solar to Grid: what's left of solar after home, EV, and battery charging
+  const solarRemainingForGridExportW = Math.max(0, solarGenerationWatts - solarToHomeW - evChargingFromSolarW - solarToBatteryW);
+  const solarToGridW = gridIsExporting ? Math.min(solarRemainingForGridExportW, Math.abs(rawGridPowerWatts)) : 0;
+  const isSolarToGrid = solarToGridW > THRESHOLD_WATTS;
 
-  const evChargingFromGridKW = isEVCharging && gridIsImporting ? Math.min(gridPowerAbsKW, remainingEVNeedsKW) : 0;
-  const isEVChargingFromGrid = evChargingFromGridKW > THRESHOLD_KW;
+  // Battery to Grid: what's left of battery discharge after home and EV
+  const batteryRemainingForGridExportW = Math.max(0, batteryAbsPowerW - batteryToHomeW - evChargingFromBatteryW);
+  const batteryToGridW = gridIsExporting ? Math.min(batteryRemainingForGridExportW, Math.abs(rawGridPowerWatts)) : 0;
+  const isBatteryToGrid = batteryToGridW > THRESHOLD_WATTS;
 
-  const evChargingFromBatteryKW = isEVCharging && batteryIsDischarging ? Math.min(batteryAbsPowerKW, remainingEVNeedsKW - evChargingFromGridKW) : 0;
-  const isEVChargingFromBattery = evChargingFromBatteryKW > THRESHOLD_KW;
-
-  // Recalculate Home, Battery, Grid flows considering EV
-  const batteryToHomeKW = batteryIsDischarging ? Math.min(batteryAbsPowerKW - evChargingFromBatteryKW, homeKW - solarToHomeKW - gridToHomeKW) : 0;
-  const isBatteryToHome = batteryToHomeKW > THRESHOLD_KW;  
-
-  const solarToBatteryKW = batteryIsCharging && solarKW > THRESHOLD_KW && !gridIsImporting && !isEVChargingFromSolar ? Math.min(solarKW - solarToHomeKW - evChargingFromSolarKW, batteryAbsPowerKW) : 0;
-  const isSolarToBattery = solarToBatteryKW > THRESHOLD_KW;
-
-  const gridToBatteryKW = batteryIsCharging && gridIsImporting && !isEVChargingFromGrid ? Math.min(gridPowerAbsKW - evChargingFromGridKW, batteryAbsPowerKW) : 0;
-  const isGridToBattery = gridToBatteryKW > THRESHOLD_KW;
-
-  const solarToGridKW = gridIsExporting && solarKW > THRESHOLD_KW && !batteryIsDischarging && !isEVChargingFromSolar ? Math.min(solarKW - solarToHomeKW - solarToBatteryKW - evChargingFromSolarKW, gridPowerAbsKW) : 0;
-  const isSolarToGrid = solarToGridKW > THRESHOLD_KW;
-
-  const batteryToGridKW = gridIsExporting && batteryIsDischarging ? Math.min(batteryAbsPowerKW - batteryToHomeKW, gridPowerAbsKW) : 0;
-  const isBatteryToGrid = batteryToGridKW > THRESHOLD_KW;
-
-
-  const formatKW = (value: number | string) => {
-    if (typeof value === 'string') return value;
-    if (value < 0.01 && value > -0.01) return "0.00"; // Avoid -0.00
-    return value.toFixed(2);
-  };
 
   const getBatteryIcon = () => {
     if (batteryIsCharging) return <BatteryCharging className="h-8 w-8 text-blue-500" />;
@@ -128,14 +162,16 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     return <BatteryWarning className="h-8 w-8 text-red-600" />;
   };
   
-  const batteryNodePowerText = batteryIsCharging || batteryIsDischarging ? `${formatKW(batteryAbsPowerKW)} kW` : "0.00 kW";
-  const gridNodePowerText = gridIsImporting || gridIsExporting ? `${formatKW(gridPowerAbsKW)} kW` : "0.00 kW";
+  const batteryNodePowerText = batteryIsCharging || batteryIsDischarging ? formatPowerForDisplay(batteryAbsPowerW) : "0 W";
+  const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W"; // gridDisplayValueWatts is already absolute
+  const evNodePowerText = isEVAvailable ? formatPowerForDisplay(evChargerPowerWatts) : "N/A";
+
 
   const solarPos = { x: 175, y: 30, iconYAdjust: 1, textYAdjust: 20 };
   const homePos = { x: 175, y: 125, iconYAdjust: 1, textYAdjust: 20 };
   const batteryPos = { x: 50, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
   const gridPos = { x: 275, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
-  const evPos = { x: 175, y: 200, iconYAdjust: 1, textYAdjust: 20 }; // Moved below Home icon
+  const evPos = { x: 175, y: 200, iconYAdjust: 1, textYAdjust: 20 }; 
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full min-h-[300px] md:min-h-[400px]">
@@ -183,25 +219,20 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
 					{isBatteryToGrid && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={gridPos.x - 16} y2={gridPos.y} className="stroke-blue-500" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />)}
 					{isEVChargingFromBattery && isEVAvailable && (<line x1={batteryPos.x} y1={batteryPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-orange-500" strokeWidth="2.5" markerEnd="url(#arrowhead-orange)" />)}
 
-					{/* Home to EV - Only if EV is charging and power is coming from Home (implicitly via Battery/Grid). Adjust y1 to be homePos.y + 16 and y2 to be evPos.y - 16 for consistency */}
-					{/* {isEVCharging && !isEVChargingFromSolar && !isEVChargingFromGrid && !isEVChargingFromBattery && isEVAvailable && (
-						<line x1={homePos.x} y1={homePos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-primary" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />
-					)} */}
-
 					{/* Icons and Text */}
 					<g transform={`translate(${solarPos.x - 16}, ${solarPos.y + solarPos.iconYAdjust - 16})`}><Sun className="h-8 w-8 text-yellow-500" /></g>
-					<text x={solarPos.x} y={solarPos.y + solarPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatKW(solarKW)} kW</text>
+					<text x={solarPos.x} y={solarPos.y + solarPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatPowerForDisplay(solarGenerationWatts)}</text>
 
 					<g transform={`translate(${gridPos.x - 16}, ${gridPos.y + gridPos.iconYAdjust - 16})`}><Power className={cn("h-8 w-8", gridIsImporting ? "text-red-500" : gridIsExporting ? "text-blue-500" : "text-muted-foreground" )} /></g>
-					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{gridNodePowerText}</text> {/* Adjusted text position */}
-					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text> {/* Adjusted text position */}
+					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{gridNodePowerText}</text> 
+					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text> 
 
 					<g transform={`translate(${homePos.x - 16}, ${homePos.y + homePos.iconYAdjust - 16})`}><Home className="h-8 w-8 text-primary" /></g>
-					<text x={homePos.x} y={homePos.y + homePos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatKW(homeKW)} kW</text>
+					<text x={homePos.x} y={homePos.y + homePos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatPowerForDisplay(homeConsumptionWatts)}</text>
 
 					<g transform={`translate(${batteryPos.x - 16}, ${batteryPos.y + batteryPos.iconYAdjust - 16})`}>{getBatteryIcon()}</g>
 					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{batteryNodePowerText}</text>
-					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text> {/* Adjusted text position */}
+					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text> 
 					
 					{isEVAvailable && evCharger && (
 						<g transform={`translate(${evPos.x - 16}, ${evPos.y + evPos.iconYAdjust - 16})`}><Car className={cn("h-8 w-8", isEVCharging ? "text-green-500" : "text-muted-foreground")} /></g>
@@ -209,7 +240,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
 					{isEVAvailable && (<text x={evPos.x} y={evPos.y + evPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{evNodePowerText}</text>)}
 				</svg>
 
-				<div className="mt-auto pt-4 hidden"> {/* Temporarily hide battery progress bar */}
+				<div className="mt-auto pt-4 hidden"> 
 					<div className="flex items-center mb-1">
 						{getBatteryIcon()}
 						<span className="ml-2 text-sm font-semibold text-foreground">
@@ -222,4 +253,3 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     </Card>
   );
 }
-
