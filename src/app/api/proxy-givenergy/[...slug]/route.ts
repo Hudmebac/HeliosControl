@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 const GIVENERGY_API_TARGET_BASE = 'https://api.givenergy.cloud/v1';
 
-async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string) {
+async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string): Promise<NextResponse> {
   if (!apiResponse.ok) {
     let errorPayload: { error?: string; message?: string; details?: any } = {};
     try {
@@ -34,6 +34,7 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
       return NextResponse.json(successData, { status: apiResponse.status });
     } catch (jsonError) {
       console.error('Error parsing JSON from successful GivEnergy response:', jsonError, 'URL:', targetUrl);
+      // If parsing fails but status was ok (e.g. 200 with empty body), treat as success with message
       return NextResponse.json({ success: true, message: 'Command accepted, but response parsing failed (e.g. empty JSON).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
     }
   } else {
@@ -46,7 +47,7 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string[] } }
-) {
+): Promise<NextResponse> {
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
   const searchParams = requestUrl.search;
@@ -77,7 +78,7 @@ export async function GET(
 export async function POST(
   request: NextRequest,
   { params }: { params: { slug: string[] } }
-) {
+): Promise<NextResponse> {
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
   const searchParams = requestUrl.search; // Include query params if any
@@ -90,6 +91,7 @@ export async function POST(
     return NextResponse.json({ error: 'Authorization header missing' }, { status: 401 });
   }
 
+  // GivEnergy POST commands generally require a JSON body.
   if (!contentType || !contentType.includes('application/json')) {
     return NextResponse.json({ error: 'Invalid Content-Type. Must be application/json for POST.' }, { status: 415 });
   }
