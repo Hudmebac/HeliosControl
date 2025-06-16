@@ -63,13 +63,19 @@ async function _fetchGivEnergyAPI<T>(
       if (!suppressErrorForStatus.includes(response.status)) {
         console.error(`GivEnergy API error for ${fetchUrl}: ${response.status}`, errorBody);
       }
-      throw new Error(errorMessage);
+      throw new Error(errorMessage); // Error is thrown regardless of suppression for logging
     }
     return response.json() as Promise<T>;
   } catch (error: unknown) {
     let originalMessage = "Unknown error during fetch operation";
+    let statusCodeFromError: number | null = null;
+
     if (error instanceof Error) {
       originalMessage = error.message;
+      const match = originalMessage.match(/API Request Error: (\d+)/);
+      if (match && match[1]) {
+        statusCodeFromError = parseInt(match[1], 10);
+      }
     } else if (typeof error === 'string') {
       originalMessage = error;
     } else if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as {message: any}).message === 'string') {
@@ -84,14 +90,20 @@ async function _fetchGivEnergyAPI<T>(
       console.error("Throwing detailed network error from _fetchGivEnergyAPI (proxy call):", detailedMessage);
       throw new Error(detailedMessage);
     }
-
-    if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error for") || originalMessage.startsWith("Network error:")) {
-        throw error;
+    
+    // Check if the status code extracted from the error message is in the suppress list
+    if (statusCodeFromError && suppressErrorForStatus.includes(statusCodeFromError)) {
+        // If the status code is suppressed, we still re-throw the error but don't log the generic proxy error message.
+        // The calling function is responsible for handling it appropriately (e.g., with console.info for 404s).
+    } else if (originalMessage.startsWith("API Request Error:") || originalMessage.startsWith("GivEnergy API error for") || originalMessage.startsWith("Network error:")) {
+        // This means the error was already logged appropriately or is a network error that was logged.
+        // No need for an additional generic log here.
+    } else {
+      // For truly unexpected errors not caught by the above, log the generic proxy error.
+      const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
+      console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
     }
-
-    const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
-    console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
-    throw new Error(errorMessage);
+    throw error; // Re-throw the original error so the calling function can handle it
   }
 }
 
@@ -101,16 +113,18 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
     await _fetchGivEnergyAPI<RawCommunicationDevicesResponse>(apiKey, "/communication-device");
     return true;
   } catch (error) {
-    console.error("API Key validation failed via proxy:", error);
+    // Don't log "API Key validation failed" here if it's a suppressed error (like 401 being handled by the caller)
+    // but for validateApiKey, any error usually means failure.
+    // The console.error for the actual API call failure would happen inside _fetchGivEnergyAPI if not suppressed.
     if (error instanceof Error && (error.message.includes("401") || error.message.includes("Unauthenticated"))) {
         return false;
     }
-    // Check for any 4xx error specifically for validation
     if (error instanceof Error && error.message.match(/API Request Error: 4\d\d/)) {
         return false;
     }
-    // If it's not a 4xx error, it might be a network issue, so don't definitively say the key is invalid.
-    // However, for simplicity in this context, if any error occurs during validation, treat as failed.
+    // If it's not a specific auth/client error, it might be network, etc.
+    // To be safe for validation, treat most errors as a validation failure.
+    // The detailed error would have been logged by _fetchGivEnergyAPI or the proxy route.
     return false;
   }
 }
@@ -163,10 +177,12 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     } else if (typeof error === 'string') {
         originalMessage = error;
     }
-    console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", originalMessage, error);
+    // Error already logged by _fetchGivEnergyAPI if not suppressed, or by the block above for !inverterSerial
+    // console.error("Error fetching or processing communication devices in _getPrimaryDeviceIDs (via proxy):", originalMessage, error);
     if (originalMessage && (originalMessage.toLowerCase().includes('network error:') || originalMessage.startsWith('API Request Error:') || originalMessage.startsWith('API Request Failed via Proxy:') || originalMessage.startsWith('GivEnergy API error:') || originalMessage.startsWith('Failed to identify a primary inverter'))) {
-        throw error;
+        throw error; // Re-throw errors that are already specific or critical
     }
+    // For truly unhandled ones here, wrap them.
     throw new Error(`Failed to retrieve essential device identifiers (communication devices pagination via proxy): ${originalMessage}`);
   }
 
@@ -206,11 +222,14 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
         } else if (typeof error === 'string') {
             originalMessage = error;
         }
+        // Error already logged by _fetchGivEnergyAPI if not suppressed.
         console.warn(`Could not fetch EV chargers list (pagination via proxy, this is optional): ${originalMessage}. EV Charger data will likely be unavailable.`);
     }
   }
 
   if (!inverterSerial) {
+    // This case should be caught by the earlier check after comm device fetch,
+    // but as a safeguard:
     throw new Error("Inverter serial could not be determined after device discovery and EV charger search.");
   }
 
@@ -225,7 +244,7 @@ export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     return _getPrimaryDeviceIDs(apiKey);
 }
 
-function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.ReactNode {
+export function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.ReactNode {
     if (!apiStatus) return <span className="text-muted-foreground">Status Unknown</span>;
     const lowerApiStatus = apiStatus.toLowerCase().trim();
 
@@ -274,6 +293,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         acCharge: rawMeterData.today.ac_charge
     };
   } catch (meterError) {
+      // Error already logged by _fetchGivEnergyAPI if not suppressed.
       console.warn("Could not fetch daily meter data (optional):", meterError);
   }
 
@@ -340,15 +360,17 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       const evStatusDetailedResponse = await _fetchGivEnergyAPI<RawEVChargerStatusResponse>(
         apiKey,
         `/ev-charger/${S_evChargerId}/status`,
-        { suppressErrorForStatus: [404] } // Suppress console.error for 404 on this specific call
+        { suppressErrorForStatus: [404] } 
       );
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       evPowerInWatts = rawDetailedEVData.charge_session?.power;
       evApiStatusString = rawDetailedEVData.status;
     } catch (errorDetailed: any) {
-      if (errorDetailed?.message?.includes("404")) {
-         console.info(`Detailed EV status endpoint (/ev-charger/${S_evChargerId}/status) not found (404). This is expected for some EV charger setups. Attempting fallback to basic EV info.`);
+      if (errorDetailed?.message?.includes("404") || errorDetailed?.message?.includes("Not Found")) {
+         console.info(`Detailed EV status endpoint (/ev-charger/${S_evChargerId}/status) not found or returned 404. This is expected for some EV charger setups. Attempting fallback to basic EV info. Original error: ${errorDetailed.message}`);
       } else {
+        // For other errors, log a warning, as it might indicate a different issue.
+        // _fetchGivEnergyAPI would have already logged if it wasn't suppressed.
         console.warn(`Detailed EV status fetch failed for ${S_evChargerId}. Attempting fallback. Error: ${errorDetailed instanceof Error ? errorDetailed.message : String(errorDetailed)}`);
       }
       // Attempt fallback regardless of the specific error for detailed status
@@ -356,6 +378,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
         evApiStatusString = evBasicInfoResponse.data.status;
       } catch (errorBasic) {
+         // _fetchGivEnergyAPI would log this error if not suppressed.
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
       }
@@ -369,7 +392,8 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   } else {
     if (!evChargerId) {
-        console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
+        // This is an expected scenario if no EV charger is found.
+        // console.log("No EV Charger ID available, EV Charger data will be default/unavailable.");
     }
   }
 
@@ -398,3 +422,4 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
+
