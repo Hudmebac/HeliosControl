@@ -5,15 +5,17 @@ const GIVENERGY_API_TARGET_BASE = 'https://api.givenergy.cloud/v1';
 
 async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string) {
   if (!apiResponse.ok) {
-    let errorPayload;
+    let errorPayload: { error?: string; message?: string; details?: any } = {};
     try {
       errorPayload = await apiResponse.json();
     } catch (parseError) {
+      // Non-JSON error response or empty body
       errorPayload = {
         error: `GivEnergy API error: ${apiResponse.status} ${apiResponse.statusText}.`,
         details: `Target response status: ${apiResponse.status}. Response body was not valid JSON or was empty. URL: ${targetUrl}`
       };
     }
+    // Ensure errorPayload is an object and has a primary error message
     if (typeof errorPayload !== 'object' || errorPayload === null) {
       errorPayload = { error: String(errorPayload) };
     }
@@ -46,7 +48,7 @@ export async function GET(
 ) {
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
-  const searchParams = requestUrl.search; 
+  const searchParams = requestUrl.search;
 
   const targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}${searchParams}`;
   const authToken = request.headers.get('Authorization');
@@ -85,10 +87,10 @@ export async function POST(
     return NextResponse.json({ error: 'Authorization header missing' }, { status: 401 });
   }
 
-  let requestBody;
   const contentType = request.headers.get('Content-Type');
+  let requestBody: any;
 
-  if (contentType && contentType.includes('application/json')) {
+  if (contentType && contentType.toLowerCase().startsWith('application/json')) {
     try {
       requestBody = await request.json();
     } catch (error: any) {
@@ -96,11 +98,14 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid JSON in request body.', details: error.message }, { status: 400 });
     }
   } else {
-    // GivEnergy control commands typically require a JSON body.
-    // If the command doesn't need a body, this is fine. If it does, GivEnergy API will likely error out.
-    // For stricter handling, one might return a 400 error here if a body is always expected.
-    console.warn(`POST request to ${targetUrl} received without 'application/json' Content-Type or with an empty body. Proceeding, but GivEnergy API might reject if body is required.`);
-    requestBody = undefined; // Or attempt to read as text if other content types are possible for some commands
+    // GivEnergy POST commands typically require a JSON body.
+    // If Content-Type is not application/json, it's an unsupported media type for this proxy's POST handling.
+    console.warn(`POST request to ${targetUrl} received with Content-Type: '${contentType || 'Not specified'}'. Expected 'application/json'.`);
+    return NextResponse.json(
+        { error: "Content-Type must be 'application/json' for POST requests.",
+          details: `Received Content-Type: ${contentType || 'Not specified'}` },
+        { status: 415 } // 415 Unsupported Media Type
+    );
   }
 
   try {
@@ -111,12 +116,11 @@ export async function POST(
         'Content-Type': 'application/json', // GivEnergy API generally expects JSON for POST
         'Accept': 'application/json',
       },
-      body: requestBody ? JSON.stringify(requestBody) : undefined,
+      body: JSON.stringify(requestBody), // requestBody should be populated if we reached here
     });
     return await handleGivEnergyResponse(apiResponse, targetUrl);
   } catch (error: any) {
     console.error('Error in GivEnergy POST proxy during fetch or response handling:', error, 'URL:', targetUrl);
-    // Use 502 Bad Gateway if the proxy successfully made a request but got an invalid response or network error to upstream
     return NextResponse.json({ error: 'Proxy POST request to GivEnergy failed', details: error.message }, { status: 502 });
   }
 }
