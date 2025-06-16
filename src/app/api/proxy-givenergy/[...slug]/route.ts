@@ -9,6 +9,7 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     try {
       errorPayload = await apiResponse.json();
     } catch (parseError) {
+      // If parsing fails, construct a generic error but still use the original status
       errorPayload = {
         error: `GivEnergy API error: ${apiResponse.status} ${apiResponse.statusText}.`,
         details: `Target response status: ${apiResponse.status}. Response body was not valid JSON or was empty. URL: ${targetUrl}`
@@ -16,9 +17,9 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     }
     // Ensure errorPayload is an object and has a primary error message
     if (typeof errorPayload !== 'object' || errorPayload === null) {
-      errorPayload = { error: String(errorPayload) };
+      errorPayload = { error: String(errorPayload) }; // Convert non-objects to a string error
     }
-    if (!errorPayload.error && !errorPayload.message) {
+    if (!errorPayload.error && !errorPayload.message) { // If after parsing, no specific error/message field
       errorPayload.error = `GivEnergy API request failed with status ${apiResponse.status} for URL: ${targetUrl}.`;
     }
     return NextResponse.json(errorPayload, { status: apiResponse.status });
@@ -26,6 +27,7 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
 
   // Handle successful responses (2xx)
   if (apiResponse.status === 204) { // Explicitly handle 204 No Content
+    // For 204, return a success JSON as the body will be empty
     return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (204 No Content).', originalStatus: apiResponse.statusText }, { status: 204 });
   }
 
@@ -42,6 +44,7 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
     }
   } else {
     // Handle successful non-JSON responses (e.g., empty body for some 200 OK control commands if Content-Type is not JSON)
+    // This indicates success, but the actual GivEnergy API didn't return JSON content.
     return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (non-JSON response).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
   }
 }
@@ -83,7 +86,7 @@ export async function POST(
 ) {
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
-  const searchParams = requestUrl.search;
+  const searchParams = requestUrl.search; // Keep query params if any for POST
   const targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}${searchParams}`;
   const authToken = request.headers.get('Authorization');
 
@@ -124,7 +127,8 @@ export async function POST(
     });
     return await handleGivEnergyResponse(apiResponse, targetUrl);
   } catch (error: any) {
+    // This catch is for network errors during the fetch to GivEnergy, or if handleGivEnergyResponse throws
     console.error('Error in GivEnergy POST proxy during fetch or response handling:', error, 'URL:', targetUrl);
-    return NextResponse.json({ error: 'Proxy POST request to GivEnergy failed', details: error.message }, { status: 502 });
+    return NextResponse.json({ error: 'Proxy POST request to GivEnergy failed', details: error.message }, { status: 502 }); // 502 Bad Gateway
   }
 }
