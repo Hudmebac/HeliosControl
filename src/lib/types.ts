@@ -18,6 +18,8 @@ export interface BatteryStatus extends Metric {
 
 export interface EVChargerStatus extends Metric {
   status: EVChargerInternalStatus;
+  dailyTotalKWh?: number; // Total energy consumed by charger today
+  sessionKWhDelivered?: number; // Energy delivered in the current/most recent session
 }
 
 // For daily totals from meter-data/latest

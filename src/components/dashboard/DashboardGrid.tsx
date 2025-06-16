@@ -112,7 +112,7 @@ function getHomeConsumptionCardDetails(
 }
 
 function getSolarGenerationCardDetails(
-    solarData: Metric, // Current solar generation power
+    solarData: Metric, 
     dailyTotals: DailyEnergyTotals | undefined,
     timestamp: number
 ): CardDetails {
@@ -265,7 +265,6 @@ function getBatteryCardDetails(
       <div className="text-xs space-y-0.5">
         {descriptionElements.map((el, index) => {
             if (React.isValidElement(el) && (el.key?.toString().startsWith("kwh") || el.key?.toString().startsWith("activity") || el.key?.toString().startsWith("time"))) {
-                // Original inline flow for the first line
                 return (
                     <React.Fragment key={el.key}>
                         {el}
@@ -273,7 +272,6 @@ function getBatteryCardDetails(
                     </React.Fragment>
                 );
             }
-            // New elements are already divs
             return el; 
         })}
       </div>
@@ -352,10 +350,23 @@ function getEVChargerCardDetails(
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
     }
     
-    let descriptionNode: React.ReactNode = (
+    const descriptionElements: React.ReactNode[] = [];
+    descriptionElements.push(<div key="status">{evData.status}</div>);
+    if (typeof evData.dailyTotalKWh === 'number') {
+        descriptionElements.push(<div key="dailyTotal">{`Today's Energy: ${evData.dailyTotalKWh.toFixed(1)} kWh`}</div>);
+    } else {
+        descriptionElements.push(<div key="dailyTotal">{`Today's Energy: N/A`}</div>);
+    }
+    if (typeof evData.sessionKWhDelivered === 'number') {
+        descriptionElements.push(<div key="sessionTotal">{`Session Energy: ${evData.sessionKWhDelivered.toFixed(1)} kWh`}</div>);
+    } else {
+        descriptionElements.push(<div key="sessionTotal">{`Session Energy: N/A`}</div>);
+    }
+    descriptionElements.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
+
+    const descriptionNode = (
       <div className="space-y-0.5 text-xs">
-        <div>{evData.status}</div>
-        <div className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>
+        {descriptionElements.map((el, index) => <div key={index}>{el}</div> )}
       </div>
     );
 
@@ -383,6 +394,7 @@ export function DashboardGrid({ apiKey }: DashboardGridProps) {
       <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 space-y-4 flex flex-col">
+            {/* Placeholder for EnergyFlowVisual skeleton */}
             <Card className="shadow-lg h-full min-h-[300px] md:min-h-[400px]">
               <CardContent className="p-6 flex items-center justify-center">
                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
