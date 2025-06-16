@@ -47,22 +47,20 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   }
 
   const formatPowerForDisplay = (valueInWatts: number | string): string => {
-    let watts: number;
+    let originalWattsAsNumber: number;
     if (typeof valueInWatts === 'string') {
-      watts = parseFloat(valueInWatts);
-      if (isNaN(watts)) return "N/A";
+      originalWattsAsNumber = parseFloat(valueInWatts);
+      if (isNaN(originalWattsAsNumber)) return "N/A";
     } else {
-      watts = valueInWatts;
+      originalWattsAsNumber = valueInWatts;
     }
 
-    const absWatts = Math.abs(watts);
+    const absWatts = Math.abs(originalWattsAsNumber);
 
     if (absWatts < 1000) {
-      const roundedWatts = Math.round(watts);
-      return `${roundedWatts} W`;
+      return `${Math.round(absWatts)} W`;
     } else {
-      const kW = watts / 1000;
-      return `${kW.toFixed(2)} kW`;
+      return `${(absWatts / 1000).toFixed(2)} kW`;
     }
   };
 
@@ -81,7 +79,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   // Convert all primary power figures to Watts for consistent internal logic
   const solarGenerationWatts = getWatts(solarGeneration.value, solarGeneration.unit);
   const homeConsumptionWatts = getWatts(homeConsumption.value, homeConsumption.unit);
-  const gridDisplayValueWatts = getWatts(grid.value, grid.unit); // This is already absolute from givenergy.ts formatPower
+  const gridDisplayValueWatts = getWatts(grid.value, grid.unit); // This value can be negative for import
 
   let evChargerPowerWatts = 0;
   if (evCharger && typeof evCharger.value === 'number') {
@@ -163,7 +161,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   };
 
   const batteryNodePowerText = batteryIsCharging || batteryIsDischarging ? formatPowerForDisplay(batteryAbsPowerW) : "0 W";
-  const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W"; // gridDisplayValueWatts is already absolute
+  const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W";
   const evNodePowerText = isEVAvailable ? formatPowerForDisplay(evChargerPowerWatts) : "N/A";
 
 
