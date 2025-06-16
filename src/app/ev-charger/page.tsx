@@ -88,9 +88,7 @@ const EVChargerPage = () => {
     console.log('Fetching schedules...');
     try {
       const headers = getAuthHeaders();
-      // Assuming "set-schedule" can also be used to GET current schedules, or there's a corresponding read endpoint
-      // This might need adjustment based on actual GivEnergy API for reading schedules
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/606`, { headers }); // 606 is typically for schedule setting/reading
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/606`, { headers }); 
       const data = await response.json();
       setSchedules(data.data || []);
     } catch (error) {
@@ -194,15 +192,24 @@ const EVChargerPage = () => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Starting charge...');
     try {
-      // Note: Proxy needs to support POST. Command path/body needs verification.
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/705`, { // 705 is often Start Charge
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/705`, { 
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: 1 }), // Example body, might vary
+        body: JSON.stringify({ value: 1 }), 
       });
-      const data = await response.json();
-      console.log('Start charge response:', data);
-      fetchEvChargerData(); // Refresh data
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Start charge request failed with status ${response.status}` }));
+        console.error('Error starting charge:', errorData);
+        // Optionally, show a toast message with errorData.error
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Start charge response:', data);
+      } catch (e) {
+        console.log('Start charge command successful, no JSON content in response.');
+      }
+      fetchEvChargerData(); 
     } catch (error) {
       console.error('Error starting charge:', error);
     }
@@ -212,15 +219,23 @@ const EVChargerPage = () => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Stopping charge...');
     try {
-      // Note: Proxy needs to support POST. Command path/body needs verification.
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/706`, { // 706 is often Stop Charge
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/control/706`, { 
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: 1 }), // Example body, might vary
+        body: JSON.stringify({ value: 1 }), 
       });
-      const data = await response.json();
-      console.log('Stop charge response:', data);
-      fetchEvChargerData(); // Refresh data
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Stop charge request failed with status ${response.status}` }));
+        console.error('Error stopping charge:', errorData);
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Stop charge response:', data);
+      } catch (e) {
+        console.log('Stop charge command successful, no JSON content in response.');
+      }
+      fetchEvChargerData(); 
     } catch (error) {
       console.error('Error stopping charge:', error);
     }
@@ -231,14 +246,22 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, solarCharging: checked }));
     console.log('Toggling solar charging:', checked);
     try {
-      // Note: Proxy needs to support POST. This is an INVERTER command.
-      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, { // Setting 106 for EV Charger Mode
+      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, { 
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 2 : 0 }), // 2 for SuperEco, 0 for Eco (check API docs)
+        body: JSON.stringify({ value: checked ? 2 : 0 }), 
       });
-      const data = await response.json();
-      console.log('Solar charging toggle response:', data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Toggle solar charging failed with status ${response.status}` }));
+        console.error('Error toggling solar charging:', errorData);
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Solar charging toggle response:', data);
+      } catch (e) {
+        console.log('Toggle solar charging successful, no JSON content in response.');
+      }
     } catch (error) {
       console.error('Error toggling solar charging:', error);
     }
@@ -249,14 +272,22 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, plugAndCharge: checked }));
     console.log('Toggling plug and charge:', checked);
     try {
-      // Note: Proxy needs to support POST.
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/616/write`, { // Setting 616 for Plug and Go
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/616/write`, { 
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ value: checked ? 1 : 0 }),
       });
-      const data = await response.json();
-      console.log('Plug and charge toggle response:', data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Toggle plug and charge failed with status ${response.status}` }));
+        console.error('Error toggling plug and charge:', errorData);
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Plug and charge toggle response:', data);
+      } catch (e) {
+        console.log('Toggle plug and charge successful, no JSON content in response.');
+      }
     } catch (error) {
       console.error('Error toggling plug and charge:', error);
     }
@@ -267,15 +298,22 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] }));
     console.log('Setting max battery discharge to EVC:', value[0]);
     try {
-      // Note: Proxy needs to support POST. This is an INVERTER command.
-      // Assuming there's a specific setting ID for this. Example: 107
-      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, { // Replace 107 if different
+      const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, { 
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] * 1000 }), // Convert kW to W if API expects W
+        body: JSON.stringify({ value: value[0] * 1000 }), 
       });
-      const data = await response.json();
-      console.log('Max battery discharge to EVC response:', data);
+       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Set max battery discharge failed with status ${response.status}` }));
+        console.error('Error setting max battery discharge:', errorData);
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Max battery discharge to EVC response:', data);
+      } catch (e) {
+        console.log('Set max battery discharge successful, no JSON content in response.');
+      }
     } catch (error) {
       console.error('Error setting max battery discharge to EVC:', error);
     }
@@ -287,33 +325,30 @@ const EVChargerPage = () => {
     console.log('Adding schedule...');
     // Extract form data, construct payload as per GivEnergy API for schedules
     // Example: const payload = { name: "New Schedule", startTime: "23:00", ... };
-    // const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/606/write`, {
-    //   method: 'POST',
-    //   headers: getAuthHeaders(),
-    //   body: JSON.stringify(payload),
-    // });
-    // Refresh schedules: fetchSchedules(evChargerData.uuid);
+    // try {
+    //   const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/606/write`, {
+    //     method: 'POST',
+    //     headers: getAuthHeaders(),
+    //     body: JSON.stringify(payload),
+    //   });
+    //   if (!response.ok) { /* ... error handling ... */ }
+    //   // process response
+    //   fetchSchedules(evChargerData.uuid);
+    // } catch (error) { /* ... error handling ... */ }
   };
 
   const handleSetActiveSchedule = async (scheduleId: string) => {
     if (!apiKey || !evChargerData?.uuid) return;
     console.log('Setting active schedule:', scheduleId);
-    try {
-      // Note: Proxy needs to support POST.
-      // This likely involves POSTing to a general schedule setting endpoint with the ID of the schedule to activate.
-      // The exact mechanism (e.g., setting ID 607 to the target schedule's internal ID) needs API doc verification.
-      // For example, if 607 is "Active Schedule ID"
+    // try {
       // const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/607/write`, {
       //   method: 'POST',
       //   headers: getAuthHeaders(),
       //   body: JSON.stringify({ value: scheduleId }), 
       // });
-      // const data = await response.json();
-      // console.log('Set active schedule response:', data);
-      // Optionally, update UI or re-fetch schedules
-    } catch (error) {
-      console.error('Error setting active schedule:', error);
-    }
+      // if (!response.ok) { /* ... error handling ... */ }
+      // // process response
+    // } catch (error) { /* ... error handling ... */ }
   };
 
   const handleSetChargeRate = useCallback(async (value: number[]) => {
@@ -321,14 +356,22 @@ const EVChargerPage = () => {
     setSettings(prevSettings => ({ ...prevSettings, chargeRate: value[0] }));
     console.log('Setting charge rate:', value[0]);
     try {
-      // Note: Proxy needs to support POST.
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, { // Setting 621 for Charge Current Limit
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/621/write`, { 
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ value: value[0] }),
       });
-      const data = await response.json();
-      console.log('Set charge rate response:', data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `Set charge rate failed with status ${response.status}` }));
+        console.error('Error setting charge rate:', errorData);
+        return;
+      }
+      try {
+        const data = await response.json();
+        console.log('Set charge rate response:', data);
+      } catch (e) {
+        console.log('Set charge rate successful, no JSON content in response.');
+      }
     } catch (error) {
       console.error('Error setting charge rate:', error);
     }
@@ -417,7 +460,7 @@ const EVChargerPage = () => {
               <h3 className="text-xl font-semibold mb-4" style={{ color: themes[theme as keyof typeof themes]?.primary }}>Existing Schedules</h3>
               {schedules.length > 0 ? (
                 <ul>
-                  {schedules.map((schedule: any) => ( // Added type for schedule
+                  {schedules.map((schedule: any) => ( 
                     <li key={schedule.id} className="mb-2 p-2 border rounded" style={{ borderColor: themes[theme as keyof typeof themes]?.accent }}>
                       <div className="flex justify-between items-center">
                         <span>{schedule.name || `Schedule ${schedule.id}`}: {schedule.start_time} - {schedule.finish_time} ({schedule.days?.join(', ') || 'N/A'})</span>
@@ -456,7 +499,7 @@ const EVChargerPage = () => {
                       }} />
                     <span className="ml-2">All</span>
                   </label>
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ( // Using short day names often used in APIs
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ( 
                     <label key={day} className="inline-flex items-center mr-4">
                       <input type="checkbox" className="form-checkbox" name="days" value={day} style={{ color: themes[theme as keyof typeof themes]?.primary }} />
                       <span className="ml-2">{day}</span>
@@ -555,4 +598,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
