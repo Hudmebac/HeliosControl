@@ -59,7 +59,7 @@ const EVChargerPage = () => {
   const [chargingSessionsPage, setChargingSessionsPage] = useState(1);
   const [hasMoreChargingSessions, setHasMoreChargingSessions] = useState(true);
 
-  const chargePowerLimitPresets = [8.5, 10, 12, 16, 24, 32];
+  const chargePowerLimitPresets = [6, 8.5, 10, 12, 16, 24, 32];
 
 
   const getAuthHeaders = useCallback(() => {
