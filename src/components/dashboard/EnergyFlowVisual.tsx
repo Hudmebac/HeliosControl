@@ -50,7 +50,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     let watts: number;
     if (typeof valueInWatts === 'string') {
       watts = parseFloat(valueInWatts);
-      if (isNaN(watts)) return "N/A"; 
+      if (isNaN(watts)) return "N/A";
     } else {
       watts = valueInWatts;
     }
@@ -75,7 +75,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     battery,
     rawGridPowerWatts, // Use this for grid direction
   } = data;
-  
+
   const effectiveBatteryPowerWatts = battery.rawPowerWatts || 0;
 
   // Convert all primary power figures to Watts for consistent internal logic
@@ -96,7 +96,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   // Use rawGridPowerWatts for determining import/export direction with threshold
   const gridIsImporting = rawGridPowerWatts < -THRESHOLD_WATTS;
   const gridIsExporting = rawGridPowerWatts > THRESHOLD_WATTS;
-  
+
   const isEVCharging = evChargerPowerWatts > THRESHOLD_WATTS && (evCharger?.status?.props?.children === 'Charging' || (typeof evCharger?.status === 'string' && evCharger.status.toLowerCase().includes('charging')));
   const isEVAvailable = evCharger && evCharger.status?.props?.children !== 'Unavailable' && (typeof evCharger.status !== 'string' || !evCharger.status.toLowerCase().includes('unavailable'));
 
@@ -114,7 +114,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const solarAvailableForEVOrBatteryW = Math.max(0, solarGenerationWatts - solarToHomeW);
   const evChargingFromSolarW = isEVCharging ? Math.min(solarAvailableForEVOrBatteryW, evChargerPowerWatts) : 0;
   const isEVChargingFromSolar = evChargingFromSolarW > THRESHOLD_WATTS;
-  
+
   let remainingEVNeedsW = Math.max(0, evChargerPowerWatts - evChargingFromSolarW);
   const gridAvailableForEVOrBatteryW = gridIsImporting ? Math.max(0, Math.abs(rawGridPowerWatts) - gridToHomeW) : 0;
   const evChargingFromGridW = isEVCharging ? Math.min(gridAvailableForEVOrBatteryW, remainingEVNeedsW) : 0;
@@ -130,7 +130,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const homeDemandAfterSolarAndGridW = Math.max(0, homeConsumptionWatts - solarToHomeW - gridToHomeW);
   const batteryPowerForHomeOrGridW = Math.max(0, batteryAbsPowerW - evChargingFromBatteryW);
   const batteryToHomeW = batteryIsDischarging ? Math.min(batteryPowerForHomeOrGridW, homeDemandAfterSolarAndGridW) : 0;
-  const isBatteryToHome = batteryToHomeW > THRESHOLD_WATTS;  
+  const isBatteryToHome = batteryToHomeW > THRESHOLD_WATTS;
 
   // Solar to Battery: what's left of solar after home and EV, going to battery (if charging)
   const solarRemainingAfterHomeAndEVW = Math.max(0, solarGenerationWatts - solarToHomeW - evChargingFromSolarW);
@@ -161,7 +161,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     if (battery.percentage > 10) return <BatteryLow className="h-8 w-8 text-orange-500" />;
     return <BatteryWarning className="h-8 w-8 text-red-600" />;
   };
-  
+
   const batteryNodePowerText = batteryIsCharging || batteryIsDischarging ? formatPowerForDisplay(batteryAbsPowerW) : "0 W";
   const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W"; // gridDisplayValueWatts is already absolute
   const evNodePowerText = isEVAvailable ? formatPowerForDisplay(evChargerPowerWatts) : "N/A";
@@ -171,7 +171,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const homePos = { x: 175, y: 125, iconYAdjust: 1, textYAdjust: 20 };
   const batteryPos = { x: 50, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
   const gridPos = { x: 275, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
-  const evPos = { x: 175, y: 200, iconYAdjust: 1, textYAdjust: 20 }; 
+  const evPos = { x: 175, y: 200, iconYAdjust: 1, textYAdjust: 20 };
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full min-h-[300px] md:min-h-[400px]">
@@ -184,10 +184,10 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
       <CardContent className="flex-grow flex flex-col justify-center">
         <svg viewBox="0 0 400 280" className="w-full h-auto">
 					<defs>
-						<marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" fill="var(--color-green-500, #22C55E)"><polygon points="0 0, 8 3, 0 6" /></marker>
-						<marker id="arrowhead-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" fill="var(--color-red-500, #EF4444)"><polygon points="0 0, 8 3, 0 6" /></marker>
-						<marker id="arrowhead-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" fill="var(--color-orange-500, #F97316)"><polygon points="0 0, 8 3, 0 6" /></marker>
-						<marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" fill="var(--color-blue-500, #3B82F6)"><polygon points="0 0, 8 3, 0 6" /></marker>
+						<marker id="arrowhead-green" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-green-500, #22C55E)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
+						<marker id="arrowhead-red" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-red-500, #EF4444)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
+						<marker id="arrowhead-orange" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-orange-500, #F97316)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
+						<marker id="arrowhead-blue" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-blue-500, #3B82F6)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
 					</defs>
 
 					<style>
@@ -206,41 +206,41 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
 					</style>
 
 					{/* Lines */}
-					{isSolarToHome && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={homePos.x} y2={homePos.y - 16} className="stroke-green-500" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />)}
-					{isSolarToBattery && (<line x1={solarPos.x + 16} y1={solarPos.y + 16} x2={batteryPos.x} y2={batteryPos.y - 16} className="stroke-green-500" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />)}
-					{isSolarToGrid && (<line x1={solarPos.x - 16} y1={solarPos.y + 16} x2={gridPos.x} y2={gridPos.y - 16} className="stroke-blue-500" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />)}
-					{isEVChargingFromSolar && isEVAvailable && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-green-500" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />)}
+					{isSolarToHome && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={homePos.x} y2={homePos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isSolarToBattery && (<line x1={solarPos.x + 16} y1={solarPos.y + 16} x2={batteryPos.x} y2={batteryPos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isSolarToGrid && (<line x1={solarPos.x - 16} y1={solarPos.y + 16} x2={gridPos.x} y2={gridPos.y - 16} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
+					{isEVChargingFromSolar && isEVAvailable && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
 
-					{isGridToHome && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={homePos.x + 16} y2={homePos.y} className="stroke-red-500" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />)}
-					{isGridToBattery && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={batteryPos.x + 16} y2={batteryPos.y} className="stroke-red-500" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />)}
-					{isEVChargingFromGrid && isEVAvailable && (<line x1={gridPos.x} y1={gridPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-red-500" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />)}
+					{isGridToHome && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={homePos.x + 16} y2={homePos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
+					{isGridToBattery && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={batteryPos.x + 16} y2={batteryPos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
+					{isEVChargingFromGrid && isEVAvailable && (<line x1={gridPos.x} y1={gridPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
 
-					{isBatteryToHome && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={homePos.x - 16} y2={homePos.y} className="stroke-green-500" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />)}
-					{isBatteryToGrid && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={gridPos.x - 16} y2={gridPos.y} className="stroke-blue-500" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />)}
-					{isEVChargingFromBattery && isEVAvailable && (<line x1={batteryPos.x} y1={batteryPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-orange-500" strokeWidth="2.5" markerEnd="url(#arrowhead-orange)" />)}
+					{isBatteryToHome && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={homePos.x - 16} y2={homePos.y} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isBatteryToGrid && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={gridPos.x - 16} y2={gridPos.y} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
+					{isEVChargingFromBattery && isEVAvailable && (<line x1={batteryPos.x} y1={batteryPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-orange-500" strokeWidth="1.25" markerEnd="url(#arrowhead-orange)" />)}
 
 					{/* Icons and Text */}
 					<g transform={`translate(${solarPos.x - 16}, ${solarPos.y + solarPos.iconYAdjust - 16})`}><Sun className="h-8 w-8 text-yellow-500" /></g>
 					<text x={solarPos.x} y={solarPos.y + solarPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatPowerForDisplay(solarGenerationWatts)}</text>
 
 					<g transform={`translate(${gridPos.x - 16}, ${gridPos.y + gridPos.iconYAdjust - 16})`}><Power className={cn("h-8 w-8", gridIsImporting ? "text-red-500" : gridIsExporting ? "text-blue-500" : "text-muted-foreground" )} /></g>
-					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{gridNodePowerText}</text> 
-					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text> 
+					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{gridNodePowerText}</text>
+					<text x={gridPos.x} y={gridPos.y + gridPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text>
 
 					<g transform={`translate(${homePos.x - 16}, ${homePos.y + homePos.iconYAdjust - 16})`}><Home className="h-8 w-8 text-primary" /></g>
 					<text x={homePos.x} y={homePos.y + homePos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{formatPowerForDisplay(homeConsumptionWatts)}</text>
 
 					<g transform={`translate(${batteryPos.x - 16}, ${batteryPos.y + batteryPos.iconYAdjust - 16})`}>{getBatteryIcon()}</g>
 					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{batteryNodePowerText}</text>
-					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text> 
-					
+					<text x={batteryPos.x} y={batteryPos.y + batteryPos.textYAdjust + 12} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text>
+
 					{isEVAvailable && evCharger && (
 						<g transform={`translate(${evPos.x - 16}, ${evPos.y + evPos.iconYAdjust - 16})`}><Car className={cn("h-8 w-8", isEVCharging ? "text-green-500" : "text-muted-foreground")} /></g>
 					)}
 					{isEVAvailable && (<text x={evPos.x} y={evPos.y + evPos.textYAdjust} textAnchor="middle" className="fill-current text-xs font-medium">{evNodePowerText}</text>)}
 				</svg>
 
-				<div className="mt-auto pt-4 hidden"> 
+				<div className="mt-auto pt-4 hidden">
 					<div className="flex items-center mb-1">
 						{getBatteryIcon()}
 						<span className="ml-2 text-sm font-semibold text-foreground">
@@ -253,3 +253,4 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     </Card>
   );
 }
+
