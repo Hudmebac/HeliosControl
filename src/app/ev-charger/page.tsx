@@ -98,13 +98,15 @@ const EVChargerPage = () => {
     }
   }, [apiKey, getAuthHeaders]);
 
-  const fetchEvChargerData = useCallback(async () => {
+  const fetchEvChargerData = useCallback(async (isSoftRefresh?: boolean) => {
     if (!apiKey) {
       setIsLoadingEvData(false);
       setEvChargerData(null);
       return;
     }
-    setIsLoadingEvData(true);
+    if (!isSoftRefresh) {
+      setIsLoadingEvData(true);
+    }
     try {
       const headers = getAuthHeaders();
       const chargerResponse = await fetch('/api/proxy-givenergy/ev-charger', { headers });
@@ -170,7 +172,9 @@ const EVChargerPage = () => {
       console.error('Error fetching EV charger data:', error);
       setEvChargerData(null);
     } finally {
-      setIsLoadingEvData(false);
+      if (!isSoftRefresh) {
+        setIsLoadingEvData(false);
+      }
     }
   }, [apiKey, storedEvChargerId, getAuthHeaders]);
 
@@ -198,9 +202,12 @@ const EVChargerPage = () => {
       const parsedJson = await response.json();
       if (typeof parsedJson === 'object' && parsedJson !== null) {
         if (parsedJson.error || parsedJson.message) {
-          errorPayload = { ...parsedJson, ...errorPayload }; // Prioritize parsed error/message
-        } else {
-          errorPayload.details = parsedJson; // Parsed but no standard error fields
+          errorPayload = { ...parsedJson, ...errorPayload }; 
+        } else if (Object.keys(parsedJson).length === 0 && response.status !== 204) { 
+          errorPayload.details = "Response was an empty JSON object.";
+        }
+         else {
+          errorPayload.details = parsedJson; 
         }
       } else {
          errorPayload.details = "Response was not a standard JSON error object.";
@@ -230,7 +237,6 @@ const EVChargerPage = () => {
         return;
       }
       try {
-        // Attempt to parse JSON, but don't fail if it's empty for success
         const textResponse = await response.text();
         if (textResponse) {
           const data = JSON.parse(textResponse);
@@ -241,7 +247,7 @@ const EVChargerPage = () => {
       } catch (e) {
         console.log('Start charge command successful, response was not valid JSON (may be empty).');
       }
-      fetchEvChargerData(); 
+      fetchEvChargerData(true); 
     } catch (error) {
       console.error('Network or unexpected error starting charge:', error);
       toast({ variant: "destructive", title: "Start Charge Error", description: "An unexpected error occurred." });
@@ -272,7 +278,7 @@ const EVChargerPage = () => {
       } catch (e) {
          console.log('Stop charge command successful, response was not valid JSON (may be empty).');
       }
-      fetchEvChargerData(); 
+      fetchEvChargerData(true); 
     } catch (error) {
       console.error('Network or unexpected error stopping charge:', error);
       toast({ variant: "destructive", title: "Stop Charge Error", description: "An unexpected error occurred." });
@@ -657,5 +663,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
-      

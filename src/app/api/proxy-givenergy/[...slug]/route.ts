@@ -3,7 +3,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 const GIVENERGY_API_TARGET_BASE = 'https://api.givenergy.cloud/v1';
 
-// This helper function remains the same as it's used by GET and potentially by a more complex POST later.
 async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string) {
   if (!apiResponse.ok) {
     let errorPayload: { error?: string; message?: string; details?: any } = {};
@@ -38,7 +37,9 @@ async function handleGivEnergyResponse(apiResponse: Response, targetUrl: string)
       return NextResponse.json({ success: true, message: 'Command accepted, but response parsing failed (e.g. empty JSON).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
     }
   } else {
-    return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (non-JSON response).', originalStatus: apiResponse.statusText }, { status: apiResponse.status });
+    // For non-JSON success responses (e.g., plain text or other types if any)
+    const textData = await apiResponse.text();
+    return NextResponse.json({ success: true, message: 'Command accepted by GivEnergy (non-JSON response).', data: textData, originalStatus: apiResponse.statusText }, { status: apiResponse.status });
   }
 }
 
@@ -73,38 +74,46 @@ export async function GET(
   }
 }
 
-// Simplified POST handler for diagnostics
 export async function POST(
   request: NextRequest,
   { params }: { params: { slug: string[] } }
 ) {
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
-  const searchParams = requestUrl.search;
+  const searchParams = requestUrl.search; // Include query params if any
+
   const targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}${searchParams}`;
   const authToken = request.headers.get('Authorization');
-
-  console.log(`[PROXY DIAGNOSTIC POST] Received POST request for: /api/proxy-givenergy/${slugPath}`);
-  console.log(`[PROXY DIAGNOSTIC POST] Auth token present: ${!!authToken}`);
+  const contentType = request.headers.get('Content-Type');
 
   if (!authToken) {
-    return NextResponse.json({ error: 'Authorization header missing (Diagnostic POST)' }, { status: 401 });
-  }
-  
-  try {
-    const requestBody = await request.json().catch(() => null); // Try to parse body, ignore if not JSON or empty
-    console.log('[PROXY DIAGNOSTIC POST] Request body (parsed or null):', requestBody);
-  } catch (e) {
-    console.log('[PROXY DIAGNOSTIC POST] Error parsing request body:', e);
+    return NextResponse.json({ error: 'Authorization header missing' }, { status: 401 });
   }
 
-  // Instead of forwarding, return a simple success message
-  return NextResponse.json(
-    { 
-      success: true, 
-      message: `[Diagnostic] POST request to /api/proxy-givenergy/${slugPath} received successfully.`,
-      originalTarget: targetUrl 
-    }, 
-    { status: 200 }
-  );
+  if (!contentType || !contentType.includes('application/json')) {
+    return NextResponse.json({ error: 'Invalid Content-Type. Must be application/json for POST.' }, { status: 415 });
+  }
+
+  let requestBody;
+  try {
+    requestBody = await request.json();
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  try {
+    const apiResponse = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': authToken,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+    return await handleGivEnergyResponse(apiResponse, targetUrl);
+  } catch (error: any) {
+    console.error('Error in GivEnergy POST proxy:', error, 'URL:', targetUrl);
+    return NextResponse.json({ error: 'Proxy POST request failed', details: error.message }, { status: 500 });
+  }
 }
