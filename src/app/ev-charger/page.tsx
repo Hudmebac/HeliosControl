@@ -723,7 +723,7 @@ const EVChargerPage = () => {
                         key={limit}
                         variant={commandChargePowerLimit?.value === limit ? "default" : (commandChargePowerLimit === null && limit === 12 ? "default" : "outline")}
                         onClick={() => handleAdjustChargePowerLimit(limit)}
-                        disabled={!commandChargePowerLimit && limit !==12}
+                        disabled={commandChargePowerLimit === null ? limit !== 12 : isLoadingCommandSettings}
                         className="min-w-[60px]"
                       >
                         {limit}{commandChargePowerLimit?.unit || 'A'}
