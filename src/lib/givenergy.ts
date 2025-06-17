@@ -256,32 +256,35 @@ export async function getDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     return _getPrimaryDeviceIDs(apiKey);
 }
 
-export function mapEVChargerAPIStatus(apiStatus: string | undefined | null): React.ReactNode {
-    if (!apiStatus) return <span className="text-muted-foreground">Status Unknown</span>;
-    const lowerApiStatus = apiStatus.toLowerCase().trim();
+export function mapEVChargerAPIStatus(apiStatus: string | undefined | null): string {
+    if (!apiStatus) return "Status Unknown";
+    const normalizedApiStatus = apiStatus.trim();
 
-    if (lowerApiStatus === "available") return <span className="text-gray-400">Disconnected</span>;
-    if (lowerApiStatus === "preparing") return <span className="text-blue-500">Preparing</span>;
-    if (lowerApiStatus === "charging") return <span className="text-green-500">Charging</span>;
-    if (lowerApiStatus === "suspendedevse") return <span className="text-yellow-600">Paused (Charger)</span>;
-    if (lowerApiStatus === "suspendedev") return <span className="text-yellow-500">Paused (Vehicle)</span>;
-    if (lowerApiStatus === "finishing") return <span className="text-blue-400">Finishing</span>;
-    if (lowerApiStatus === "reserved") return <span className="text-purple-500">Reserved</span>;
-    if (lowerApiStatus === "unavailable") return <span className="text-red-600">Unavailable</span>;
-    if (lowerApiStatus === "faulted") return <span className="text-red-700">Faulted</span>;
-
-    const idleLikeStates = [
-        "eco", "eco+", "boost", "modbusslave",
-        "vehicle connected", "standby", "paused",
-        "plugged in", "idle", "connected", "stopped", "ready",
-        "plugged_in_not_charging"
-    ];
-     if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
-        return <span className="text-blue-500">Idle / Connected</span>;
+    switch (normalizedApiStatus) {
+        case "Available": return "The EV charger is not plugged in to a vehicle";
+        case "Preparing": return "The EV charger is plugged into a vehicle and is ready to start a charge";
+        case "Charging": return "The EV charger is charging the connected EV";
+        case "SuspendedEVSE": return "The charging session has been stopped by the EV charger";
+        case "SuspendedEV": return "The charging session has been stopped by the EV";
+        case "Finishing": return "The charging session has finished, but the EV charger isn't ready to start a new charging session";
+        case "Reserved": return "The EV charger has been reserved for a future charging session";
+        case "Unavailable": return "The EV charger cannot start new charging sessions";
+        case "Faulted": return "The EV charger is reporting an error";
     }
 
-    console.warn(`Unknown EV Charger status from API: "${apiStatus}".`);
-    return <span className="text-muted-foreground">{apiStatus}</span>;
+    const lowerApiStatus = normalizedApiStatus.toLowerCase();
+    const idleLikeStates = [
+        "eco", "eco+", "boost", "modbusslave", "vehicle connected", "standby", 
+        "paused", "plugged in", "idle", "connected", "stopped", "ready",
+        "plugged_in_not_charging"
+    ];
+
+    if (idleLikeStates.some(s => lowerApiStatus.includes(s))) {
+        return "Idle / Vehicle Connected (Not Actively Charging)";
+    }
+
+    console.warn(`Unknown EV Charger status from API: "${apiStatus}". Displaying raw status.`);
+    return apiStatus;
 }
 
 
@@ -365,17 +368,16 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   let evCharger: EVChargerStatus = {
     value: "N/A",
     unit: "kW",
-    status: mapEVChargerAPIStatus("unavailable"),
+    status: mapEVChargerAPIStatus("unavailable"), // Use the mapping function
     rawStatus: "unavailable",
     dailyTotalKWh: dailyTotals.acCharge,
     sessionKWhDelivered: undefined,
   };
-   let evApiStatusString: string | undefined | null = "unavailable"; // Define here for wider scope
+   let evApiStatusString: string | undefined | null = "unavailable";
 
   if (evChargerId && apiKey) {
     const S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown EV ID';
     let evPowerInWatts: number | null | undefined = null;
-    // evApiStatusString is already defined above
     let sessionKWh: number | undefined = undefined;
 
     try {
@@ -398,7 +400,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
         evApiStatusString = evBasicInfoResponse.data.status;
-        // sessionKWh might not be available in basic info
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
@@ -408,7 +409,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     evCharger = {
       value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
       unit: "kW",
-      status: mapEVChargerAPIStatus(evApiStatusString),
+      status: mapEVChargerAPIStatus(evApiStatusString), // Use the mapping function
       rawStatus: evApiStatusString || "unavailable",
       dailyTotalKWh: dailyTotals.acCharge,
       sessionKWhDelivered: typeof sessionKWh === 'number' ? parseFloat(sessionKWh.toFixed(1)) : undefined,

@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useTheme, themes } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
+import { mapEVChargerAPIStatus } from '@/lib/givenergy';
 
 
 const EVChargerPage = () => {
@@ -23,18 +24,6 @@ const EVChargerPage = () => {
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
 
-  const evChargerStatusMap: { [key: string]: string } = {
-    Available: 'Available',
-    Preparing: 'Preparing to Charge',
-    Charging: 'Charging',
-    SuspendedEVSE: 'Charging Suspended (EVSE Side)',
-    SuspendedEV: 'Charging Suspended (EV Side)',
-    Finishing: 'Finishing Charge',
-    Reserved: 'Reserved',
-    Faulted: 'Faulted',
-    Unavailable: 'Unavailable',
-    Unknown: 'Unknown',
-  };
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({
@@ -143,7 +132,6 @@ const EVChargerPage = () => {
         if (Array.isArray(data.data)) {
           setSchedules(data.data);
         } else if (typeof data.data === 'object' && data.data !== null) {
-          // If API returns a single schedule object instead of array for GET (as per some GivEnergy patterns)
           setSchedules([data.data]);
         } else {
           setSchedules([]);
@@ -192,11 +180,9 @@ const EVChargerPage = () => {
         return;
       }
       const data = await response.json();
-      // The API doc says command data is just `true` or `false` for set-plug-and-go GET
       if (data && typeof data.data === 'boolean') {
         setCommandPlugAndGoEnabled(data.data);
       } else {
-        // If it's wrapped in an object like {"enabled": true}
         if (data && data.data && typeof data.data.enabled === 'boolean') {
           setCommandPlugAndGoEnabled(data.data.enabled);
         } else {
@@ -268,7 +254,7 @@ const EVChargerPage = () => {
             ...prevData,
             uuid: chargerDetails.uuid,
             online: chargerDetails.online,
-            status: chargerDetails.status,
+            status: chargerDetails.status, // This is the raw status string
             type: chargerDetails.type,
             serial_number: chargerDetails.serial_number,
             went_offline_at: chargerDetails.went_offline_at
@@ -410,7 +396,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Charge Power Limit Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentChargePowerLimit(evChargerData.uuid); // Refresh current value
+        fetchCurrentChargePowerLimit(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update charge power limit." });
       }
@@ -434,7 +420,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Plug and Go Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentPlugAndGo(evChargerData.uuid); // Refresh current value
+        fetchCurrentPlugAndGo(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update plug and go." });
       }
@@ -464,7 +450,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Session Energy Limit Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentSessionEnergyLimit(evChargerData.uuid); // Refresh current value
+        fetchCurrentSessionEnergyLimit(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update session energy limit." });
       }
@@ -568,11 +554,9 @@ const EVChargerPage = () => {
     const daysSelected = Array.from(formData.getAll('days')) as string[];
 
     const payload = {
-      name: scheduleName || "Unnamed Schedule", // API might require a name
-      active: true, // Assume new schedules are active, or provide a checkbox
+      name: scheduleName || "Unnamed Schedule", 
+      active: true, 
       rules: [ { start_time: startTime, end_time: endTime, days: daysSelected.join(','), } ]
-      // Note: GivEnergy API for schedules might be more complex, e.g. supporting multiple rules per schedule,
-      // or specific format for days (Mon,Tue,Wed or bitmask). This is a basic interpretation.
     };
 
     try {
@@ -631,10 +615,10 @@ const EVChargerPage = () => {
 
   useEffect(() => {
     if (evChargerData?.uuid && apiKey) {
-        fetchChargingSessions(1, false); // Fetch initial page
+        fetchChargingSessions(1, false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey]); // Only re-run if these change, not fetchChargingSessions itself
+  }, [evChargerData?.uuid, apiKey]); 
 
 
   if (isLoadingApiKey || isLoadingEvData) {
@@ -688,7 +672,7 @@ const EVChargerPage = () => {
                 <>
                   <div className="flex items-center"><PlugZap className="mr-2 h-5 w-5 text-primary" />Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</div>
                   <div className="flex items-center"><Power className="mr-2 h-5 w-5 text-primary" />Current Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</div>
-                  <div className="flex items-center"><ListFilter className="mr-2 h-5 w-5 text-primary" />Status: {evChargerStatusMap[evChargerData?.status || 'Unknown']}</div>
+                  <div className="flex items-center"><ListFilter className="mr-2 h-5 w-5 text-primary" />Status: {mapEVChargerAPIStatus(evChargerData?.status)}</div>
                   <div className="flex items-center"><History className="mr-2 h-5 w-5 text-primary" />Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</div>
                   <div>Type: {evChargerData?.type || 'N/A'}</div>
                   <div>Serial: {evChargerData?.serial_number || 'N/A'}</div>
