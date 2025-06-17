@@ -316,10 +316,36 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       console.warn("Could not fetch daily meter data (optional):", meterError);
   }
 
+  let dailyEnergyFlows: { [key: number]: number } = {};
+  try {
+    const today = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
+    const energyFlowsResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<{ start_time: string; end_time: string; data: { [key: string]: number } }[]>>(apiKey, `/inverter/${inverterSerial}/energy-flows`, {
+      method: 'POST',
+      body: JSON.stringify({
+        start_time: today,
+        end_time: today,
+        grouping: 1, // Daily grouping
+        types: [0, 1, 2, 3, 4, 5, 6], // Include all relevant types
+      }),
+    });
+
+    if (energyFlowsResponse.data && energyFlowsResponse.data.length > 0) {
+      // The API returns an array for grouping 1, but we only expect one entry for today
+      const todayFlowData = energyFlowsResponse.data[0].data;
+      for (const typeId in todayFlowData) {
+        dailyEnergyFlows[parseInt(typeId, 10)] = todayFlowData[typeId];
+      }
+    } else {
+        console.warn("Energy flows API returned no data for today.");
+    }
+  } catch (energyFlowsError) {
+    console.warn("Could not fetch daily energy flows (optional):", energyFlowsError);
+  }
+
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
   const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; 
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
   const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
@@ -371,7 +397,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     unit: "kW",
     status: mapEVChargerAPIStatus("unavailable"), // Use the mapping function
     rawStatus: "unavailable",
-    dailyTotalKWh: dailyTotals.acCharge,
+    dailyTotalKWh: dailyEnergyFlows[4] || 0, // Grid to Battery (assuming AC Charge)
     sessionKWhDelivered: undefined,
   };
    let evApiStatusString: string | undefined | null = "unavailable";
@@ -414,7 +440,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       unit: "kW",
       status: mapEVChargerAPIStatus(evApiStatusString), // Use the mapping function
       rawStatus: evApiStatusString || "unavailable",
-      dailyTotalKWh: dailyTotals.acCharge,
+      dailyTotalKWh: dailyEnergyFlows[4] || 0, // Grid to Battery (assuming AC Charge)
       sessionKWhDelivered: typeof sessionKWh === 'number' ? parseFloat(sessionKWh.toFixed(1)) : undefined,
     };
 
@@ -436,7 +462,15 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     rawGridPowerWatts: gridPowerWatts,
     rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, 
     inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
-    today: dailyTotals,
+    today: {
+        solar: dailyEnergyFlows[0] + dailyEnergyFlows[1] + dailyEnergyFlows[2] || dailyTotals.solar || 0, // PV to Home + PV to Battery + PV to Grid
+        gridImport: dailyEnergyFlows[3] + dailyEnergyFlows[4] || dailyTotals.gridImport || 0, // Grid to Home + Grid to Battery
+        gridExport: dailyEnergyFlows[2] + dailyEnergyFlows[6] || dailyTotals.gridExport || 0, // PV to Grid + Battery to Grid
+        batteryCharge: dailyEnergyFlows[1] + dailyEnergyFlows[4] || dailyTotals.batteryCharge || 0, // PV to Battery + Grid to Battery
+        batteryDischarge: dailyEnergyFlows[5] + dailyEnergyFlows[6] || dailyTotals.batteryDischarge || 0, // Battery to Home + Battery to Grid
+        consumption: dailyEnergyFlows[0] + dailyEnergyFlows[3] + dailyEnergyFlows[5] || dailyTotals.consumption || 0, // PV to Home + Grid to Home + Battery to Home
+        acCharge: dailyEnergyFlows[4] || dailyTotals.acCharge || 0, // Grid to Battery
+    }
   };
 
   return dataToReturn;
