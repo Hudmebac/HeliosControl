@@ -26,7 +26,7 @@ const EVChargerPage = () => {
 
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
-  const [settingsLegacy, setSettingsLegacy] = useState<any>({ 
+  const [settingsLegacy, setSettingsLegacy] = useState<any>({
     solarCharging: false,
     plugAndCharge: false,
     maxBatteryDischargeToEvc: 0,
@@ -67,7 +67,7 @@ const EVChargerPage = () => {
       if (typeof parsedJson === 'object' && parsedJson !== null) {
         if (parsedJson.error || parsedJson.message) {
           errorPayload = { ...parsedJson, ...errorPayload, message: parsedJson.message || parsedJson.error || errorPayload.message };
-        } else if (parsedJson.data && (parsedJson.data.error || parsedJson.data.message)) { 
+        } else if (parsedJson.data && (parsedJson.data.error || parsedJson.data.message)) {
           errorPayload = { ...parsedJson.data, ...errorPayload, message: parsedJson.data.message || parsedJson.data.error || errorPayload.message };
         } else if (Object.keys(parsedJson).length === 0 && response.status !== 204) {
           errorPayload.details = "Response was an empty JSON object.";
@@ -251,7 +251,7 @@ const EVChargerPage = () => {
             ...prevData,
             uuid: chargerDetails.uuid,
             online: chargerDetails.online,
-            status: chargerDetails.status, 
+            status: chargerDetails.status,
             type: chargerDetails.type,
             serial_number: chargerDetails.serial_number,
             went_offline_at: chargerDetails.went_offline_at
@@ -392,7 +392,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Charge Power Limit Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentChargePowerLimit(evChargerData.uuid); 
+        fetchCurrentChargePowerLimit(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update charge power limit." });
       }
@@ -416,7 +416,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Plug and Go Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentPlugAndGo(evChargerData.uuid); 
+        fetchCurrentPlugAndGo(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update plug and go." });
       }
@@ -446,7 +446,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data?.data?.success) {
         toast({ title: "Session Energy Limit Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentSessionEnergyLimit(evChargerData.uuid); 
+        fetchCurrentSessionEnergyLimit(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update session energy limit." });
       }
@@ -549,8 +549,8 @@ const EVChargerPage = () => {
     const daysSelected = Array.from(formData.getAll('days')) as string[];
 
     const payload = {
-      name: scheduleName || "Unnamed Schedule", 
-      active: true, 
+      name: scheduleName || "Unnamed Schedule",
+      active: true,
       rules: [ { start_time: startTime, end_time: endTime, days: daysSelected.join(','), } ]
     };
 
@@ -609,10 +609,10 @@ const EVChargerPage = () => {
 
   useEffect(() => {
     if (evChargerData?.uuid && apiKey) {
-        fetchChargingSessions(1, false); 
+        fetchChargingSessions(1, false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey]); 
+  }, [evChargerData?.uuid, apiKey]);
 
 
   if (isLoadingApiKey || isLoadingEvData) {
@@ -663,85 +663,104 @@ const EVChargerPage = () => {
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
               </TabsList>
               <TabsContent value="overview">
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle className="text-primary">Overview</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {evChargerData ? (
-                      <>
-                        <div className="flex items-center"><PlugZap className="mr-2 h-5 w-5 text-primary" />Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</div>
-                        <div className="flex items-center"><Power className="mr-2 h-5 w-5 text-primary" />Current Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</div>
-                        <div className="flex items-center"><ListFilter className="mr-2 h-5 w-5 text-primary" />Status: {mapEVChargerAPIStatus(evChargerData?.status)}</div>
-                        <div className="flex items-center"><History className="mr-2 h-5 w-5 text-primary" />Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</div>
-                        <div>Type: {evChargerData?.type || 'N/A'}</div>
-                        <div>Serial: {evChargerData?.serial_number || 'N/A'}</div>
-                        <div>UUID: {evChargerData?.uuid || 'N/A'}</div>
-                      </>
-                    ) : (
-                      <p>No EV charger data found or could not be loaded. Please check your API key and charger connection.</p>
-                    )}
-                    <div className="col-span-1 md:col-span-2 space-y-6 border-t pt-4 mt-4">
-                      <h3 className="text-xl font-semibold text-primary">Instant Control</h3>
-                      <p className="text-muted-foreground">Directly control your EV Charger. Changes are immediate.</p>
-                      <div className="flex space-x-4">
-                        <Button onClick={handleStartCharge} disabled={!apiKey || !evChargerData?.uuid || isLoadingCommandSettings}>Start Charging</Button>
-                        <Button onClick={handleStopCharge} variant="destructive" disabled={!apiKey || !evChargerData?.uuid || isLoadingCommandSettings}>Stop Charging</Button>
-                      </div>
-                      {isLoadingCommandSettings ? (
-                         <div className="flex items-center space-x-2"><Loader2 className="h-5 w-5 animate-spin" /> <p>Loading current control settings...</p></div>
-                      ) : (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="charge-power-limit-presets">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value ?? 12}</Label>
-                          <div className="flex flex-wrap gap-2 mt-1" id="charge-power-limit-presets">
-                            {chargePowerLimitPresets.map((limit) => (
-                              <Button
-                                key={limit}
-                                variant={commandChargePowerLimit?.value === limit ? "default" : (commandChargePowerLimit === null && limit === 12 ? "default" : "outline")}
-                                onClick={() => handleAdjustChargePowerLimit(limit)}
-                                disabled={commandChargePowerLimit === null ? limit !== 12 : isLoadingCommandSettings}
-                                className="min-w-[60px]"
-                              >
-                                {limit}{commandChargePowerLimit?.unit || 'A'}
-                              </Button>
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value ?? 12} {commandChargePowerLimit?.unit || 'A'}</p>
-                          <p className="text-xs text-muted-foreground">Min: {commandChargePowerLimit?.min || "N/A"} {commandChargePowerLimit?.unit || 'A'}, Max: {commandChargePowerLimit?.max || "N/A"} {commandChargePowerLimit?.unit || 'A'}</p>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Instant Control */}
+                  <div className="md:col-span-1">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-primary">Instant Control</CardTitle>
+                        <CardDescription>Directly control your EV Charger. Changes are immediate.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="flex space-x-4">
+                          <Button onClick={handleStartCharge} disabled={!apiKey || !evChargerData?.uuid || isLoadingCommandSettings}>Start Charging</Button>
+                          <Button onClick={handleStopCharge} variant="destructive" disabled={!apiKey || !evChargerData?.uuid || isLoadingCommandSettings}>Stop Charging</Button>
                         </div>
+                        {isLoadingCommandSettings ? (
+                          <div className="flex items-center space-x-2"><Loader2 className="h-5 w-5 animate-spin" /> <p>Loading control settings...</p></div>
+                        ) : (
+                          <>
+                            <div className="space-y-2">
+                              <Label htmlFor="charge-power-limit-presets">Charge Power Limit ({commandChargePowerLimit?.unit || 'A'}): {commandChargePowerLimit?.value ?? 'N/A'}</Label>
+                              <div className="flex flex-wrap gap-2 mt-1" id="charge-power-limit-presets">
+                                {chargePowerLimitPresets.map((limit) => (
+                                  <Button
+                                    key={limit}
+                                    variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
+                                    onClick={() => handleAdjustChargePowerLimit(limit)}
+                                    disabled={isLoadingCommandSettings}
+                                    className="min-w-[60px]"
+                                  >
+                                    {limit}{commandChargePowerLimit?.unit || 'A'}
+                                  </Button>
+                                ))}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Current limit: {commandChargePowerLimit?.value ?? 'N/A'} {commandChargePowerLimit?.unit || 'A'}</p>
+                              <p className="text-xs text-muted-foreground">Min: {commandChargePowerLimit?.min || "N/A"} {commandChargePowerLimit?.unit || 'A'}, Max: {commandChargePowerLimit?.max || "N/A"} {commandChargePowerLimit?.unit || 'A'}</p>
+                            </div>
 
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id="plug-and-go-switch"
-                            checked={commandPlugAndGoEnabled === true}
-                            onCheckedChange={handleCommandSetPlugAndGo}
-                            disabled={commandPlugAndGoEnabled === null}
-                          />
-                          <Label htmlFor="plug-and-go-switch">Plug and Go Mode (Current: {commandPlugAndGoEnabled === null ? 'N/A' : commandPlugAndGoEnabled ? 'Enabled' : 'Disabled'})</Label>
-                        </div>
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                id="plug-and-go-switch"
+                                checked={commandPlugAndGoEnabled === true}
+                                onCheckedChange={handleCommandSetPlugAndGo}
+                                disabled={commandPlugAndGoEnabled === null || isLoadingCommandSettings}
+                              />
+                              <Label htmlFor="plug-and-go-switch">Plug and Go Mode (Current: {commandPlugAndGoEnabled === null ? 'N/A' : commandPlugAndGoEnabled ? 'Enabled' : 'Disabled'})</Label>
+                            </div>
 
-                        <form onSubmit={handleSetSessionEnergyLimit} className="space-y-2">
-                          <Label htmlFor="session-energy-limit-input">Session Energy Limit (kWh): {commandSessionEnergyLimit?.value || 'Not Set'}</Label>
-                          <div className="flex space-x-2">
-                            <Input
-                              id="session-energy-limit-input"
-                              type="number"
-                              value={inputSessionEnergyLimit}
-                              onChange={(e) => setInputSessionEnergyLimit(e.target.value)}
-                              min={commandSessionEnergyLimit?.min || 0.1}
-                              max={commandSessionEnergyLimit?.max || 250}
-                              step="0.1"
-                              placeholder={`e.g. ${commandSessionEnergyLimit?.value || '20 (0.1-250)'}`}
-                              disabled={!commandSessionEnergyLimit}/>
-                            <Button type="submit" disabled={!commandSessionEnergyLimit}>Set Limit</Button>
-                          </div>
-                           <p className="text-xs text-muted-foreground">Current limit: {commandSessionEnergyLimit?.value !== null ? `${commandSessionEnergyLimit?.value} ${commandSessionEnergyLimit?.unit}` : "Not Set"}</p>
-                        </form>
-                      </>
-                      )}
-                    </div>
-                  </CardContent>
+                            <form onSubmit={handleSetSessionEnergyLimit} className="space-y-2">
+                              <Label htmlFor="session-energy-limit-input">Session Energy Limit (kWh): {commandSessionEnergyLimit?.value || 'Not Set'}</Label>
+                              <div className="flex space-x-2">
+                                <Input
+                                  id="session-energy-limit-input"
+                                  type="number"
+                                  value={inputSessionEnergyLimit}
+                                  onChange={(e) => setInputSessionEnergyLimit(e.target.value)}
+                                  min={commandSessionEnergyLimit?.min || 0.1}
+                                  max={commandSessionEnergyLimit?.max || 250}
+                                  step="0.1"
+                                  placeholder={`e.g. ${commandSessionEnergyLimit?.value || '20 (0.1-250)'}`}
+                                  disabled={!commandSessionEnergyLimit || isLoadingCommandSettings}/>
+                                <Button type="submit" disabled={!commandSessionEnergyLimit || isLoadingCommandSettings}>Set Limit</Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">Current limit: {commandSessionEnergyLimit?.value !== null ? `${commandSessionEnergyLimit?.value} ${commandSessionEnergyLimit?.unit}` : "Not Set"}</p>
+                            </form>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Right Column: Overview Status */}
+                  <div className="md:col-span-1">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-primary">Overview</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {evChargerData ? (
+                          <>
+                            <div className="flex items-center"><PlugZap className="mr-2 h-5 w-5 text-primary" />Charger Online: {evChargerData?.online ? 'Yes' : 'No'}</div>
+                            <div className="flex items-center"><Power className="mr-2 h-5 w-5 text-primary" />Current Power: {evChargerData?.current_power ? `${evChargerData.current_power} kW` : 'N/A'}</div>
+                            <div className="flex items-center"><ListFilter className="mr-2 h-5 w-5 text-primary" />Status: {mapEVChargerAPIStatus(evChargerData?.status)}</div>
+                            <div className="flex items-center"><History className="mr-2 h-5 w-5 text-primary" />Last Offline: {evChargerData?.went_offline_at ? new Date(evChargerData.went_offline_at).toLocaleString() : 'N/A'}</div>
+                          </>
+                        ) : (
+                          <p>No EV charger status data found.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+                {/* Device Information - Full Width Below Columns */}
+                <Card className="mt-6">
+                   <CardHeader><CardTitle className="text-primary text-base font-semibold">Device Information</CardTitle></CardHeader>
+                   <CardContent className="space-y-1 text-sm">
+                       <p><strong className="font-medium text-muted-foreground">Type:</strong> {evChargerData?.type || 'N/A'}</p>
+                       <p><strong className="font-medium text-muted-foreground">UUID:</strong> {evChargerData?.uuid || 'N/A'}</p>
+                       <p><strong className="font-medium text-muted-foreground">Serial:</strong> {evChargerData?.serial_number || 'N/A'}</p>
+                   </CardContent>
                 </Card>
               </TabsContent>
               <TabsContent value="schedule">
