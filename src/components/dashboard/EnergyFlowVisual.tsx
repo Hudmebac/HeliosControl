@@ -165,11 +165,11 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const evNodePowerText = isEVAvailable ? formatPowerForDisplay(evChargerPowerWatts) : "N/A";
 
   // Adjusted icon positions
-  const solarPos = { x: 200, y: 30, iconYAdjust: 1, textYAdjust: 20 };
-  const homePos = { x: 200, y: 125, iconYAdjust: 1, textYAdjust: 20 };
-  const batteryPos = { x: 75, y: 125, iconYAdjust: 1, textYAdjust: 20 };
-  const gridPos = { x: 325, y: 125, iconYAdjust: 1, textYAdjust: 20 };
-  const evPos = { x: 200, y: 220, iconYAdjust: 1, textYAdjust: 20 }; // Moved EV down
+  const solarPos = { x: 125, y: 30, iconYAdjust: 1, textYAdjust: 20 };
+  const homePos = { x: 125, y: 125, iconYAdjust: 1, textYAdjust: 20 };
+  const batteryPos = { x: 30, y: 90, iconYAdjust: 1, textYAdjust: 20 };
+  const gridPos = { x: 200, y: 90, iconYAdjust: 1, textYAdjust: 20 };
+  const evPos = { x: 200, y: 30, iconYAdjust: 1, textYAdjust: 20 }; // Moved EV down
 
   // Icon radius/offset for line connections
   const offset = 16; // For straight lines to icon edge-center
