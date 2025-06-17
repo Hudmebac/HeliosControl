@@ -366,14 +366,16 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     value: "N/A",
     unit: "kW",
     status: mapEVChargerAPIStatus("unavailable"),
+    rawStatus: "unavailable",
     dailyTotalKWh: dailyTotals.acCharge,
     sessionKWhDelivered: undefined,
   };
+   let evApiStatusString: string | undefined | null = "unavailable"; // Define here for wider scope
 
   if (evChargerId && apiKey) {
     const S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown EV ID';
     let evPowerInWatts: number | null | undefined = null;
-    let evApiStatusString: string | undefined | null = "unavailable";
+    // evApiStatusString is already defined above
     let sessionKWh: number | undefined = undefined;
 
     try {
@@ -407,6 +409,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
       unit: "kW",
       status: mapEVChargerAPIStatus(evApiStatusString),
+      rawStatus: evApiStatusString || "unavailable",
       dailyTotalKWh: dailyTotals.acCharge,
       sessionKWhDelivered: typeof sessionKWh === 'number' ? parseFloat(sessionKWh.toFixed(1)) : undefined,
     };
@@ -442,3 +445,4 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
+

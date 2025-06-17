@@ -18,6 +18,7 @@ export interface BatteryStatus extends Metric {
 
 export interface EVChargerStatus extends Metric {
   status: EVChargerInternalStatus;
+  rawStatus?: string; // Raw status string from API
   dailyTotalKWh?: number; // Total energy consumed by charger today
   sessionKWhDelivered?: number; // Energy delivered in the current/most recent session
 }
@@ -225,3 +226,4 @@ export interface RawMeterDataLatest {
     is_metered: boolean;
 }
 export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
+
