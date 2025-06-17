@@ -398,12 +398,12 @@ function getEVChargerCardDetails(
     
     const descriptionElements: React.ReactNode[] = [];
     descriptionElements.push(<div key="status">{evData.status}</div>);
-    if (typeof evData.dailyTotalKWh === 'number') {
+    if (typeof evData.dailyTotalKWh === 'number' && !isNaN(evData.dailyTotalKWh)) {
         descriptionElements.push(<div key="dailyTotal">{`Today's Energy: ${evData.dailyTotalKWh.toFixed(1)} kWh`}</div>);
     } else {
         descriptionElements.push(<div key="dailyTotal">{`Today's Energy: N/A`}</div>);
     }
-    if (typeof evData.sessionKWhDelivered === 'number') {
+    if (typeof evData.sessionKWhDelivered === 'number' && !isNaN(evData.sessionKWhDelivered)) {
         descriptionElements.push(<div key="sessionTotal">{`Session Energy: ${evData.sessionKWhDelivered.toFixed(1)} kWh`}</div>);
     } else {
         descriptionElements.push(<div key="sessionTotal">{`Session Energy: N/A`}</div>);

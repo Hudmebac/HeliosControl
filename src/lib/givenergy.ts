@@ -301,6 +301,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
   let dailyTotals: DailyEnergyTotals = {};
   try {
     const meterDataResponse = await _fetchGivEnergyAPI<RawMeterDataLatestResponse>(apiKey, `/inverter/${inverterSerial}/meter-data/latest`);
+    console.log("Raw Meter Data Latest:", meterDataResponse.data);
     const rawMeterData: RawMeterDataLatest = meterDataResponse.data;
     dailyTotals = {
         solar: rawMeterData.today.solar,
@@ -386,6 +387,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         `/ev-charger/${S_evChargerId}/status`,
         { suppressErrorForStatus: [404] }
       );
+      console.log("Raw Detailed EV Charger Status:", evStatusDetailedResponse.data);
       const rawDetailedEVData: RawEVChargerStatusType = evStatusDetailedResponse.data;
       evPowerInWatts = rawDetailedEVData.charge_session?.power;
       evApiStatusString = rawDetailedEVData.status;
@@ -399,6 +401,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       }
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
+        console.log("Raw EV Charger Basic Info (Fallback):", evBasicInfoResponse.data);
         evApiStatusString = evBasicInfoResponse.data.status;
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
