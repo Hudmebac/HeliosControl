@@ -164,12 +164,16 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W";
   const evNodePowerText = isEVAvailable ? formatPowerForDisplay(evChargerPowerWatts) : "N/A";
 
+  // Adjusted icon positions
+  const solarPos = { x: 200, y: 30, iconYAdjust: 1, textYAdjust: 20 };
+  const homePos = { x: 200, y: 125, iconYAdjust: 1, textYAdjust: 20 };
+  const batteryPos = { x: 75, y: 125, iconYAdjust: 1, textYAdjust: 20 };
+  const gridPos = { x: 325, y: 125, iconYAdjust: 1, textYAdjust: 20 };
+  const evPos = { x: 200, y: 220, iconYAdjust: 1, textYAdjust: 20 }; // Moved EV down
 
-  const solarPos = { x: 175, y: 30, iconYAdjust: 1, textYAdjust: 20 };
-  const homePos = { x: 175, y: 125, iconYAdjust: 1, textYAdjust: 20 };
-  const batteryPos = { x: 50, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
-  const gridPos = { x: 275, y: homePos.y, iconYAdjust: 1, textYAdjust: 20 };
-  const evPos = { x: 175, y: 200, iconYAdjust: 1, textYAdjust: 20 };
+  // Icon radius/offset for line connections
+  const offset = 16; // For straight lines to icon edge-center
+  const diagOffset = 12; // For diagonal lines to icon near-corners
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full min-h-[300px] md:min-h-[400px]">
@@ -180,7 +184,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col justify-center">
-        <svg viewBox="0 0 400 280" className="w-full h-auto">
+        <svg viewBox="0 0 400 300" className="w-full h-auto"> {/* Adjusted viewBox height */}
 					<defs>
 						<marker id="arrowhead-green" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-green-500, #22C55E)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
 						<marker id="arrowhead-red" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto" fill="var(--color-red-500, #EF4444)"><polygon points="0 0, 4 1.5, 0 3" /></marker>
@@ -203,19 +207,19 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
 						`}
 					</style>
 
-					{/* Lines */}
-					{isSolarToHome && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={homePos.x} y2={homePos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
-					{isSolarToBattery && (<line x1={solarPos.x + 16} y1={solarPos.y + 16} x2={batteryPos.x} y2={batteryPos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
-					{isSolarToGrid && (<line x1={solarPos.x - 16} y1={solarPos.y + 16} x2={gridPos.x} y2={gridPos.y - 16} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
-					{isEVChargingFromSolar && isEVAvailable && (<line x1={solarPos.x} y1={solarPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{/* Lines with adjusted endpoints */}
+					{isSolarToHome && (<line x1={solarPos.x} y1={solarPos.y + offset} x2={homePos.x} y2={homePos.y - offset} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isSolarToBattery && (<line x1={solarPos.x - diagOffset} y1={solarPos.y + diagOffset} x2={batteryPos.x + diagOffset} y2={batteryPos.y - diagOffset} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isSolarToGrid && (<line x1={solarPos.x + diagOffset} y1={solarPos.y + diagOffset} x2={gridPos.x - diagOffset} y2={gridPos.y - diagOffset} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
+					{isEVChargingFromSolar && isEVAvailable && (<line x1={solarPos.x} y1={solarPos.y + offset} x2={evPos.x} y2={evPos.y - offset} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
 
-					{isGridToHome && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={homePos.x + 16} y2={homePos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
-					{isGridToBattery && (<line x1={gridPos.x - 16} y1={gridPos.y} x2={batteryPos.x + 16} y2={batteryPos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
-					{isEVChargingFromGrid && isEVAvailable && (<line x1={gridPos.x} y1={gridPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
+					{isGridToHome && (<line x1={gridPos.x - offset} y1={gridPos.y} x2={homePos.x + offset} y2={homePos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
+					{isGridToBattery && (<line x1={gridPos.x - offset} y1={gridPos.y} x2={batteryPos.x + offset} y2={batteryPos.y} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
+					{isEVChargingFromGrid && isEVAvailable && (<line x1={gridPos.x - diagOffset} y1={gridPos.y + diagOffset} x2={evPos.x + diagOffset} y2={evPos.y - diagOffset} className="stroke-red-500" strokeWidth="1.25" markerEnd="url(#arrowhead-red)" />)}
 
-					{isBatteryToHome && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={homePos.x - 16} y2={homePos.y} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
-					{isBatteryToGrid && (<line x1={batteryPos.x + 16} y1={batteryPos.y} x2={gridPos.x - 16} y2={gridPos.y} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
-					{isEVChargingFromBattery && isEVAvailable && (<line x1={batteryPos.x} y1={batteryPos.y + 16} x2={evPos.x} y2={evPos.y - 16} className="stroke-orange-500" strokeWidth="1.25" markerEnd="url(#arrowhead-orange)" />)}
+					{isBatteryToHome && (<line x1={batteryPos.x + offset} y1={batteryPos.y} x2={homePos.x - offset} y2={homePos.y} className="stroke-green-500" strokeWidth="1.25" markerEnd="url(#arrowhead-green)" />)}
+					{isBatteryToGrid && (<line x1={batteryPos.x + offset} y1={batteryPos.y} x2={gridPos.x - offset} y2={gridPos.y} className="stroke-blue-500" strokeWidth="1.25" markerEnd="url(#arrowhead-blue)" />)}
+					{isEVChargingFromBattery && isEVAvailable && (<line x1={batteryPos.x + diagOffset} y1={batteryPos.y + diagOffset} x2={evPos.x - diagOffset} y2={evPos.y - diagOffset} className="stroke-orange-500" strokeWidth="1.25" markerEnd="url(#arrowhead-orange)" />)}
 
 					{/* Icons and Text */}
 					<g transform={`translate(${solarPos.x - 16}, ${solarPos.y + solarPos.iconYAdjust - 16})`}><Sun className="h-8 w-8 text-yellow-500" /></g>
@@ -251,4 +255,3 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     </Card>
   );
 }
-
