@@ -71,15 +71,14 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     grid,
     evCharger,
     battery,
-    rawGridPowerWatts, // Negative for import, positive for export
+    rawGridPowerWatts, 
     rawSolarPowerWatts,
   } = data;
 
-  // Use effectiveBatteryPowerWatts which is battery.rawPowerWatts (negative for charge, positive for discharge)
   const effectiveBatteryPowerWatts = battery.rawPowerWatts || 0;
   const solarGenerationWatts = getWatts(solarGeneration.value, solarGeneration.unit);
   const homeConsumptionWatts = getWatts(homeConsumption.value, homeConsumption.unit);
-  const gridDisplayValueWatts = getWatts(grid.value, grid.unit); // This is Math.abs of rawGridPowerWatts essentially
+  const gridDisplayValueWatts = getWatts(grid.value, grid.unit); 
   let evChargerPowerWatts = getWatts(evCharger.value, evCharger.unit);
   if (isNaN(evChargerPowerWatts)) {
     evChargerPowerWatts = 0;
@@ -97,7 +96,6 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const isSolarToHome = solarToHomeW > THRESHOLD_WATTS;
   let solarRemainingAfterHomeW = Math.max(0, solarGenerationWatts - solarToHomeW);
 
-  // EV charging from Solar (priority before battery charging or grid export from solar)
   let evChargingFromSolarW = 0;
   let isEvChargingFromSolar = false;
   if (evChargerPowerWatts > THRESHOLD_WATTS) {
@@ -106,32 +104,25 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     solarRemainingAfterHomeW = Math.max(0, solarRemainingAfterHomeW - evChargingFromSolarW);
   }
 
-  // Solar to Battery
   const solarToBatteryW = batteryIsCharging ? Math.min(solarRemainingAfterHomeW, batteryAbsPowerW) : 0;
   const isSolarToBattery = solarToBatteryW > THRESHOLD_WATTS;
   let solarRemainingAfterBatteryW = Math.max(0, solarRemainingAfterHomeW - solarToBatteryW);
 
-  // Solar to Grid
   const solarToGridW = gridIsExporting ? Math.min(solarRemainingAfterBatteryW, Math.abs(rawGridPowerWatts)) : 0;
   const isSolarToGrid = solarToGridW > THRESHOLD_WATTS;
-
 
   // Home demand fulfillment
   let remainingHomeDemandAfterSolarW = Math.max(0, homeConsumptionWatts - solarToHomeW);
   
-  // Grid to Home
   const gridToHomeW = (gridIsImporting && remainingHomeDemandAfterSolarW > THRESHOLD_WATTS) ? Math.min(Math.abs(rawGridPowerWatts), remainingHomeDemandAfterSolarW) : 0;
   const isGridToHome = gridToHomeW > THRESHOLD_WATTS;
   let remainingHomeDemandAfterSolarAndGridW = Math.max(0, remainingHomeDemandAfterSolarW - gridToHomeW);
 
-  // Battery to Home
   const batteryToHomeW = (batteryIsDischarging && remainingHomeDemandAfterSolarAndGridW > THRESHOLD_WATTS) ? Math.min(batteryAbsPowerW, remainingHomeDemandAfterSolarAndGridW) : 0;
   const isBatteryToHome = batteryToHomeW > THRESHOLD_WATTS;
 
-  // Power available from battery after supplying home
   let batteryPowerAvailableForGridOrEvW = batteryIsDischarging ? Math.max(0, batteryAbsPowerW - batteryToHomeW) : 0;
 
-  // EV charging from Battery (if not fully covered by solar)
   let evChargingFromBatteryW = 0;
   let isEvChargingFromBattery = false;
   const evDemandNotMetBySolar = Math.max(0, evChargerPowerWatts - evChargingFromSolarW);
@@ -141,15 +132,12 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     batteryPowerAvailableForGridOrEvW = Math.max(0, batteryPowerAvailableForGridOrEvW - evChargingFromBatteryW);
   }
   
-  // Battery to Grid
   const gridExportDemandNotMetBySolar = gridIsExporting ? Math.max(0, Math.abs(rawGridPowerWatts) - solarToGridW) : 0;
   const batteryToGridW = (gridIsExporting && batteryIsDischarging && gridExportDemandNotMetBySolar > THRESHOLD_WATTS) ? Math.min(batteryPowerAvailableForGridOrEvW, gridExportDemandNotMetBySolar) : 0;
   const isBatteryToGrid = batteryToGridW > THRESHOLD_WATTS;
 
-  // Power available from grid after supplying home
   let gridPowerAvailableForEvOrBatteryW = gridIsImporting ? Math.max(0, Math.abs(rawGridPowerWatts) - gridToHomeW) : 0;
   
-  // EV charging from Grid (if not fully covered by solar or battery)
   let evChargingFromGridW = 0;
   let isEvChargingFromGrid = false;
   const evDemandNotMetBySolarOrBattery = Math.max(0, evDemandNotMetBySolar - evChargingFromBatteryW);
@@ -159,11 +147,9 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     gridPowerAvailableForEvOrBatteryW = Math.max(0, gridPowerAvailableForEvOrBatteryW - evChargingFromGridW);
   }
 
-  // Grid to Battery (if not fully charged by solar)
   const batteryChargeDemandNotMetBySolar = batteryIsCharging ? Math.max(0, batteryAbsPowerW - solarToBatteryW) : 0;
   const gridToBatteryW = (gridIsImporting && batteryIsCharging && batteryChargeDemandNotMetBySolar > THRESHOLD_WATTS) ? Math.min(gridPowerAvailableForEvOrBatteryW, batteryChargeDemandNotMetBySolar) : 0;
   const isGridToBattery = gridToBatteryW > THRESHOLD_WATTS;
-
 
   const getBatteryIconSized = (className = "h-8 w-8 md:h-10 md:w-10") => {
     if (batteryIsCharging) return <BatteryCharging className={`${className} text-blue-500`} />;
@@ -178,15 +164,15 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const evNodePowerText = evChargerPowerWatts > THRESHOLD_WATTS ? formatPowerForDisplay(evChargerPowerWatts) : "0 W";
 
   const iconSize = 32; 
-  const iconOffset = iconSize / 2; // 16
+  const iconOffset = iconSize / 2;
   const diagOffset = 12; 
 
-  const nodeSolarY = 30;
-  const nodeHomeY = 125; 
+  const nodeSolarY = 50;
+  const nodeHomeY = 175; 
   const nodeBatteryX = 75; 
   const nodeGridX = 325; 
   const nodeEVX = 200;
-  const nodeEVY = 220; 
+  const nodeEVY = 300; 
   const centerX = 200;
 
   return (
@@ -216,92 +202,74 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
             </style>
           </defs>
 
-          {/* Solar Icon and Labels */}
           <Sun x={centerX - iconOffset} y={nodeSolarY - iconOffset} className="h-8 w-8 text-yellow-500" />
           <text x={centerX} y={nodeSolarY + iconOffset + 10} textAnchor="middle" className="flow-text">{formatPowerForDisplay(solarGenerationWatts)}</text>
           <text x={centerX} y={nodeSolarY + iconOffset + 22} textAnchor="middle" className="fill-current text-xs text-muted-foreground">Solar</text>
 
-          {/* Home Icon and Labels */}
           <Home x={centerX - iconOffset} y={nodeHomeY - iconOffset} className="h-8 w-8 text-primary" />
           <text x={centerX} y={nodeHomeY + iconOffset + 10} textAnchor="middle" className="flow-text">{formatPowerForDisplay(homeConsumptionWatts)}</text>
           <text x={centerX} y={nodeHomeY + iconOffset + 22} textAnchor="middle" className="fill-current text-xs text-muted-foreground">Home</text>
 
-          {/* Battery Icon and Labels */}
           <g transform={`translate(${nodeBatteryX - iconOffset}, ${nodeHomeY - iconOffset})`}>{getBatteryIconSized("h-8 w-8")}</g>
           <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 10} textAnchor="middle" className="flow-text">{batteryNodePowerText}</text>
           <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 22} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text>
           
-          {/* Grid Icon and Labels */}
           <Power x={nodeGridX - iconOffset} y={nodeHomeY - iconOffset} className={cn("h-8 w-8", gridIsImporting ? "text-red-500" : gridIsExporting ? "text-blue-500" : "text-muted-foreground")} />
           <text x={nodeGridX} y={nodeHomeY + iconOffset + 10} textAnchor="middle" className="flow-text">{gridNodePowerText}</text>
           <text x={nodeGridX} y={nodeHomeY + iconOffset + 22} textAnchor="middle" className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text>
 
-          {/* EV Charger Icon and Labels */}
           <Car x={nodeEVX - iconOffset} y={nodeEVY - iconOffset} className={cn("h-8 w-8", evChargerPowerWatts > THRESHOLD_WATTS ? "text-green-500" : "text-muted-foreground")} />
           <text x={nodeEVX} y={nodeEVY + iconOffset + 10} textAnchor="middle" className="flow-text">{evNodePowerText}</text>
           <text x={nodeEVX} y={nodeEVY + iconOffset + 22} textAnchor="middle" className="fill-current text-xs text-muted-foreground">EV ({evCharger.rawStatus || 'N/A'})</text>
 
-          {/* --- Lines and Flow Text --- */}
-          {/* Solar to Home */}
           {isSolarToHome && (<>
             <path d={`M ${centerX} ${nodeSolarY + iconOffset} L ${centerX} ${nodeHomeY - iconOffset}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
             <text x={centerX + 20} y={(nodeSolarY + nodeHomeY) / 2} className="flow-text">{formatPowerForDisplay(solarToHomeW)}</text>
           </>)}
 
-          {/* Solar to Battery */}
           {isSolarToBattery && (<>
-            <path d={`M ${centerX - diagOffset} ${nodeSolarY + iconOffset - diagOffset/2} Q ${centerX - 90} ${(nodeSolarY + nodeHomeY) / 2}, ${nodeBatteryX + iconOffset} ${nodeHomeY - diagOffset}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
-            <text x={centerX - 70} y={(nodeSolarY + nodeHomeY) / 2 - 20} className="flow-text">{formatPowerForDisplay(solarToBatteryW)}</text>
+            <path d={`M ${centerX - diagOffset} ${nodeSolarY + iconOffset - diagOffset/2} Q ${centerX - 90} ${(nodeSolarY + nodeHomeY) / 2 - 20}, ${nodeBatteryX + iconOffset} ${nodeHomeY - diagOffset - 10}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
+            <text x={centerX - 70} y={(nodeSolarY + nodeHomeY) / 2 - 40} className="flow-text">{formatPowerForDisplay(solarToBatteryW)}</text>
           </>)}
 
-          {/* Solar to Grid */}
           {isSolarToGrid && (<>
-            <path d={`M ${centerX + diagOffset} ${nodeSolarY + iconOffset - diagOffset/2} Q ${centerX + 90} ${(nodeSolarY + nodeHomeY) / 2}, ${nodeGridX - iconOffset} ${nodeHomeY - diagOffset}`} className="stroke-blue-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />
-            <text x={centerX + 70} y={(nodeSolarY + nodeHomeY) / 2 - 20} className="flow-text">{formatPowerForDisplay(solarToGridW)}</text>
+            <path d={`M ${centerX + diagOffset} ${nodeSolarY + iconOffset - diagOffset/2} Q ${centerX + 90} ${(nodeSolarY + nodeHomeY) / 2 - 20}, ${nodeGridX - iconOffset} ${nodeHomeY - diagOffset - 10}`} className="stroke-blue-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />
+            <text x={centerX + 70} y={(nodeSolarY + nodeHomeY) / 2 - 40} className="flow-text">{formatPowerForDisplay(solarToGridW)}</text>
           </>)}
           
-          {/* Solar to EV Charger */}
           {isEvChargingFromSolar && (<>
             <path d={`M ${centerX} ${nodeSolarY + iconOffset + 5} L ${centerX} ${nodeEVY - iconOffset}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
-            <text x={centerX - 20} y={(nodeSolarY + nodeEVY) / 2 + 20} className="flow-text">{formatPowerForDisplay(evChargingFromSolarW)}</text>
+            <text x={centerX - 25} y={(nodeSolarY + nodeEVY) / 2 + 20} className="flow-text">{formatPowerForDisplay(evChargingFromSolarW)}</text>
           </>)}
 
-
-          {/* Grid to Home */}
           {isGridToHome && (<>
             <path d={`M ${nodeGridX - iconOffset} ${nodeHomeY} L ${centerX + iconOffset} ${nodeHomeY}`} className="stroke-red-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />
             <text x={(centerX + nodeGridX) / 2} y={nodeHomeY - 8} className="flow-text">{formatPowerForDisplay(gridToHomeW)}</text>
           </>)}
 
-          {/* Grid to Battery */}
           {isGridToBattery && (<>
-            <path d={`M ${nodeGridX - iconOffset} ${nodeHomeY + diagOffset} Q ${(nodeGridX + nodeBatteryX) / 2 + 30} ${nodeHomeY + 70}, ${nodeBatteryX + iconOffset} ${nodeHomeY + diagOffset}`} className="stroke-red-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />
-            <text x={(nodeGridX + nodeBatteryX) / 2} y={nodeHomeY + 55} className="flow-text">{formatPowerForDisplay(gridToBatteryW)}</text>
+            <path d={`M ${nodeGridX - iconOffset} ${nodeHomeY + diagOffset + 10} Q ${(nodeGridX + nodeBatteryX) / 2 + 30} ${nodeHomeY + 90}, ${nodeBatteryX + iconOffset} ${nodeHomeY + diagOffset + 10}`} className="stroke-red-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />
+            <text x={(nodeGridX + nodeBatteryX) / 2} y={nodeHomeY + 75} className="flow-text">{formatPowerForDisplay(gridToBatteryW)}</text>
           </>)}
 
-          {/* Grid to EV Charger */}
           {isEvChargingFromGrid && (<>
             <path d={`M ${nodeGridX - diagOffset} ${nodeHomeY + iconOffset + diagOffset*2} Q ${(nodeGridX + nodeEVX)/2 + 30} ${(nodeHomeY + nodeEVY)/2 + 40}, ${nodeEVX + diagOffset} ${nodeEVY - iconOffset + 5}`} className="stroke-red-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-red)" />
-            <text x={(nodeGridX + nodeEVX)/2 + 40} y={(nodeHomeY + nodeEVY)/2 + 55} className="flow-text">{formatPowerForDisplay(evChargingFromGridW)}</text>
+            <text x={(nodeGridX + nodeEVX)/2 + 45} y={(nodeHomeY + nodeEVY)/2 + 60} className="flow-text">{formatPowerForDisplay(evChargingFromGridW)}</text>
           </>)}
 
-
-          {/* Battery to Home */}
           {isBatteryToHome && (<>
             <path d={`M ${nodeBatteryX + iconOffset} ${nodeHomeY} L ${centerX - iconOffset} ${nodeHomeY}`} className="stroke-orange-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-orange)" />
             <text x={(centerX + nodeBatteryX) / 2} y={nodeHomeY - 8} className="flow-text">{formatPowerForDisplay(batteryToHomeW)}</text>
           </>)}
           
-          {/* Battery to Grid */}
           {isBatteryToGrid && (<>
-             <path d={`M ${nodeBatteryX + iconOffset} ${nodeHomeY - diagOffset} Q ${(nodeBatteryX + nodeGridX) / 2 - 30} ${nodeHomeY - 70}, ${nodeGridX - iconOffset} ${nodeHomeY - diagOffset}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
-            <text x={(nodeBatteryX + nodeGridX) / 2} y={nodeHomeY - 55} className="flow-text">{formatPowerForDisplay(batteryToGridW)}</text>
+             <path d={`M ${nodeBatteryX + iconOffset} ${nodeHomeY - diagOffset -10} Q ${(nodeBatteryX + nodeGridX) / 2 - 30} ${nodeHomeY - 90}, ${nodeGridX - iconOffset} ${nodeHomeY - diagOffset -10}`} className="stroke-blue-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-blue)" />
+            <text x={(nodeBatteryX + nodeGridX) / 2} y={nodeHomeY - 75} className="flow-text">{formatPowerForDisplay(batteryToGridW)}</text>
           </>)}
 
-          {/* Battery to EV Charger */}
           {isEvChargingFromBattery && (<>
             <path d={`M ${nodeBatteryX + diagOffset} ${nodeHomeY + iconOffset + diagOffset*2} Q ${(nodeBatteryX + nodeEVX)/2 - 30} ${(nodeHomeY + nodeEVY)/2 + 40}, ${nodeEVX - diagOffset} ${nodeEVY - iconOffset + 5}`} className="stroke-orange-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-orange)" />
-            <text x={(nodeBatteryX + nodeEVX)/2 - 40} y={(nodeHomeY + nodeEVY)/2 + 55} className="flow-text">{formatPowerForDisplay(evChargingFromBatteryW)}</text>
+            <text x={(nodeBatteryX + nodeEVX)/2 - 45} y={(nodeHomeY + nodeEVY)/2 + 60} className="flow-text">{formatPowerForDisplay(evChargingFromBatteryW)}</text>
           </>)}
 
         </svg>
@@ -318,4 +286,3 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
     </Card>
   );
 }
-
