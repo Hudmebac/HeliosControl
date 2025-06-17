@@ -522,7 +522,7 @@ const EVChargerPage = () => {
 
   const handleSetMaxBatteryDischargeToEvc = async (value: number[]) => {
      if (!apiKey || !inverterSerial) return;
-    setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] }));
+    setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] * 1000 }));
     try {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, {
         method: 'POST',
@@ -1028,4 +1028,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
