@@ -1,5 +1,6 @@
 
 'use client';
+import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
@@ -351,6 +352,7 @@ const EVChargerPage = () => {
       });
     }
   }, [evChargerData?.uuid, apiKey, fetchLegacySettings, fetchSchedules, fetchCurrentChargePowerLimit, fetchCurrentPlugAndGo, fetchCurrentSessionEnergyLimit]);
+
 
   const handleStartCharge = async () => {
     if (!apiKey || !evChargerData?.uuid) return;
@@ -803,7 +805,7 @@ const EVChargerPage = () => {
                         </CardHeader>
                         <CardContent className="space-y-1">
                            {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
-                           {renderStatusValue("Online", evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/>, evChargerData?.online ? "Yes" : "No")}
+                           {renderStatusValue("Online", evChargerData?.online, evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                            {renderStatusValue("Status", mapEVChargerAPIStatus(evChargerData?.status), <AlertCircle />)}
                            {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
                            {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
@@ -1026,3 +1028,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
