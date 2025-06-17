@@ -159,11 +159,11 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
   const gridNodePowerText = gridIsImporting || gridIsExporting ? formatPowerForDisplay(gridDisplayValueWatts) : "0 W";
   const evNodePowerText = isEVCharging ? formatPowerForDisplay(evChargerPowerWatts) : (isEVAvailable ? "Idle" : "N/A");
 
-  const solarPos = { x: 200, y: 30 };
-  const homePos = { x: 200, y: 125 };
-  const batteryPos = { x: 75, y: 125 };
-  const gridPos = { x: 325, y: 125 };
-  const evPos = { x: 200, y: 220 };
+  const solarPos = { x: 175, y: 50, iconYAdjust: 1, textYAdjust: 20 };
+  const homePos = { x: 175, y: 175, iconYAdjust: 1, textYAdjust: 20 };
+  const batteryPos = { x: 30, y: 250, iconYAdjust: 1, textYAdjust: 20 };
+  const gridPos = { x: 300, y: 230, iconYAdjust: 1, textYAdjust: 20 };
+  const evPos = { x: 250, y: 50, iconYAdjust: 1, textYAdjust: 20 }; // Moved EV down
 
   const offset = 16; // Half of icon size (32px)
   const diagOffset = 12; // Adjusted for diagonal connections
