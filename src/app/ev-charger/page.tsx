@@ -49,6 +49,28 @@ const EVChargerPage = () => {
   const [sessionStartDate, setSessionStartDate] = useState('');
   const [sessionEndDate, setSessionEndDate] = useState('');
 
+  const evChargerStatusMap: { [key: string]: string } = {
+      Available: 'The EV charger is not plugged in to a vehicle',
+      Preparing: 'The EV charger is plugged into a vehicle and is ready to start a charge',
+      Charging: 'The EV charger is charging the connected EV',
+      SuspendedEVSE: 'The charging session has been stopped by the EV charger',
+      SuspendedEV: 'The charging session has been stopped by the EV',
+      Finishing: 'The charging session has finished, but the EV charger is not ready to start a new charging session',
+      Reserved: 'The EV charger has been reserved for a future charging session',
+      Unavailable: 'The EV charger cannot start new charging sessions',
+      Faulted: 'The EV charger is reporting an error',
+      Unknown: 'Unknown Status', // Added a fallback for unexpected values
+  };
+
+  const evChargerStatusColorMap: { [key: string]: string } = {
+      Available: 'text-blue-400',
+      Preparing: 'text-blue-500',
+      Charging: 'text-green-500',
+      SuspendedEVSE: 'text-orange-500',
+      SuspendedEV: 'text-orange-500',
+      Finishing: 'text-red-600',
+  };
+
   const chargePowerLimitPresets = [6, 8.5, 10, 12, 16, 24, 32];
 
 
@@ -668,21 +690,24 @@ const EVChargerPage = () => {
   }, [evChargerData?.uuid, apiKey]);
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
-    const displayValue = value !== null && value !== undefined ? String(value) : "N/A";
+    if (value === null || value === undefined || value === '') {
+      return null; // Don't render rows with empty or null values
+    }
     return (
-      <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-b-0">
-        <div className="flex items-center">
-          {icon && React.cloneElement(icon as React.ReactElement, { className: "mr-2 h-4 w-4 text-muted-foreground" })}
-          <span className="text-sm text-muted-foreground">{label}:</span>
-        </div>
+      <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
+        {icon && <span className="mr-2 text-muted-foreground">{icon}</span>}
+        <span className="text-sm text-muted-foreground mr-2">{label}:</span>
         <span className="text-sm font-medium text-foreground">
-          {displayValue} {unit && displayValue !== "N/A" ? unit : ""}
+          {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+          {unit && <span className="ml-1 text-xs text-muted-foreground">{unit}</span>}
         </span>
       </div>
     );
   };
 
-  if (isLoadingApiKey || isLoadingEvData) {
+
+
+ if (isLoadingApiKey || isLoadingEvData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -814,15 +839,26 @@ const EVChargerPage = () => {
                   {/* Right Column: Charger Status */}
                   <div className="lg:col-span-1">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center"><Info className="mr-2 h-5 w-5"/>Charger Status</CardTitle>
-                            <CardDescription>Current status of your EV charger.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-1">
-                           {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
-                           {renderStatusValue("Online", evChargerData?.online, evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
-                           {renderStatusValue("Status", mapEVChargerAPIStatus(evChargerData?.status), <AlertCircle />)}
-                           {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
+ <CardHeader>
+ <CardTitle className="flex items-center"><Info className="mr-2 h-5 w-5"/>Charger Status</CardTitle>
+ {/* Replaced CardDescription with a div for more control */}
+ {evChargerData?.status && (
+ <div className="text-sm text-muted-foreground">
+ Status: <span className={`font-medium ${evChargerStatusColorMap[evChargerData.status] || 'text-foreground'}`}>
+ {mapEVChargerAPIStatus(evChargerData.status) || 'Unknown'}
+ </span> <span className="ml-1 text-xs">
+ {evChargerStatusMap[evChargerData.status] || 'No description available'}
+ </span>
+ </div>
+ )}
+ </CardHeader>
+ <CardContent className="space-y-1">
+ {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
+ {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
+ {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
+
+ {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
+
                            {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
                         </CardContent>
                     </Card>
