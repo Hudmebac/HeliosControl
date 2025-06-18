@@ -761,7 +761,7 @@ const EVChargerPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-6 pb-0 border-b border-border/50"> {/* Added pb-0 and border-b */}
                           <div className="space-y-1"> {/* Added space-y-1 for status rows */}
-                              {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
+                              {renderStatusValue("Charger", evChargerData?.alias, <FileText />)}
                               {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                               {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
                               {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
@@ -771,8 +771,7 @@ const EVChargerPage = () => {
                       {/* Instant Control Section */}
                       <CardHeader className="pt-6"> {/* Added pt-6 */}
                         <CardTitle className="flex items-center"><Power className="mr-2 h-5 w-5"/>Instant Control</CardTitle>
-                        <CardDescription>Real-time commands for your EV charger.</CardDescription>
-                      </CardHeader>
+                       </CardHeader>
                       <CardContent className="space-y-6 pt-0"> {/* Added pt-0 */}
                          {isLoadingCommandSettings ? (
                            <div className="flex justify-center items-center py-8">
