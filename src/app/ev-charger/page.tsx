@@ -404,6 +404,21 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
+
+    // Fetch the current status to check if it's an instant control session
+    await fetchEvChargerData(true); // Refresh data to get latest status
+
+    // Check if the current status indicates an instant control session.
+    // The exact status string might vary based on API documentation.
+    // Assuming 'INSTANT_CONTROL' or similar indicates an active instant session.
+    // You might need to adjust this check based on actual API responses.
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; // Replace with correct status if needed
+
+    if (!isInstantControl) {
+      toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
+      return;
+    }
+
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/adjust-charge-power-limit`, {
         method: 'POST',
