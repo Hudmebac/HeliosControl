@@ -706,16 +706,6 @@ const EVChargerPage = () => {
   };
 
 
-
- if (isLoadingApiKey || isLoadingEvData) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading EV Charger Details...</p>
-      </div>
-    );
-  }
-
   return (
     <>
       {isLoadingApiKey || isLoadingEvData ? (
@@ -757,22 +747,40 @@ const EVChargerPage = () => {
               </TabsList>
 
               <TabsContent value="overview">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Column: Instant Control */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">                 
+                 {/* Left Column: Combined Status and Instant Control */}
                   <div className="lg:col-span-2">
+                   {/* Combined Charger Status and Instant Control Card */}
                     <Card>
                       <CardHeader>
+                        <CardTitle className="flex items-center"><Info className="mr-2 h-5 w-5"/>Charger Status</CardTitle>
+                        {/* Replaced CardDescription with a div for more control */}
+                        {evChargerData?.status && evChargerData?.online && (
+                          <div className="text-sm text-muted-foreground">Status: <span className={`font-medium ${evChargerStatusColorMap[evChargerData.status] || 'text-foreground'}`}>{mapEVChargerAPIStatus(evChargerData.status) || 'Unknown'}</span> <span className="ml-1 text-xs">{evChargerStatusMap[evChargerData.status] || 'No description available'}</span></div>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-6 pb-0 border-b border-border/50"> {/* Added pb-0 and border-b */}
+                          <div className="space-y-1"> {/* Added space-y-1 for status rows */}
+                              {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
+                              {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
+                              {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
+                              {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
+                          </div>
+                      </CardContent>
+
+                      {/* Instant Control Section */}
+                      <CardHeader className="pt-6"> {/* Added pt-6 */}
                         <CardTitle className="flex items-center"><Power className="mr-2 h-5 w-5"/>Instant Control</CardTitle>
                         <CardDescription>Real-time commands for your EV charger.</CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-6">
-                        {isLoadingCommandSettings ? (
-                          <div className="flex justify-center items-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                            <p className="ml-2">Loading controls...</p>
-                          </div>
-                        ) : (
-                          <>
+                      <CardContent className="space-y-6 pt-0"> {/* Added pt-0 */}
+                         {isLoadingCommandSettings ? (
+                           <div className="flex justify-center items-center py-8">
+                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                             <p className="ml-2">Loading controls...</p>
+                           </div>
+                         ) : (
+                           <>
                             <div className="flex flex-col sm:flex-row gap-4">
                               <Button onClick={handleStartCharge} className="flex-1 bg-green-600 hover:bg-green-700 text-white">Start Charging</Button>
                               <Button onClick={handleStopCharge} className="flex-1 bg-red-600 hover:bg-red-700 text-white">Stop Charging</Button>
@@ -832,38 +840,14 @@ const EVChargerPage = () => {
                             </form>
                           </>
                         )}
-                      </CardContent>
-                    </Card>
+                      </CardContent> {/* This CardContent now contains the Instant Control section */}
+                    </Card> {/* End of the combined card */}
                   </div>
 
-                  {/* Right Column: Charger Status */}
-                  <div className="lg:col-span-1">
-                    <Card>
- <CardHeader>
- <CardTitle className="flex items-center"><Info className="mr-2 h-5 w-5"/>Charger Status</CardTitle>
- {/* Replaced CardDescription with a div for more control */}
- {evChargerData?.status && (
- <div className="text-sm text-muted-foreground">
- Status: <span className={`font-medium ${evChargerStatusColorMap[evChargerData.status] || 'text-foreground'}`}>
- {mapEVChargerAPIStatus(evChargerData.status) || 'Unknown'}
- </span> <span className="ml-1 text-xs">
- {evChargerStatusMap[evChargerData.status] || 'No description available'}
- </span>
+                 {/* Right Column: Device Information */}
+ <div className="lg:col-span-1"></div> {/* This column div needs content or can be removed if not needed */}
+
  </div>
- )}
- </CardHeader>
- <CardContent className="space-y-1">
- {renderStatusValue("Alias", evChargerData?.alias, <FileText />)}
- {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
- {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
-
- {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
-
-                           {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
-                        </CardContent>
-                    </Card>
-                  </div>
-                </div>
                  {/* Device Information Card (full width below columns) */}
                  <Card className="mt-6">
                     <CardHeader>
