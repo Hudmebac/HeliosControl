@@ -382,20 +382,49 @@ function getEVChargerCardDetails(
     }    
 
     const evChargerStatusMap: { [key: string]: string } = {
-        Available: 'Available',
-        Preparing: 'Preparing to Charge',
-        Charging: 'Charging',
-        SuspendedEVSE: 'Suspended (EVSE)',
-        SuspendedEV: 'Suspended (EV)',
-        Finishing: 'Finishing Charge',
-        Reserved: 'Reserved',
-        Unavailable: 'Unavailable',
-        Faulted: 'Faulted',
+        Available: 'The EV charger is not plugged in to a vehicle',
+        Preparing: 'The EV charger is plugged into a vehicle and is ready to start a charge',
+        Charging: 'The EV charger is charging the connected EV',
+        SuspendedEVSE: 'The charging session has been stopped by the EV charger',
+        SuspendedEV: 'The charging session has been stopped by the EV',
+        Finishing: 'The charging session has finished, but the EV charger is not ready to start a new charging session',
+        Reserved: 'The EV charger has been reserved for a future charging session',
+        Unavailable: 'The EV charger cannot start new charging sessions',
+        Faulted: 'The EV charger is reporting an error',
         Unknown: 'Unknown Status', // Added a fallback for unexpected values
+    };
+
+    const evChargerStatusColorMap: { [key: string]: string } = {
+        Available: 'text-blue-400',
+        Preparing: 'text-blue-500',
+        Charging: 'text-green-500',
+        SuspendedEVSE: 'text-orange-500',
+        SuspendedEV: 'text-orange-500',
+        Finishing: 'text-red-600',
+        Reserved: 'text-blue-500',
+        Unavailable: 'text-red-600',
+        Faulted: 'text-red-600',
+        Unknown: 'text-red-600', // Fallback color
     };
     
     const descriptionElements: React.ReactNode[] = [];
-    descriptionElements.push(<div key="status">{evData.status}</div>);
+    let statusText: string | React.ReactNode = 'Unknown Status';
+    let mappedDescription = 'Unknown Status';
+    
+    if (evData.rawStatus) {
+      statusText = evData.rawStatus;
+      mappedDescription = evChargerStatusMap[evData.rawStatus as keyof typeof evChargerStatusMap] || evData.rawStatus;
+    } else if (React.isValidElement(evData.status)) {
+      // Attempt to infer status from the ReactNode's children as a fallback
+      statusText = (evData.status.props.children as string) || 'Unknown Status';
+      mappedDescription = evChargerStatusMap[statusText as keyof typeof evChargerStatusMap] || statusText;
+    }
+
+    descriptionElements.push(
+      <p key="status" className={cn(evChargerStatusColorMap[evData.rawStatus as keyof typeof evChargerStatusColorMap] || 'text-muted-foreground')}>
+        {`${statusText} (${mappedDescription})`}
+      </p>
+    );
     if (typeof evData.dailyTotalKWh === 'number' && !isNaN(evData.dailyTotalKWh)) {
         descriptionElements.push(<div key="dailyTotal">{`Today's Energy: ${evData.dailyTotalKWh.toFixed(1)} kWh`}</div>);
     } else {
