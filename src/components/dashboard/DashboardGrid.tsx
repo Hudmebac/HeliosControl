@@ -263,12 +263,10 @@ function getBatteryCardDetails(
 
         descriptionElements.push(<div key="chargeHeader" className="font-semibold mt-2 pt-1 border-t border-border/50">Battery In Today:</div>);
         descriptionElements.push(<div key="s2b-detail" className="pl-2">{`Solar to Battery: ${solarToBatteryKWh.toFixed(2)} kWh`}</div>);
-        descriptionElements.push(<div key="g2b-detail" className="pl-2">{`Grid to Battery: ${gridToBatteryKWh.toFixed(2)} kWh`}</div>);
         descriptionElements.push(<div key="totalCharge-detail" className="pl-2 font-medium">{`Total Charged: ${batteryChargeTotalKWh.toFixed(2)} kWh`}</div>);
 
         descriptionElements.push(<div key="dischargeHeader" className="font-semibold mt-1 pt-1 border-t border-border/50">Battery Out Today:</div>);
         descriptionElements.push(<div key="b2h-detail" className="pl-2">{`Battery to Home: ${batteryToHomeKWh.toFixed(2)} kWh`}</div>);
-        descriptionElements.push(<div key="b2g-detail" className="pl-2">{`Battery to Grid: ${batteryToGridKWh.toFixed(2)} kWh`}</div>);
         descriptionElements.push(<div key="totalDischarge-detail" className="pl-2 font-medium">{`Total Discharged: ${batteryDischargeTotalKWh.toFixed(2)} kWh`}</div>);
     }
 
