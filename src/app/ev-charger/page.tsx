@@ -19,7 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
-import { format, parseISO, formatISO, subDays, parse as parseDate } from 'date-fns';
+import { format, parseISO, formatISO, subDays, parse as parseDate, differenceInMinutes } from 'date-fns';
 
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
@@ -30,15 +30,6 @@ const EVChargerPage = () => {
   const [isLoadingEvData, setIsLoadingEvData] = useState(true);
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
-
-  // State for new detailed analytics
-  const [detailedStartDate, setDetailedStartDate] = useState<Date | undefined>(subDays(new Date(), 7));
-  const [detailedEndDate, setDetailedEndDate] = useState<Date | undefined>(new Date());
-  const [detailedPowerData, setDetailedPowerData] = useState<Array<{ time: string; power: number }>>([]);
-  const [detailedEnergyIntervalData, setDetailedEnergyIntervalData] = useState<Array<{ time: string; energy: number }>>([]);
-  const [totalEnergyForPeriod, setTotalEnergyForPeriod] = useState<number | null>(null);
-  const [isLoadingDetailedAnalytics, setIsLoadingDetailedAnalytics] = useState(false);
-
 
   const [schedules, setSchedules] = useState<any[]>([]);
   const [settingsLegacy, setSettingsLegacy] = useState<any>({
@@ -347,91 +338,6 @@ const EVChargerPage = () => {
     }
   }, [apiKey, storedEvChargerId, getAuthHeaders, toast]);
 
-  const fetchDetailedAnalyticsData = useCallback(async (start: Date, end: Date) => {
-    if (!apiKey || !evChargerData?.uuid) {
-        toast({ variant: "destructive", title: "Missing Information", description: "API Key or EV Charger ID is missing." });
-        return;
-    }
-    setIsLoadingDetailedAnalytics(true);
-    setDetailedPowerData([]);
-    setDetailedEnergyIntervalData([]);
-    setTotalEnergyForPeriod(null);
-
-    const startTime = formatISO(start);
-    const endTime = formatISO(end);
-
-    try {
-        const headers = getAuthHeaders();
-        const response = await fetch(
-            `/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/meter-data?start_time=${startTime}&end_time=${endTime}&measurands[0]=13&measurands[1]=4&meter_ids[0]=0&pageSize=2016`,
-            { headers }
-        );
-
-        if (!response.ok) {
-            await handleApiError(response, 'fetching detailed EV analytics');
-            return;
-        }
-        const result = await response.json();
-
-        if (result && result.data && Array.isArray(result.data)) {
-            const rawDataPoints: Array<{ timestamp: string; measurements: Array<{ measurand: number; value: number | null; unit: number | null }> }> = result.data;
-
-            const powerData = rawDataPoints
-                .map(dp => {
-                    const powerMeasurement = dp.measurements.find(m => m.measurand === 13);
-                    return {
-                        timestamp: new Date(dp.timestamp),
-                        power: powerMeasurement && typeof powerMeasurement.value === 'number' ? powerMeasurement.value : 0,
-                    };
-                })
-                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
-                .map(dp => ({
-                    time: format(dp.timestamp, "HH:mm (MMM d)"),
-                    power: dp.power,
-                }));
-            setDetailedPowerData(powerData);
-
-            const cumulativeEnergyData = rawDataPoints
-                .map(dp => {
-                    const energyMeasurement = dp.measurements.find(m => m.measurand === 4);
-                    return {
-                        timestamp: new Date(dp.timestamp),
-                        cumulativeEnergy: energyMeasurement && typeof energyMeasurement.value === 'number' ? energyMeasurement.value : null,
-                    };
-                })
-                .filter(dp => dp.cumulativeEnergy !== null)
-                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-            const intervalEnergy = [];
-            let totalEnergy = 0;
-            if (cumulativeEnergyData.length > 0) {
-                for (let i = 1; i < cumulativeEnergyData.length; i++) {
-                    const energyDiff = cumulativeEnergyData[i].cumulativeEnergy! - cumulativeEnergyData[i - 1].cumulativeEnergy!;
-                    if (energyDiff >= 0) { // Ensure no negative energy consumption due to resets or bad data
-                        intervalEnergy.push({
-                            time: format(cumulativeEnergyData[i].timestamp, "HH:mm (MMM d)"),
-                            energy: parseFloat(energyDiff.toFixed(3)), // Store as kWh
-                        });
-                        totalEnergy += energyDiff;
-                    }
-                }
-            }
-            setDetailedEnergyIntervalData(intervalEnergy);
-            setTotalEnergyForPeriod(parseFloat(totalEnergy.toFixed(3)));
-            if (rawDataPoints.length === 0) {
-                toast({ title: "No Detailed Data", description: "No specific power or energy measurements found for the selected period." });
-            }
-
-        } else {
-            toast({ title: "No Data Structure", description: "Received an unexpected data structure from the API for detailed analytics." });
-        }
-    } catch (error) {
-        console.error('Error in fetchDetailedAnalyticsData:', error);
-        toast({ variant: "destructive", title: "Analytics Fetch Error", description: "Could not load detailed EV analytics data." });
-    } finally {
-        setIsLoadingDetailedAnalytics(false);
-    }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, handleApiError, toast]);
 
  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDate?: Date, endDate?: Date) => {
     if (!apiKey || !evChargerData?.uuid) return;
@@ -440,14 +346,12 @@ const EVChargerPage = () => {
         const headers = getAuthHeaders();
         const params = new URLSearchParams();
         params.append('page', String(page));
-        params.append('pageSize', '10'); // Fetch 10 sessions per page
+        params.append('pageSize', '10'); 
 
         if (startDate) {
-            // Format date as YYYY-MM-DD for the API
             params.append('start_time', formatISO(startDate, { representation: 'date' }));
         }
         if (endDate) {
-             // Format date as YYYY-MM-DD for the API
              params.append('end_time', formatISO(endDate, { representation: 'date' }));
         }
 
@@ -461,11 +365,9 @@ const EVChargerPage = () => {
         }
         const result = await response.json();
         if (result && result.data) {
-            // Sort data by started_at descending before setting/appending
             const sortedData = result.data.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
             setChargingSessionsData(prev => append ? [...prev, ...sortedData] : sortedData);
             setChargingSessionsPage(page);
-            // Check if there are more pages based on API metadata
             setHasMoreChargingSessions(result.data.length > 0 && result.meta && result.meta.current_page < result.meta.last_page);
         } else {
             setChargingSessionsData(append ? chargingSessionsData : []);
@@ -473,13 +375,13 @@ const EVChargerPage = () => {
         }
     } catch (error) {
         console.error('Error fetching charging sessions:', error);
-        setChargingSessionsData(append ? chargingSessionsData : []); // Reset on error or ensure it stays if appending
+        setChargingSessionsData(append ? chargingSessionsData : []); 
         setHasMoreChargingSessions(false);
         toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
     } finally {
         setIsLoadingChargingSessions(false);
     }
-}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]); // Added chargingSessionsData to deps for append logic stability
+}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]); 
 
 
   useEffect(() => {
@@ -500,13 +402,13 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
-        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate) // Initial fetch for sessions
+        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate) 
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey]); // Removed specific fetch functions from deps as they are stable callbacks
+  }, [evChargerData?.uuid, apiKey]); 
 
 
   const handleStartCharge = async () => {
@@ -559,14 +461,11 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    // Refetch EV charger data to ensure `status` is current before checking control type
     await fetchEvChargerData(true); 
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; // Example status, adjust if API uses a different value
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; 
 
     if (!isInstantControl) {
       toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
-      // It might be useful to fetch current charge power limit again here to ensure UI consistency
-      // fetchCurrentChargePowerLimit(evChargerData.uuid); 
       return;
     }
 
@@ -620,7 +519,7 @@ const EVChargerPage = () => {
     event.preventDefault();
     if (!apiKey || !evChargerData?.uuid) return;
     const limitValue = parseFloat(inputSessionEnergyLimit);
-    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) { // Assuming API has these limits
+    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) { 
         toast({ variant: "destructive", title: "Invalid Input", description: "Session energy limit must be between 0.1 and 250 kWh." });
         return;
     }
@@ -648,25 +547,19 @@ const EVChargerPage = () => {
 
   const handleToggleSolarCharging = async (checked: boolean) => {
     if (!apiKey || !inverterSerial) return;
-    // Optimistically update UI
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, solarCharging: checked }));
     try {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 2 : 0 }), // Example values, confirm actual API needs
+        body: JSON.stringify({ value: checked ? 2 : 0 }), 
       });
       if (!response.ok) {
         await handleApiError(response, 'toggling solar charging');
-        // Optionally revert optimistic update on error
-        // setSettingsLegacy(prevSettings => ({ ...prevSettings, solarCharging: !checked }));
         return;
       }
-      // fetchEvChargerData(true); // Or a more specific settings refetch if available
       toast({title: "Solar Charging Setting Updated"});
     } catch (error) {
-      // Optionally revert optimistic update on error
-      // setSettingsLegacy(prevSettings => ({ ...prevSettings, solarCharging: !checked }));
       toast({ variant: "destructive", title: "Solar Charging Error", description: "An unexpected error occurred." });
     }
   };
@@ -684,7 +577,6 @@ const EVChargerPage = () => {
          await handleApiError(response, 'toggling plug and charge (settings)');
         return;
       }
-      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Plug & Charge Setting (Register) Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
@@ -693,19 +585,17 @@ const EVChargerPage = () => {
 
   const handleSetMaxBatteryDischargeToEvc = async (value: number[]) => {
      if (!apiKey || !inverterSerial) return;
-    // Update UI optimistically if desired, or wait for commit
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] * 1000 }));
     try {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] * 1000 }), // Assuming API expects Watts
+        body: JSON.stringify({ value: value[0] * 1000 }), 
       });
       if (!response.ok) {
         await handleApiError(response, 'setting max battery discharge');
         return;
       }
-      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Battery Discharge to EVC Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Battery Discharge Error", description: "An unexpected error occurred." });
@@ -725,12 +615,11 @@ const EVChargerPage = () => {
         await handleApiError(response, 'setting charge rate (settings)');
         return;
       }
-      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Charge Rate Limit (Register) Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
     }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]); // Removed fetchEvChargerData from deps as it's stable
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]); 
 
   const handleAddSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -739,22 +628,18 @@ const EVChargerPage = () => {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const scheduleName = formData.get('scheduleName') as string;
-    const startTime = formData.get('startTime') as string; // "HH:mm"
-    const endTime = formData.get('endTime') as string;   // "HH:mm"
-    const daysSelected = Array.from(formData.getAll('days')) as string[]; // e.g., ["Mon", "Tue"]
+    const startTime = formData.get('startTime') as string; 
+    const endTime = formData.get('endTime') as string;   
+    const daysSelected = Array.from(formData.getAll('days')) as string[]; 
 
-    // API expects days as a comma-separated string, e.g., "Mon,Tue,Wed"
-    // Example: "start_time":"00:30","end_time":"04:30","days":"Mon,Tue,Wed,Thu,Fri,Sat,Sun"
     const payload = {
-      name: scheduleName || "Unnamed Schedule", // API might require a name, or have a default
-      active: true, // Assuming new schedules should be active
-      // The structure for rules might be an array if multiple rules per schedule are supported by API.
-      // For now, assuming one rule per "named" schedule from this form.
+      name: scheduleName || "Unnamed Schedule", 
+      active: true, 
       rules: [
         {
           start_time: startTime,
           end_time: endTime,
-          days: daysSelected.join(','), // Convert array to comma-separated string
+          days: daysSelected.join(','), 
         }
       ]
     };
@@ -772,7 +657,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data && data.data && data.data.success) {
         toast({ title: "Schedule Updated", description: data.data.message || "Schedule command accepted." });
-        fetchSchedules(evChargerData.uuid); // Refetch schedules to update the list
+        fetchSchedules(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Schedule Update Not Confirmed", description: data?.data?.message || data?.error || "Command sent, but success not confirmed." });
       }
@@ -788,7 +673,7 @@ const EVChargerPage = () => {
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
     if (value === null || value === undefined || value === '') {
-      return null; // Don't render if value is not meaningful
+      return null; 
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -801,6 +686,33 @@ const EVChargerPage = () => {
       </div>
     );
   };
+
+  const chartSessionData = React.useMemo(() => {
+    return chargingSessionsData
+      .map(session => {
+        let energyKWh = 0;
+        if (typeof session.kwh_delivered === 'number') {
+          energyKWh = parseFloat(session.kwh_delivered.toFixed(2));
+        } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
+          const energyWh = session.meter_stop - session.meter_start;
+          energyKWh = parseFloat((energyWh / 1000).toFixed(2));
+        }
+
+        let durationMinutes = 0;
+        if (session.started_at && session.stopped_at) {
+            durationMinutes = differenceInMinutes(parseISO(session.stopped_at), parseISO(session.started_at));
+        }
+
+        return {
+          formattedStartTime: session.started_at ? format(parseISO(session.started_at), "MMM d, HH:mm") : 'N/A',
+          energyKWh: energyKWh,
+          durationMinutes: durationMinutes > 0 ? durationMinutes : null, // only include if valid duration
+          stopReason: session.stop_reason || (session.stopped_at ? 'Completed' : 'Active'),
+        };
+      })
+      .filter(item => item.energyKWh > 0) // Only show sessions with some energy delivered
+      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(a.formattedStartTime).getTime() - new Date(b.formattedStartTime).getTime()); // Sort chronologically for chart
+  }, [chargingSessionsData]);
 
 
   return (
@@ -1000,114 +912,9 @@ const EVChargerPage = () => {
 
               <TabsContent value="analytics">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Detailed EV Charger Analytics</CardTitle>
-                    <CardDescription>Analyze historical power and energy consumption for your EV charger.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-end">
-                      <div className="space-y-1">
-                        <Label htmlFor="detailed-start-date">Start Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button id="detailed-start-date" variant="outline" className="w-full justify-start text-left font-normal">
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formatDateForDisplay(detailedStartDate)}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={detailedStartDate} onSelect={setDetailedStartDate} initialFocus disabled={(date) => detailedEndDate ? date > detailedEndDate : false} />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="detailed-end-date">End Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button id="detailed-end-date" variant="outline" className="w-full justify-start text-left font-normal">
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formatDateForDisplay(detailedEndDate)}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={detailedEndDate} onSelect={setDetailedEndDate} initialFocus disabled={(date) => detailedStartDate ? date < detailedStartDate : false} />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <Button
-                        onClick={() => {
-                          if (detailedStartDate && detailedEndDate) {
-                            fetchDetailedAnalyticsData(detailedStartDate, detailedEndDate);
-                          } else {
-                            toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
-                          }
-                        }}
-                        disabled={isLoadingDetailedAnalytics || !detailedStartDate || !detailedEndDate}
-                        className="w-full md:w-auto"
-                      >
-                        {isLoadingDetailedAnalytics ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch Detailed Data"}
-                      </Button>
-                    </div>
-
-                    {isLoadingDetailedAnalytics && (
-                        <div className="flex justify-center items-center h-[300px]">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <p className="ml-2">Loading detailed analytics...</p>
-                        </div>
-                    )}
-
-                    {!isLoadingDetailedAnalytics && detailedPowerData.length > 0 && (
-                      <>
-                        <h3 className="text-lg font-semibold mt-6 mb-2">Power Consumption Over Time</h3>
-                        <div className="h-[300px] mb-6">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={detailedPowerData}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="time" />
-                              <YAxis label={{ value: 'Power (W)', angle: -90, position: 'insideLeft' }} />
-                              <Tooltip formatter={(value: number) => [`${value} W`, "Power"]} />
-                              <Legend />
-                              <Area type="monotone" dataKey="power" stroke={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "#000000"} fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "#000000"} fillOpacity={0.3} name="Charging Power" unit="W" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </>
-                    )}
-
-                    {!isLoadingDetailedAnalytics && detailedEnergyIntervalData.length > 0 && (
-                      <>
-                        <h3 className="text-lg font-semibold mt-6 mb-2">Energy Consumed Per Interval</h3>
-                         <div className="h-[300px] mb-6">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={detailedEnergyIntervalData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="time" />
-                                <YAxis label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} allowDecimals={true} />
-                                <Tooltip formatter={(value: number) => [`${value.toFixed(3)} kWh`, "Energy"]} />
-                                <Legend />
-                                <Bar dataKey="energy" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--accent))" : "hsl(var(--secondary))"} name="Energy Consumed" unit="kWh" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </>
-                    )}
-
-                    {!isLoadingDetailedAnalytics && totalEnergyForPeriod !== null && (
-                        <p className="text-md font-semibold text-center mt-4">
-                            Total Energy Consumed in Period: {totalEnergyForPeriod.toFixed(3)} kWh
-                        </p>
-                    )}
-
-                    {!isLoadingDetailedAnalytics && detailedPowerData.length === 0 && detailedEnergyIntervalData.length === 0 && (
-                        <p className="text-center text-muted-foreground py-4">No detailed analytics data to display for the selected period. Try fetching data.</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="mt-6">
                     <CardHeader>
-                        <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History</CardTitle>
-                        <CardDescription>Review past charging sessions. Filter by date.</CardDescription>
+                        <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History & Analysis</CardTitle>
+                        <CardDescription>Review past charging sessions and visualize energy usage. Filter by date.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSessionSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-end">
@@ -1139,8 +946,9 @@ const EVChargerPage = () => {
                                 </PopoverContent>
                                 </Popover>
                             </div>
-                            <Button type="submit" className="w-full md:w-auto">
-                                <ListFilter className="mr-2 h-4 w-4" /> Search Sessions
+                            <Button type="submit" className="w-full md:w-auto" disabled={isLoadingChargingSessions}>
+                                {isLoadingChargingSessions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListFilter className="mr-2 h-4 w-4" />}
+                                Search Sessions
                             </Button>
                         </form>
                         {isLoadingChargingSessions && chargingSessionsData.length === 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
@@ -1179,12 +987,66 @@ const EVChargerPage = () => {
                                 </Table>
                                 {hasMoreChargingSessions && !isLoadingChargingSessions && (
                                     <div className="mt-4 text-center">
-                                        <Button onClick={() => fetchChargingSessions(chargingSessionsPage + 1, true, sessionFilterStartDate, sessionFilterEndDate)}>
-                                            Load More
+                                        <Button onClick={() => fetchChargingSessions(chargingSessionsPage + 1, true, sessionFilterStartDate, sessionFilterEndDate)} disabled={isLoadingChargingSessions}>
+                                            {isLoadingChargingSessions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Load More"}
                                         </Button>
                                     </div>
                                 )}
                                 {isLoadingChargingSessions && chargingSessionsData.length > 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
+
+                                {/* New Charts Section */}
+                                {!isLoadingChargingSessions && chartSessionData.length > 0 && (
+                                  <div className="mt-8 space-y-8">
+                                    <div>
+                                      <h3 className="text-lg font-semibold mb-2 text-center">Energy Delivered per Session</h3>
+                                      <div className="h-[350px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <BarChart data={chartSessionData} margin={{ top: 5, right: 20, left: 10, bottom: 40 }}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis 
+                                              dataKey="formattedStartTime" 
+                                              angle={-45} 
+                                              textAnchor="end" 
+                                              height={80} 
+                                              interval={chartSessionData.length > 20 ? 'preserveStartEnd' : 0} // Reduce labels if too many
+                                            />
+                                            <YAxis label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} allowDecimals={true} />
+                                            <Tooltip formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Energy Delivered"]} />
+                                            <Legend />
+                                            <Bar dataKey="energyKWh" name="Energy Delivered" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "hsl(var(--primary))"} />
+                                          </BarChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                    </div>
+                                    
+                                    {chartSessionData.some(d => d.durationMinutes !== null) && (
+                                    <div>
+                                      <h3 className="text-lg font-semibold mb-2 text-center">Session Duration</h3>
+                                      <div className="h-[350px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <BarChart data={chartSessionData.filter(d => d.durationMinutes !== null)} margin={{ top: 5, right: 20, left: 10, bottom: 40 }}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                             <XAxis 
+                                              dataKey="formattedStartTime" 
+                                              angle={-45} 
+                                              textAnchor="end" 
+                                              height={80} 
+                                              interval={chartSessionData.filter(d => d.durationMinutes !== null).length > 20 ? 'preserveStartEnd' : 0}
+                                            />
+                                            <YAxis label={{ value: 'Duration (minutes)', angle: -90, position: 'insideLeft' }} />
+                                            <Tooltip formatter={(value: number) => [`${value} min`, "Duration"]} />
+                                            <Legend />
+                                            <Bar dataKey="durationMinutes" name="Session Duration" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--accent))" : "hsl(var(--secondary))"} />
+                                          </BarChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                    </div>
+                                    )}
+
+                                  </div>
+                                )}
+
+
                             </>
                         ) : (!isLoadingChargingSessions && <p className="text-center text-muted-foreground py-4">No charging sessions found for the selected criteria.</p>)}
                     </CardContent>
@@ -1234,11 +1096,11 @@ const EVChargerPage = () => {
                           <Slider
                             id="max-battery-discharge-evc"
                             min={0}
-                            max={7} // Example max, adjust as needed
+                            max={7} 
                             step={0.1}
                             value={[settingsLegacy.maxBatteryDischargeToEvc / 1000]}
-                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))} // Live update for visual feedback
-                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])} // API call on release
+                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))} 
+                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])} 
                             disabled={!inverterSerial}
                           />
                           <p className="text-sm text-muted-foreground mt-1">
@@ -1250,8 +1112,8 @@ const EVChargerPage = () => {
                             <Label htmlFor="charge-rate-limit-settings">Charge Rate Limit (Amps - Register 621)</Label>
                             <Slider
                                 id="charge-rate-limit-settings"
-                                min={6} // Typical minimum
-                                max={32} // Typical maximum
+                                min={6} 
+                                max={32} 
                                 step={1}
                                 value={[settingsLegacy.chargeRate]}
                                 onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, chargeRate: value[0]}))}
@@ -1275,3 +1137,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
