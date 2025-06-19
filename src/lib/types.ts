@@ -227,3 +227,18 @@ export interface RawMeterDataLatest {
 }
 export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
 
+// New type for historical energy data points
+export interface HistoricalEnergyDataPoint {
+  date: string; // YYYY-MM-DD
+  solarGeneration: number; // kWh
+  gridImport: number; // kWh
+  gridExport: number; // kWh
+  batteryCharge: number; // kWh
+  batteryDischarge: number; // kWh
+  consumption: number; // kWh
+  solarToHome: number; // kWh
+  solarToBattery: number; // kWh
+  solarToGrid: number; // kWh
+  batteryToHome: number; // kWh
+  gridToHome: number; // kWh
+}
