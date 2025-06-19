@@ -57,7 +57,7 @@ const EVChargerPage = () => {
 
   // New filter states for session history
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(false);
+  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(true); // Default to true
   const [uniqueSessionStatuses, setUniqueSessionStatuses] = useState<string[]>([]);
 
 
@@ -712,7 +712,7 @@ const EVChargerPage = () => {
         if (!hideNaEnergy) return true;
         let energyDisplay = "N/A";
         if (typeof session.kwh_delivered === 'number') {
-            energyDisplay = (session.kwh_delivered / 1000).toFixed(2); // Convert Wh to kWh if kwh_delivered is in Wh
+            energyDisplay = (session.kwh_delivered).toFixed(2); // Assuming kwh_delivered is already in kWh
         } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
             const energyWh = session.meter_stop - session.meter_start;
             if (energyWh > 0) {
