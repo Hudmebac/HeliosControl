@@ -60,8 +60,8 @@ const EVChargerPage = () => {
   const [isLoadingChargingSessions, setIsLoadingChargingSessions] = useState(false);
   const [chargingSessionsPage, setChargingSessionsPage] = useState(1);
   const [hasMoreChargingSessions, setHasMoreChargingSessions] = useState(true);
-  const [sessionFilterStartDate, setSessionFilterStartDate] = useState<string>(""); // Input as DD/MM/YYYY
-  const [sessionFilterEndDate, setSessionFilterEndDate] = useState<string>("");   // Input as DD/MM/YYYY
+  const [sessionFilterStartDate, setSessionFilterStartDate] = useState<Date | undefined>(subDays(new Date(), 1));
+  const [sessionFilterEndDate, setSessionFilterEndDate] = useState<Date | undefined>(new Date());
 
   const evChargerStatusMap: { [key: string]: string } = {
       Available: 'The EV charger is not plugged in to a vehicle',
@@ -433,7 +433,7 @@ const EVChargerPage = () => {
     }
   }, [apiKey, evChargerData?.uuid, getAuthHeaders, handleApiError, toast]);
 
-  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDateStr?: string, endDateStr?: string) => {
+ const fetchChargingSessions = useCallback(async (page = 1, append = false, startDate?: Date, endDate?: Date) => {
     if (!apiKey || !evChargerData?.uuid) return;
     setIsLoadingChargingSessions(true);
     try {
@@ -442,25 +442,11 @@ const EVChargerPage = () => {
         params.append('page', String(page));
         params.append('pageSize', '10');
 
-        if (startDateStr) {
-            try {
-                const parsedStartDate = parseDate(startDateStr, 'dd/MM/yyyy', new Date());
-                if (!isNaN(parsedStartDate.valueOf())) {
-                    params.append('start_time', formatISO(parsedStartDate, { representation: 'date' }));
-                } else {
-                    console.warn("Invalid start date format for session filter:", startDateStr);
-                }
-            } catch (e) { console.warn("Error parsing start date for session filter:", startDateStr, e); }
+        if (startDate) {
+            params.append('start_time', formatISO(startDate, { representation: 'date' }));
         }
-        if (endDateStr) {
-            try {
-                const parsedEndDate = parseDate(endDateStr, 'dd/MM/yyyy', new Date());
-                 if (!isNaN(parsedEndDate.valueOf())) {
-                    params.append('end_time', formatISO(parsedEndDate, { representation: 'date' }));
-                } else {
-                     console.warn("Invalid end date format for session filter:", endDateStr);
-                }
-            } catch (e) { console.warn("Error parsing end date for session filter:", endDateStr, e); }
+        if (endDate) {
+             params.append('end_time', formatISO(endDate, { representation: 'date' }));
         }
 
         const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/charging-sessions?${params.toString()}`, { headers });
@@ -510,7 +496,7 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
-        fetchChargingSessions(1, false) // Fetch initial charging sessions
+        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate)
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
@@ -1098,14 +1084,40 @@ const EVChargerPage = () => {
                 <Card className="mt-6">
                     <CardHeader>
                         <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History</CardTitle>
-                        <CardDescription>Review past charging sessions. Filter by date (DD/MM/YYYY).</CardDescription>
+                        <CardDescription>Review past charging sessions. Filter by date.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSessionSearch} className="flex flex-col sm:flex-row gap-2 mb-4">
-                            <Input type="text" value={sessionFilterStartDate} onChange={(e) => setSessionFilterStartDate(e.target.value)} placeholder="Start Date (DD/MM/YYYY)" className="flex-1"/>
-                            <Input type="text" value={sessionFilterEndDate} onChange={(e) => setSessionFilterEndDate(e.target.value)} placeholder="End Date (DD/MM/YYYY)" className="flex-1"/>
-                            <Button type="submit" className="flex-shrink-0">
-                                <ListFilter className="mr-2 h-4 w-4" /> Search
+                        <form onSubmit={handleSessionSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-end">
+                            <div className="space-y-1">
+                                <Label htmlFor="session-start-date">Start Date</Label>
+                                <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="session-start-date" variant="outline" className="w-full justify-start text-left font-normal">
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formatDateForDisplay(sessionFilterStartDate)}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={sessionFilterStartDate} onSelect={setSessionFilterStartDate} initialFocus disabled={(date) => sessionFilterEndDate ? date > sessionFilterEndDate : false}/>
+                                </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="session-end-date">End Date</Label>
+                                <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="session-end-date" variant="outline" className="w-full justify-start text-left font-normal">
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formatDateForDisplay(sessionFilterEndDate)}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={sessionFilterEndDate} onSelect={setSessionFilterEndDate} initialFocus disabled={(date) => sessionFilterStartDate ? date < sessionFilterStartDate : false} />
+                                </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button type="submit" className="w-full md:w-auto">
+                                <ListFilter className="mr-2 h-4 w-4" /> Search Sessions
                             </Button>
                         </form>
                         {isLoadingChargingSessions && chargingSessionsData.length === 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
@@ -1235,4 +1247,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
