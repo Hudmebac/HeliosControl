@@ -513,17 +513,34 @@ export async function getHistoricalEnergyData(
   
   console.log("[History] Raw API response from energy-flows:", JSON.stringify(apiResponse, null, 2));
 
-  if (!apiResponse || !apiResponse.data || !Array.isArray(apiResponse.data)) {
+  if (!apiResponse || typeof apiResponse.data === 'undefined') {
     console.warn(
-      "[History] Historical energy flows API returned unexpected data structure or no data array.",
-      "apiResponse.data type:", typeof apiResponse?.data,
-      "Is Array:", Array.isArray(apiResponse?.data)
+      "[History] Historical energy flows API returned a malformed response or apiResponse.data is undefined.",
+      "apiResponse:", apiResponse
     );
+    return [];
+  }
+
+  if (!Array.isArray(apiResponse.data)) {
+    const dataType = typeof apiResponse.data;
+    const isObject = dataType === 'object' && apiResponse.data !== null;
+    const isEmptyObject = isObject && Object.keys(apiResponse.data).length === 0;
+
+    if (isEmptyObject) {
+      console.log(
+        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. Interpreting as no data.`
+      );
+    } else {
+      console.warn(
+        `[History] Historical energy flows API returned 'data' field that is not an array (type: ${dataType}). Interpreting as no data. Value:`, 
+        JSON.stringify(apiResponse.data, null, 2)
+      );
+    }
     return [];
   }
   
   if (apiResponse.data.length === 0) {
-    console.log("[History] API returned an empty data array for the selected range and grouping.");
+    console.log(`[History] API returned an empty 'data' array for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}, indicating no energy flow entries.`);
   }
   
   return apiResponse.data.map(dailyEntry => {
@@ -543,14 +560,12 @@ export async function getHistoricalEnergyData(
     const totalBatteryDischarge = batteryToHome + batteryToGrid; // Sum of battery to home and battery to grid
     const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
     
-    // The start_time from the API represents the beginning of the period (day, week, month, year)
-    // For weekly, monthly, yearly, it's the first day of that period.
     const parsedDate = parseISO(dailyEntry.start_time.split('T')[0]);
     const formattedDate = format(parsedDate, "yyyy-MM-dd");
 
 
     return {
-      date: formattedDate, // This will be the start_time of the period
+      date: formattedDate, 
       solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
       gridImport: parseFloat(totalGridImport.toFixed(2)),
       gridExport: parseFloat(totalGridExport.toFixed(2)),
@@ -565,6 +580,7 @@ export async function getHistoricalEnergyData(
     };
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
+
 
 
 
