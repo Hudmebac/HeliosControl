@@ -741,6 +741,7 @@ const EVChargerPage = () => {
         }
 
         return {
+          id: session.id || session.started_at, // Add a unique key
           formattedStartTime: session.started_at ? format(parseISO(session.started_at), "MMM d, HH:mm") : 'N/A',
           energyKWh: energyKWh,
           durationMinutes: durationMinutes > 0 ? durationMinutes : null, 
@@ -1030,7 +1031,7 @@ const EVChargerPage = () => {
                                                 energyDisplay = session.kwh_delivered.toFixed(2);
                                             } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
                                                 const energyWh = session.meter_stop - session.meter_start;
-                                                 if (energyWh > 0) { // Only display if positive energy
+                                                 if (energyWh > 0) { 
                                                     const energyKWh = energyWh / 1000;
                                                     energyDisplay = energyKWh.toFixed(2);
                                                 }
@@ -1061,21 +1062,31 @@ const EVChargerPage = () => {
                                   <div className="mt-8 space-y-8">
                                     <div>
                                       <h3 className="text-lg font-semibold mb-2 text-center">Energy Delivered per Session</h3>
-                                      <div className="h-[350px]">
+                                      <div className="h-[400px] md:h-[450px]">
                                         <ResponsiveContainer width="100%" height="100%">
-                                          <BarChart data={chartSessionData} margin={{ top: 5, right: 20, left: 10, bottom: 40 }}>
+                                          <BarChart data={chartSessionData} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis 
                                               dataKey="formattedStartTime" 
                                               angle={-45} 
                                               textAnchor="end" 
                                               height={80} 
-                                              interval={chartSessionData.length > 20 ? 'preserveStartEnd' : 0} 
+                                              interval={chartSessionData.length > 15 ? 'preserveStartEnd' : 0} 
+                                              tick={{ fontSize: 12 }}
                                             />
-                                            <YAxis label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} allowDecimals={true} />
-                                            <Tooltip formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Energy Delivered"]} />
-                                            <Legend />
-                                            <Bar dataKey="energyKWh" name="Energy Delivered" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "hsl(var(--primary))"} />
+                                            <YAxis 
+                                              label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft', dy: 40 }} 
+                                              allowDecimals={true}
+                                              tick={{ fontSize: 12 }}
+                                            />
+                                            <Tooltip 
+                                              formatter={(value: number, name: string, props: any) => {
+                                                const sessionStatus = props.payload.stopReason;
+                                                return [`${value.toFixed(2)} kWh (Status: ${sessionStatus})`, "Energy Delivered"];
+                                              }} 
+                                            />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="energyKWh" name="Energy Delivered" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "hsl(var(--primary))"} radius={[4, 4, 0, 0]} />
                                           </BarChart>
                                         </ResponsiveContainer>
                                       </div>
@@ -1084,21 +1095,30 @@ const EVChargerPage = () => {
                                     {chartSessionData.some(d => d.durationMinutes !== null) && (
                                     <div>
                                       <h3 className="text-lg font-semibold mb-2 text-center">Session Duration</h3>
-                                      <div className="h-[350px]">
+                                      <div className="h-[400px] md:h-[450px]">
                                         <ResponsiveContainer width="100%" height="100%">
-                                          <BarChart data={chartSessionData.filter(d => d.durationMinutes !== null)} margin={{ top: 5, right: 20, left: 10, bottom: 40 }}>
+                                          <BarChart data={chartSessionData.filter(d => d.durationMinutes !== null)} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                              <XAxis 
                                               dataKey="formattedStartTime" 
                                               angle={-45} 
                                               textAnchor="end" 
                                               height={80} 
-                                              interval={chartSessionData.filter(d => d.durationMinutes !== null).length > 20 ? 'preserveStartEnd' : 0}
+                                              interval={chartSessionData.filter(d => d.durationMinutes !== null).length > 15 ? 'preserveStartEnd' : 0}
+                                              tick={{ fontSize: 12 }}
                                             />
-                                            <YAxis label={{ value: 'Duration (minutes)', angle: -90, position: 'insideLeft' }} />
-                                            <Tooltip formatter={(value: number) => [`${value} min`, "Duration"]} />
-                                            <Legend />
-                                            <Bar dataKey="durationMinutes" name="Session Duration" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--accent))" : "hsl(var(--secondary))"} />
+                                            <YAxis 
+                                              label={{ value: 'Duration (minutes)', angle: -90, position: 'insideLeft', dy: 50 }}
+                                              tick={{ fontSize: 12 }}
+                                            />
+                                            <Tooltip 
+                                              formatter={(value: number, name: string, props: any) => {
+                                                  const energyVal = props.payload.energyKWh;
+                                                  return [`${value} min (Energy: ${energyVal.toFixed(2)} kWh)`, "Duration"];
+                                              }}
+                                            />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="durationMinutes" name="Session Duration" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--chart-2))" : "hsl(var(--chart-3))"} radius={[4, 4, 0, 0]} />
                                           </BarChart>
                                         </ResponsiveContainer>
                                       </div>
@@ -1197,3 +1217,5 @@ const EVChargerPage = () => {
 
 export default EVChargerPage;
 
+
+    
