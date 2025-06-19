@@ -201,20 +201,20 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
 
           {/* Icons and their primary labels */}
           <Sun x={centerX - iconOffset} y={nodeSolarY - iconOffset} className="h-8 w-8 text-yellow-500" />
-          <text x={centerX} y={nodeSolarY + iconOffset + 5} className="flow-text">{formatPowerForDisplay(solarGenerationWatts)}</text>
-          <text x={centerX} y={nodeSolarY + iconOffset + 18} className="fill-current text-xs text-muted-foreground">Solar</text>
+          <text x={centerX} y={nodeSolarY + iconOffset - 30} className="flow-text">{formatPowerForDisplay(solarGenerationWatts)}</text>
+          <text x={centerX} y={nodeSolarY + iconOffset + 25} className="fill-current text-xs text-muted-foreground"></text>
 
           <Home x={centerX - iconOffset} y={nodeHomeY - iconOffset} className="h-8 w-8 text-primary" />
-          <text x={centerX} y={nodeHomeY + iconOffset + 5} className="flow-text">{formatPowerForDisplay(homeConsumptionWatts)}</text>
-          <text x={centerX} y={nodeHomeY + iconOffset + 18} className="fill-current text-xs text-muted-foreground">Home</text>
+          <text x={centerX} y={nodeHomeY + iconOffset + 10} className="flow-text">{formatPowerForDisplay(homeConsumptionWatts)}</text>
+          <text x={centerX} y={nodeHomeY + iconOffset + 25} className="fill-current text-xs text-muted-foreground"></text>
 
           <g transform={`translate(${nodeBatteryX - iconOffset}, ${nodeHomeY - iconOffset})`}>{getBatteryIconSized("h-8 w-8")}</g>
-          <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 5} className="flow-text">{batteryNodePowerText}</text>
-          <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 18} className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text>
+          <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 10} className="flow-text">{batteryNodePowerText}</text>
+          <text x={nodeBatteryX} y={nodeHomeY + iconOffset + 25} className="fill-current text-xs text-muted-foreground">{batteryIsCharging ? "Charging" : batteryIsDischarging ? "Discharging" : "Idle"}</text>
 
           <Power x={nodeGridX - iconOffset} y={nodeHomeY - iconOffset} className={cn("h-8 w-8", gridIsImporting ? "text-red-500" : gridIsExporting ? "text-green-500" : "text-muted-foreground")} />
-          <text x={nodeGridX} y={nodeHomeY + iconOffset + 5} className="flow-text">{gridNodePowerText}</text>
-          <text x={nodeGridX} y={nodeHomeY + iconOffset + 18} className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text>
+          <text x={nodeGridX} y={nodeHomeY + iconOffset + 10} className="flow-text">{gridNodePowerText}</text>
+          <text x={nodeGridX} y={nodeHomeY + iconOffset + 25} className="fill-current text-xs text-muted-foreground">{gridIsImporting ? "Import" : gridIsExporting ? "Export" : "Idle"}</text>
 
           {/* EV Charger Icon and text removed */}
           {/* <Car x={nodeEVX - iconOffset} y={nodeEVY - iconOffset} className={cn("h-8 w-8", evChargerPowerWatts > THRESHOLD_WATTS ? "text-green-500" : "text-muted-foreground")} />
@@ -224,7 +224,7 @@ export function EnergyFlowVisual({ data }: EnergyFlowVisualProps) {
           {/* Flow Lines and their power value labels */}
           {isSolarToHome && (<>
             <path d={`M ${centerX} ${nodeSolarY + iconOffset} L ${centerX} ${nodeHomeY - iconOffset}`} className="stroke-green-500 fill-none" strokeWidth="2.5" markerEnd="url(#arrowhead-green)" />
-            <text x={centerX + 35} y={(nodeSolarY + nodeHomeY) / 2} className="flow-text">{formatPowerForDisplay(solarToHomeW)}</text>
+            <text x={centerX + 20} y={(nodeSolarY + nodeHomeY) / 2} className="flow-text">{formatPowerForDisplay(solarToHomeW)}</text>
           </>)}
 
           {isSolarToBattery && (<>
