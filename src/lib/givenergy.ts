@@ -508,8 +508,8 @@ export async function getHistoricalEnergyData(
     }),
   });
 
-  if (!apiResponse.data) {
-    console.warn("Historical energy flows API returned no data structure for the given range.");
+  if (!apiResponse || !Array.isArray(apiResponse.data)) {
+    console.warn("Historical energy flows API returned unexpected data structure or no data array for the given range. API Response:", apiResponse);
     return [];
   }
   
@@ -530,9 +530,7 @@ export async function getHistoricalEnergyData(
     const totalBatteryDischarge = batteryToHome + batteryToGrid;
     const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
     
-    // Ensure date string from API (dailyEntry.start_time might be just YYYY-MM-DD)
-    // is parsed correctly, and reformat for consistency.
-    const parsedDate = parseISO(dailyEntry.start_time.split('T')[0]); // Take only date part
+    const parsedDate = parseISO(dailyEntry.start_time.split('T')[0]);
     const formattedDate = format(parsedDate, "yyyy-MM-dd");
 
 
@@ -550,5 +548,6 @@ export async function getHistoricalEnergyData(
       batteryToHome: parseFloat(batteryToHome.toFixed(2)),
       gridToHome: parseFloat(gridToHome.toFixed(2)),
     };
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort by date ascending
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
+
