@@ -326,21 +326,21 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       body: JSON.stringify({
         start_time: today,
         end_time: today,
-        grouping: 1, 
-        types: [0, 1, 2, 3, 4, 5, 6], 
+        grouping: 1, // Daily grouping for these summary flows
+        // types: [0, 1, 2, 3, 4, 5, 6], // Omitted to fetch all types by default
       }),
     });
 
-    if (energyFlowsResponse.data && energyFlowsResponse.data.length > 0) {
+    if (energyFlowsResponse.data && Array.isArray(energyFlowsResponse.data) && energyFlowsResponse.data.length > 0) {
       const todayFlowData = energyFlowsResponse.data[0].data;
       for (const typeId in todayFlowData) {
         dailyEnergyFlows[parseInt(typeId, 10)] = todayFlowData[typeId];
       }
     } else {
-        console.warn("Energy flows API returned no data for today.");
+        console.warn("Energy flows API returned no data or unexpected structure for today's summary flows.");
     }
   } catch (energyFlowsError) {
-    console.warn("Could not fetch daily energy flows (optional):", energyFlowsError);
+    console.warn("Could not fetch daily energy flows (optional for real-time summary):", energyFlowsError);
   }
 
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
@@ -506,8 +506,8 @@ export async function getHistoricalEnergyData(
     body: JSON.stringify({
       start_time: startTimeFormatted,
       end_time: endTimeFormatted,
-      grouping: groupingValue, 
-      types: [0, 1, 2, 3, 4, 5, 6], 
+      grouping: groupingValue,
+      // types: [0, 1, 2, 3, 4, 5, 6], // Omitted to fetch all types by default as per API spec
     }),
   });
   
@@ -528,7 +528,7 @@ export async function getHistoricalEnergyData(
 
     if (isEmptyObject) {
       console.log(
-        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. Interpreting as no data entries.`
+        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. This is interpreted as no data entries for the period.`
       );
     } else {
       console.warn(
@@ -560,23 +560,20 @@ export async function getHistoricalEnergyData(
     const totalBatteryDischarge = batteryToHome + batteryToGrid; 
     const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
     
-    // Robust date parsing for dailyEntry.start_time
-    // Handles "YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD HH:MM", or "YYYY-MM-DD"
-    const datePart = dailyEntry.start_time.split(' ')[0];
+    const dateStringFromApi = dailyEntry.start_time; // e.g., "2022-01-01 00:00" or "2022-01-01"
+    const datePart = dateStringFromApi.split(' ')[0]; // Extracts "YYYY-MM-DD"
     let parsedDate;
     try {
-      parsedDate = parseISO(datePart); // parseISO expects 'YYYY-MM-DD'
-      if (isNaN(parsedDate.getTime())) { // Check if parseISO returned Invalid Date
+      parsedDate = parseISO(datePart); 
+      if (isNaN(parsedDate.getTime())) { 
         throw new Error('Invalid date from parseISO');
       }
     } catch (e) {
-      console.warn(`[History] Could not parse date string "${dailyEntry.start_time}" (date part: "${datePart}") using parseISO. Falling back to direct Date constructor. Error: ${e}`);
-      // Fallback for formats parseISO might not like but `new Date` might handle (e.g. some non-standard variations)
-      // This is less reliable than parseISO for strict ISO formats but more forgiving for others.
+      console.warn(`[History] Could not parse date string "${dateStringFromApi}" (date part: "${datePart}") using parseISO. Falling back to direct Date constructor. Error: ${e}`);
       parsedDate = new Date(datePart); 
       if (isNaN(parsedDate.getTime())) {
-         console.error(`[History] Fallback date parsing also failed for "${dailyEntry.start_time}". Using current date as placeholder.`);
-         parsedDate = new Date(); // Should not happen if API provides a date string
+         console.error(`[History] Fallback date parsing also failed for "${dateStringFromApi}". Using current date as placeholder.`);
+         parsedDate = new Date(); 
       }
     }
     const formattedDate = format(parsedDate, "yyyy-MM-dd");
@@ -598,4 +595,3 @@ export async function getHistoricalEnergyData(
     };
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
-
