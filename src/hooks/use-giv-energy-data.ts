@@ -10,7 +10,7 @@ import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT, EVCha
 
 const HIGH_CONSUMPTION_THRESHOLD = 2.5; // kW from grid
 
-export function useGivEnergyData(apiKey: string | null) {
+export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: boolean = true) {
   const [data, setData] = useState<RealTimeData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,8 +136,10 @@ export function useGivEnergyData(apiKey: string | null) {
 
   useEffect(() => {
     if (apiKey && isSettingsLoaded) { 
-      fetchData();
-      fetchEvChargers(); // Fetch EV chargers on mount and API key change
+ fetchData();
+ if (fetchEvChargerData) {
+ fetchEvChargers(); // Fetch EV chargers on mount and API key change
+ }
       const intervalMilliseconds = refreshInterval * 1000;
       const intervalId = setInterval(() => fetchData(false), intervalMilliseconds);
       
@@ -159,5 +161,5 @@ export function useGivEnergyData(apiKey: string | null) {
       }
     }
   }, [apiKey, fetchData, fetchEvChargers, refreshInterval, isSettingsLoaded]);
- return { data, isLoading: isLoading || evChargersLoading, error, evChargersData, evChargerMeterData, refetch: () => { fetchData(true); fetchEvChargers(); } };
+ return { data, isLoading: isLoading || (fetchEvChargerData ? evChargersLoading : false), error, evChargersData, evChargerMeterData, refetch: () => { fetchData(true); if (fetchEvChargerData) fetchEvChargers(); }, fetchEvChargers };
 }

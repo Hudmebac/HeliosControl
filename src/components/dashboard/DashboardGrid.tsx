@@ -1,6 +1,6 @@
 
 "use client";
-
+import { useState, useEffect } from "react";
 import * as React from "react";
 import { DashboardCard } from "./DashboardCard";
 import { EnergyFlowVisual } from "./EnergyFlowVisual";
@@ -448,7 +448,13 @@ function getEVChargerCardDetails(
     
 
 export function DashboardGrid({ apiKey }: DashboardGridProps) {
-  const { data, isLoading, error, refetch } = useGivEnergyData(apiKey);
+  const [showEvChargerCard, setShowEvChargerCard] = useState(true); // State to control EV Charger card visibility and data fetching
+
+  const { data, isLoading, error, evChargersData, evChargerMeterData, refetch, fetchEvChargers } = useGivEnergyData(apiKey, showEvChargerCard);
+
+  useEffect(() => {
+    if (showEvChargerCard && (evChargersData === null || evChargerMeterData === null)) fetchEvChargers();
+  }, [showEvChargerCard, evChargersData, evChargerMeterData, fetchEvChargers]);
 
   if (error && !data) {
     return (
