@@ -6,18 +6,24 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatISO, subDays } from 'date-fns';
+
+const formatDateForDisplay = (date: Date | undefined): string => {
+  return date ? format(date, "PPP") : "Pick a date";
+};
 
 const EVChargerPage = () => {
   const [evChargerData, setEvChargerData] = useState<any>(null);
@@ -25,7 +31,19 @@ const EVChargerPage = () => {
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
 
-  const [analyticsData, setAnalyticsData] = useState<any[]>([]);
+  // State for original simple analytics chart (to be potentially phased out or kept as quick view)
+  const [simpleChartData, setSimpleChartData] = useState<any[]>([]); // Renamed from chartData
+  const [rawSimpleAnalyticsData, setRawSimpleAnalyticsData] = useState<any[]>([]); // Renamed from analyticsData
+
+  // State for new detailed analytics
+  const [detailedStartDate, setDetailedStartDate] = useState<Date | undefined>(subDays(new Date(), 7));
+  const [detailedEndDate, setDetailedEndDate] = useState<Date | undefined>(new Date());
+  const [detailedPowerData, setDetailedPowerData] = useState<Array<{ time: string; power: number }>>([]);
+  const [detailedEnergyIntervalData, setDetailedEnergyIntervalData] = useState<Array<{ time: string; energy: number }>>([]);
+  const [totalEnergyForPeriod, setTotalEnergyForPeriod] = useState<number | null>(null);
+  const [isLoadingDetailedAnalytics, setIsLoadingDetailedAnalytics] = useState(false);
+
+
   const [schedules, setSchedules] = useState<any[]>([]);
   const [settingsLegacy, setSettingsLegacy] = useState<any>({
     solarCharging: false,
@@ -33,7 +51,6 @@ const EVChargerPage = () => {
     maxBatteryDischargeToEvc: 0,
     chargeRate: 6,
   });
-  const [chartData, setChartData] = useState<any[]>([]);
   const { theme } = useTheme();
 
   const [commandChargePowerLimit, setCommandChargePowerLimit] = useState<{ value: number; unit: string; min: number; max: number; } | null>(null);
@@ -59,7 +76,7 @@ const EVChargerPage = () => {
       Reserved: 'The EV charger has been reserved for a future charging session',
       Unavailable: 'The EV charger cannot start new charging sessions',
       Faulted: 'The EV charger is reporting an error',
-      Unknown: 'Unknown Status', // Added a fallback for unexpected values
+      Unknown: 'Unknown Status', 
   };
 
   const evChargerStatusColorMap: { [key: string]: string } = {
@@ -301,31 +318,33 @@ const EVChargerPage = () => {
           } else {
             const meterData = await meterResponse.json();
             let currentPower = null;
-            if (meterData && meterData.data && meterData.data.length > 0) {
-              const latestMeterReading = meterData.data[0];
-              const powerMeasurand = latestMeterReading.readings.find((reading: any) => reading.measurand_id === 13);
-              if (powerMeasurand) {
-                currentPower = powerMeasurand.value;
-              }
-              setEvChargerData((prevData: any) => ({ ...prevData, current_power: currentPower }));
+            // Assuming meterData.data is an array of readings, and each reading has a 'measurements' array
+            if (meterData && meterData.data && meterData.data.length > 0 && meterData.data[0].measurements) {
+                const latestMeterReading = meterData.data[0];
+                const powerMeasurement = latestMeterReading.measurements.find((m: any) => m.measurand === 13); // 13 for Power.Active.Import
+                if (powerMeasurement) {
+                    currentPower = powerMeasurement.value;
+                }
             }
+            setEvChargerData((prevData: any) => ({ ...prevData, current_power: currentPower }));
           }
 
+          // Fetch for simpleChartData (original analytics chart)
           const historicalMeterResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/meter-data?page=1&pageSize=50`, { headers });
           if (!historicalMeterResponse.ok) {
             console.warn(`Failed to fetch historical meter data for EV charger ${chargerUuid}. Status: ${historicalMeterResponse.status}`);
           } else {
             const historicalMeterData = await historicalMeterResponse.json();
             if (historicalMeterData && historicalMeterData.data) {
-              const formattedData = historicalMeterData.data.slice().reverse().map((reading: any) => {
-                const powerMeasurand = reading.readings.find((r: any) => r.measurand_id === 13);
+              const formattedData = historicalMeterData.data.slice().reverse().map((dp: any) => {
+                const powerMeasurement = dp.measurements?.find((m: any) => m.measurand === 13);
                 return {
-                  time: new Date(reading.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  power: powerMeasurand ? powerMeasurand.value : 0,
+                  time: new Date(dp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  power: powerMeasurement ? powerMeasurement.value : 0,
                 };
               }).reverse();
-              setChartData(formattedData);
-              setAnalyticsData(historicalMeterData.data);
+              setSimpleChartData(formattedData);
+              setRawSimpleAnalyticsData(historicalMeterData.data);
             }
           }
         } else {
@@ -351,6 +370,115 @@ const EVChargerPage = () => {
     }
   }, [apiKey, storedEvChargerId, getAuthHeaders, toast]);
 
+  const fetchDetailedAnalyticsData = useCallback(async (start: Date, end: Date) => {
+    if (!apiKey || !evChargerData?.uuid) {
+        toast({ variant: "destructive", title: "Missing Information", description: "API Key or EV Charger ID is missing." });
+        return;
+    }
+    setIsLoadingDetailedAnalytics(true);
+    setDetailedPowerData([]);
+    setDetailedEnergyIntervalData([]);
+    setTotalEnergyForPeriod(null);
+
+    const startTime = formatISO(start);
+    const endTime = formatISO(end);
+
+    try {
+        const headers = getAuthHeaders();
+        // Fetch up to 288 * 7 = 2016 data points for a week (5-min intervals)
+        // Adjust pageSize based on expected data density and API limits
+        const response = await fetch(
+            `/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/meter-data?start_time=${startTime}&end_time=${endTime}&measurands[0]=13&measurands[1]=4&meter_ids[0]=0&pageSize=2016`,
+            { headers }
+        );
+
+        if (!response.ok) {
+            await handleApiError(response, 'fetching detailed EV analytics');
+            return;
+        }
+        const result = await response.json();
+
+        if (result && result.data && Array.isArray(result.data)) {
+            const rawDataPoints: Array<{ timestamp: string; measurements: Array<{ measurand: number; value: number | null; unit: number | null }> }> = result.data;
+
+            const powerData = rawDataPoints
+                .map(dp => {
+                    const powerMeasurement = dp.measurements.find(m => m.measurand === 13); // Power
+                    return {
+                        timestamp: new Date(dp.timestamp),
+                        power: powerMeasurement && typeof powerMeasurement.value === 'number' ? powerMeasurement.value : 0, // Watts
+                    };
+                })
+                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+                .map(dp => ({
+                    time: format(dp.timestamp, "HH:mm (MMM d)"),
+                    power: dp.power,
+                }));
+            setDetailedPowerData(powerData);
+
+            const cumulativeEnergyData = rawDataPoints
+                .map(dp => {
+                    const energyMeasurement = dp.measurements.find(m => m.measurand === 4); // Energy.Active.Import.Register
+                    return {
+                        timestamp: new Date(dp.timestamp),
+                        cumulativeEnergy: energyMeasurement && typeof energyMeasurement.value === 'number' ? energyMeasurement.value : null, // kWh
+                    };
+                })
+                .filter(dp => dp.cumulativeEnergy !== null)
+                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+            const intervalEnergy = [];
+            let totalEnergy = 0;
+            if (cumulativeEnergyData.length > 0) {
+                 // Initialize totalEnergy with the first valid reading if range is short or it's the only point
+                 if (cumulativeEnergyData.length === 1) {
+                    // Cannot calculate interval, but can show a "total so far" if meaningful
+                    // For a single point, interval consumption is not well-defined.
+                    // Could display the single cumulative value if the time range is very short.
+                 } else {
+                    // The first point's cumulative value could be the start of total calculation if it represents start of period.
+                    // However, interval calculation requires at least two points.
+                 }
+
+
+                for (let i = 1; i < cumulativeEnergyData.length; i++) {
+                    const energyDiff = cumulativeEnergyData[i].cumulativeEnergy! - cumulativeEnergyData[i - 1].cumulativeEnergy!;
+                    if (energyDiff >= 0) { // Avoid negative consumption due to resets
+                        intervalEnergy.push({
+                            time: format(cumulativeEnergyData[i].timestamp, "HH:mm (MMM d)"),
+                            energy: parseFloat(energyDiff.toFixed(3)), // kWh
+                        });
+                        totalEnergy += energyDiff;
+                    }
+                }
+                 // If there's only one data point, and it represents the cumulative total at that point
+                if (cumulativeEnergyData.length === 1 && cumulativeEnergyData[0].cumulativeEnergy !== null) {
+                    // This isn't interval data, but you could set totalEnergyForPeriod to this single value
+                    // if the context implies it's the total for a very specific, short query.
+                    // Or, acknowledge that interval data requires multiple points.
+                    // For now, intervalEnergy will be empty, totalEnergy will be 0 from loop.
+                    // If the API guarantees the first point of a range is its start total, this could be handled.
+                    // For now, assuming interval calculation is primary.
+                }
+            }
+            setDetailedEnergyIntervalData(intervalEnergy);
+            setTotalEnergyForPeriod(parseFloat(totalEnergy.toFixed(3)));
+            if (rawDataPoints.length === 0) {
+                toast({ title: "No Detailed Data", description: "No specific power or energy measurements found for the selected period." });
+            }
+
+        } else {
+            toast({ title: "No Data Structure", description: "Received an unexpected data structure from the API for detailed analytics." });
+        }
+    } catch (error) {
+        console.error('Error in fetchDetailedAnalyticsData:', error);
+        toast({ variant: "destructive", title: "Analytics Fetch Error", description: "Could not load detailed EV analytics data." });
+    } finally {
+        setIsLoadingDetailedAnalytics(false);
+    }
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, handleApiError, toast]);
+
+
   useEffect(() => {
     if (!isLoadingApiKey && apiKey) {
       fetchEvChargerData();
@@ -372,6 +500,10 @@ const EVChargerPage = () => {
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
+      // Optionally fetch detailed analytics for default range on load
+      // if (detailedStartDate && detailedEndDate) {
+      //   fetchDetailedAnalyticsData(detailedStartDate, detailedEndDate);
+      // }
     }
   }, [evChargerData?.uuid, apiKey, fetchLegacySettings, fetchSchedules, fetchCurrentChargePowerLimit, fetchCurrentPlugAndGo, fetchCurrentSessionEnergyLimit]);
 
@@ -426,15 +558,8 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-
-    // Fetch the current status to check if it's an instant control session
-    await fetchEvChargerData(true); // Refresh data to get latest status
-
-    // Check if the current status indicates an instant control session.
-    // The exact status string might vary based on API documentation.
-    // Assuming 'INSTANT_CONTROL' or similar indicates an active instant session.
-    // You might need to adjust this check based on actual API responses.
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; // Replace with correct status if needed
+    await fetchEvChargerData(true); 
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; 
 
     if (!isInstantControl) {
       toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
@@ -691,7 +816,7 @@ const EVChargerPage = () => {
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
     if (value === null || value === undefined || value === '') {
-      return null; // Don't render rows with empty or null values
+      return null; 
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -748,19 +873,16 @@ const EVChargerPage = () => {
 
               <TabsContent value="overview">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">                 
-                 {/* Left Column: Combined Status and Instant Control */}
                   <div className="lg:col-span-2">
-                   {/* Combined Charger Status and Instant Control Card */}
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center"><Info className="mr-2 h-5 w-5"/>Charger Status</CardTitle>
-                        {/* Replaced CardDescription with a div for more control */}
                         {evChargerData?.status && evChargerData?.online && (
                           <div className="text-sm text-muted-foreground">Status: <span className={`font-medium ${evChargerStatusColorMap[evChargerData.status] || 'text-foreground'}`}>{mapEVChargerAPIStatus(evChargerData.status) || 'Unknown'}</span> <span className="ml-1 text-xs">{evChargerStatusMap[evChargerData.status] || 'No description available'}</span></div>
                         )}
                       </CardHeader>
-                      <CardContent className="space-y-6 pb-0 border-b border-border/50"> {/* Added pb-0 and border-b */}
-                          <div className="space-y-1"> {/* Added space-y-1 for status rows */}
+                      <CardContent className="space-y-6 pb-0 border-b border-border/50"> 
+                          <div className="space-y-1"> 
                               {renderStatusValue("Charger", evChargerData?.alias, <FileText />)}
                               {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                               {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
@@ -768,11 +890,10 @@ const EVChargerPage = () => {
                           </div>
                       </CardContent>
 
-                      {/* Instant Control Section */}
-                      <CardHeader className="pt-6"> {/* Added pt-6 */}
+                      <CardHeader className="pt-6"> 
                         <CardTitle className="flex items-center"><Power className="mr-2 h-5 w-5"/>Instant Control</CardTitle>
                        </CardHeader>
-                      <CardContent className="space-y-6 pt-0"> {/* Added pt-0 */}
+                      <CardContent className="space-y-6 pt-0"> 
                          {isLoadingCommandSettings ? (
                            <div className="flex justify-center items-center py-8">
                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -839,15 +960,13 @@ const EVChargerPage = () => {
                             </form>
                           </>
                         )}
-                      </CardContent> {/* This CardContent now contains the Instant Control section */}
-                    </Card> {/* End of the combined card */}
+                      </CardContent> 
+                    </Card> 
                   </div>
 
-                 {/* Right Column: Device Information */}
- <div className="lg:col-span-1"></div> {/* This column div needs content or can be removed if not needed */}
+                 <div className="lg:col-span-1"></div> 
 
- </div>
-                 {/* Device Information Card (full width below columns) */}
+                </div>
                  <Card className="mt-6">
                     <CardHeader>
                         <CardTitle className="flex items-center"><Settings className="mr-2 h-5 w-5"/>Device Information</CardTitle>
@@ -910,24 +1029,110 @@ const EVChargerPage = () => {
               <TabsContent value="analytics">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Power Analytics</CardTitle>
-                    <CardDescription>Historical EV charging power usage.</CardDescription>
+                    <CardTitle>Detailed EV Charger Analytics</CardTitle>
+                    <CardDescription>Analyze historical power and energy consumption for your EV charger.</CardDescription>
                   </CardHeader>
-                  <CardContent className="h-[400px]">
-                    {isLoadingEvData && chartData.length === 0 ? <Loader2 className="animate-spin"/> :
-                     chartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData}>
-                          <XAxis dataKey="time" />
-                          <YAxis label={{ value: 'Power (W)', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip />
-                          <Legend />
-                          <Area type="monotone" dataKey="power" stroke={theme === 'dark' || theme === 'hc-dark' ? "#FFA500" : "#000000"} fill={theme === 'dark' || theme === 'hc-dark' ? "#FFA500" : "#000000"} fillOpacity={0.3} name="Charging Power" unit="W" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : <p>No historical power data available for charting.</p>}
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-end">
+                      <div className="space-y-1">
+                        <Label htmlFor="detailed-start-date">Start Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button id="detailed-start-date" variant="outline" className="w-full justify-start text-left font-normal">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formatDateForDisplay(detailedStartDate)}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single" selected={detailedStartDate} onSelect={setDetailedStartDate} initialFocus disabled={(date) => detailedEndDate ? date > detailedEndDate : false} />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="detailed-end-date">End Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button id="detailed-end-date" variant="outline" className="w-full justify-start text-left font-normal">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formatDateForDisplay(detailedEndDate)}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single" selected={detailedEndDate} onSelect={setDetailedEndDate} initialFocus disabled={(date) => detailedStartDate ? date < detailedStartDate : false} />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          if (detailedStartDate && detailedEndDate) {
+                            fetchDetailedAnalyticsData(detailedStartDate, detailedEndDate);
+                          } else {
+                            toast({ title: "Date Range Required", description: "Please select both a start and end date.", variant: "destructive" });
+                          }
+                        }}
+                        disabled={isLoadingDetailedAnalytics || !detailedStartDate || !detailedEndDate}
+                        className="w-full md:w-auto"
+                      >
+                        {isLoadingDetailedAnalytics ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch Detailed Data"}
+                      </Button>
+                    </div>
+
+                    {isLoadingDetailedAnalytics && (
+                        <div className="flex justify-center items-center h-[300px]">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <p className="ml-2">Loading detailed analytics...</p>
+                        </div>
+                    )}
+
+                    {!isLoadingDetailedAnalytics && detailedPowerData.length > 0 && (
+                      <>
+                        <h3 className="text-lg font-semibold mt-6 mb-2">Power Consumption Over Time</h3>
+                        <div className="h-[300px] mb-6">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={detailedPowerData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="time" />
+                              <YAxis label={{ value: 'Power (W)', angle: -90, position: 'insideLeft' }} />
+                              <Tooltip formatter={(value: number) => [`${value} W`, "Power"]} />
+                              <Legend />
+                              <Area type="monotone" dataKey="power" stroke={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "#000000"} fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "#000000"} fillOpacity={0.3} name="Charging Power" unit="W" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </>
+                    )}
+                    
+                    {!isLoadingDetailedAnalytics && detailedEnergyIntervalData.length > 0 && (
+                      <>
+                        <h3 className="text-lg font-semibold mt-6 mb-2">Energy Consumed Per Interval</h3>
+                         <div className="h-[300px] mb-6">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={detailedEnergyIntervalData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="time" />
+                                <YAxis label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} allowDecimals={true} />
+                                <Tooltip formatter={(value: number) => [`${value.toFixed(3)} kWh`, "Energy"]} />
+                                <Legend />
+                                <Bar dataKey="energy" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--accent))" : "hsl(var(--secondary))"} name="Energy Consumed" unit="kWh" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </>
+                    )}
+
+                    {!isLoadingDetailedAnalytics && totalEnergyForPeriod !== null && (
+                        <p className="text-md font-semibold text-center mt-4">
+                            Total Energy Consumed in Period: {totalEnergyForPeriod.toFixed(3)} kWh
+                        </p>
+                    )}
+                    
+                    {!isLoadingDetailedAnalytics && detailedPowerData.length === 0 && detailedEnergyIntervalData.length === 0 && (
+                        <p className="text-center text-muted-foreground py-4">No detailed analytics data to display for the selected period. Try fetching data.</p>
+                    )}
+
                   </CardContent>
                 </Card>
+
                 <Card className="mt-6">
                     <CardHeader>
                         <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History</CardTitle>
@@ -1062,3 +1267,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+

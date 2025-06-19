@@ -21,7 +21,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const formatDateForDisplay = (date: Date | undefined): string => {
-  return date ? format(date, "PPP") : "Pick a date";
+ return date ? format(date, "PPP") : "Pick a date";
 };
 
 const formatMonthForDisplay = (date: Date | undefined): string => {
@@ -32,10 +32,10 @@ const formatYearForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "yyyy") : "Select Year";
 };
 
-type GroupingOptionValue = "1" | "3" | "4" | "5" | "6"; // "2" (Weekly) removed
+type GroupingOptionValue = "1" | "2" | "3" | "4" | "5" | "6";
 type DatePickerType = 'calendar' | 'month_select' | 'year_select' | 'range' | 'none';
 
-interface GroupingOption {
+interface GroupingOption extends React.HTMLAttributes<HTMLLIElement> {
   value: GroupingOptionValue;
   label: string;
   apiGroupingValue: number;
@@ -45,8 +45,8 @@ interface GroupingOption {
 
 const groupingOptions: GroupingOption[] = [
   { value: "1", label: "Daily", apiGroupingValue: 1, datePickerLabel: "Select Day", datePickerType: 'calendar' },
-  // { value: "2", label: "Weekly", apiGroupingValue: 2, datePickerLabel: "Select Day in Target Week", datePickerType: 'calendar' }, // API grouping 2 is Monthly
-  { value: "3", label: "Monthly", apiGroupingValue: 2, datePickerLabel: "Select Month", datePickerType: 'month_select' }, // API grouping 2 for Monthly
+ { value: "2", label: "Weekly", apiGroupingValue: 1, datePickerLabel: "Select Day in Target Week", datePickerType: 'calendar' },
+  { value: "3", label: "Monthly", apiGroupingValue: 2, datePickerLabel: "Select Month", datePickerType: 'month_select' },
   { value: "4", label: "Yearly", apiGroupingValue: 3, datePickerLabel: "Select Year", datePickerType: 'year_select' },   // API grouping 3 for Yearly
   { value: "5", label: "All Time", apiGroupingValue: 4, datePickerType: 'none' }, // API grouping 4 for Total/All Time
   { value: "6", label: "Custom Range", apiGroupingValue: 1, datePickerType: 'range' }, // API grouping 1 for daily data in custom range
@@ -120,9 +120,12 @@ export default function HistoryPage() {
       return;
     }
 
+    // For Weekly grouping (value "2"), we use API grouping 1 (Daily) and calculate the range
+    // based on the selected date within the week.
+    const apiGrouping = selectedGrouping === "2" ? 1 : currentGroupingDetails.apiGroupingValue;
+
     let apiStartDate: Date;
     let apiEndDate: Date;
-    const apiGrouping = currentGroupingDetails.apiGroupingValue;
 
     switch (currentGroupingDetails.datePickerType) {
       case "calendar": // Handles Daily
@@ -130,6 +133,13 @@ export default function HistoryPage() {
         apiStartDate = periodDate;
         apiEndDate = periodDate;
         break;
+      case "calendar": // Handles Weekly (with API grouping 1)
+        if (!periodDate) { setError("Please select a day in the target week."); setLoading(false); return; }
+        // For Weekly, we need the start and end of the week containing the selected date
+        apiStartDate = startOfWeek(periodDate, { weekStartsOn: 1 }); // Assuming Monday is the start of the week
+        apiEndDate = endOfWeek(periodDate, { weekStartsOn: 1 });
+        break;
+
       case "month_select": // Handles Monthly
         if (!periodDate) { setError("Please select a month."); setLoading(false); return; }
         apiStartDate = startOfMonth(periodDate);
