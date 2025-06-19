@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, CartesianGrid } from 'recharts';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
@@ -15,11 +15,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
-import { format, parseISO, formatISO, subDays, parse as parseDate, differenceInMinutes } from 'date-fns';
+import { format, parseISO, formatISO, subDays, differenceInMinutes } from 'date-fns';
 
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
@@ -53,6 +54,12 @@ const EVChargerPage = () => {
   const [hasMoreChargingSessions, setHasMoreChargingSessions] = useState(true);
   const [sessionFilterStartDate, setSessionFilterStartDate] = useState<Date | undefined>(subDays(new Date(), 1));
   const [sessionFilterEndDate, setSessionFilterEndDate] = useState<Date | undefined>(new Date());
+
+  // New filter states for session history
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(false);
+  const [uniqueSessionStatuses, setUniqueSessionStatuses] = useState<string[]>([]);
+
 
   const evChargerStatusMap: { [key: string]: string } = {
       Available: 'The EV charger is not plugged in to a vehicle',
@@ -366,16 +373,23 @@ const EVChargerPage = () => {
         const result = await response.json();
         if (result && result.data) {
             const sortedData = result.data.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
-            setChargingSessionsData(prev => append ? [...prev, ...sortedData] : sortedData);
+            const currentData = append ? [...chargingSessionsData, ...sortedData] : sortedData;
+            setChargingSessionsData(currentData);
+
+            const statuses = new Set(currentData.map((session: any) => session.stop_reason || (session.stopped_at ? 'Completed' : 'Active')));
+            setUniqueSessionStatuses(Array.from(statuses));
+
             setChargingSessionsPage(page);
             setHasMoreChargingSessions(result.data.length > 0 && result.meta && result.meta.current_page < result.meta.last_page);
         } else {
             setChargingSessionsData(append ? chargingSessionsData : []);
+            setUniqueSessionStatuses([]);
             setHasMoreChargingSessions(false);
         }
     } catch (error) {
         console.error('Error fetching charging sessions:', error);
         setChargingSessionsData(append ? chargingSessionsData : []); 
+        setUniqueSessionStatuses([]);
         setHasMoreChargingSessions(false);
         toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
     } finally {
@@ -687,8 +701,31 @@ const EVChargerPage = () => {
     );
   };
 
-  const chartSessionData = React.useMemo(() => {
+  const displayedSessions = React.useMemo(() => {
     return chargingSessionsData
+      .filter(session => {
+        if (statusFilter === 'all') return true;
+        const sessionStatus = session.stop_reason || (session.stopped_at ? 'Completed' : 'Active');
+        return sessionStatus === statusFilter;
+      })
+      .filter(session => {
+        if (!hideNaEnergy) return true;
+        let energyDisplay = "N/A";
+        if (typeof session.kwh_delivered === 'number') {
+            energyDisplay = session.kwh_delivered.toFixed(2);
+        } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
+            const energyWh = session.meter_stop - session.meter_start;
+            if (energyWh > 0) {
+              const energyKWh = energyWh / 1000;
+              energyDisplay = energyKWh.toFixed(2);
+            }
+        }
+        return energyDisplay !== "N/A";
+      });
+  }, [chargingSessionsData, statusFilter, hideNaEnergy]);
+
+  const chartSessionData = React.useMemo(() => {
+    return displayedSessions // Use filtered sessions for chart data
       .map(session => {
         let energyKWh = 0;
         if (typeof session.kwh_delivered === 'number') {
@@ -706,13 +743,13 @@ const EVChargerPage = () => {
         return {
           formattedStartTime: session.started_at ? format(parseISO(session.started_at), "MMM d, HH:mm") : 'N/A',
           energyKWh: energyKWh,
-          durationMinutes: durationMinutes > 0 ? durationMinutes : null, // only include if valid duration
+          durationMinutes: durationMinutes > 0 ? durationMinutes : null, 
           stopReason: session.stop_reason || (session.stopped_at ? 'Completed' : 'Active'),
         };
       })
-      .filter(item => item.energyKWh > 0) // Only show sessions with some energy delivered
-      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(a.formattedStartTime).getTime() - new Date(b.formattedStartTime).getTime()); // Sort chronologically for chart
-  }, [chargingSessionsData]);
+      .filter(item => item.energyKWh > 0) 
+      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(a.formattedStartTime).getTime() - new Date(b.formattedStartTime).getTime()); 
+  }, [displayedSessions]);
 
 
   return (
@@ -914,10 +951,10 @@ const EVChargerPage = () => {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History & Analysis</CardTitle>
-                        <CardDescription>Review past charging sessions and visualize energy usage. Filter by date.</CardDescription>
+                        <CardDescription>Review past charging sessions and visualize energy usage. Filter by date and status.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSessionSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-end">
+                        <form onSubmit={handleSessionSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-end">
                             <div className="space-y-1">
                                 <Label htmlFor="session-start-date">Start Date</Label>
                                 <Popover>
@@ -946,13 +983,36 @@ const EVChargerPage = () => {
                                 </PopoverContent>
                                 </Popover>
                             </div>
-                            <Button type="submit" className="w-full md:w-auto" disabled={isLoadingChargingSessions}>
+                             <div className="space-y-1">
+                                <Label htmlFor="status-filter">Status</Label>
+                                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                    <SelectTrigger id="status-filter">
+                                        <SelectValue placeholder="Filter by status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        {uniqueSessionStatuses.map(status => (
+                                            <SelectItem key={status} value={status}>{status}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Button type="submit" className="w-full" disabled={isLoadingChargingSessions}>
                                 {isLoadingChargingSessions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListFilter className="mr-2 h-4 w-4" />}
                                 Search Sessions
                             </Button>
                         </form>
-                        {isLoadingChargingSessions && chargingSessionsData.length === 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
-                        {chargingSessionsData.length > 0 ? (
+                        <div className="flex items-center space-x-2 mb-4">
+                            <Switch
+                                id="hide-na-energy-filter"
+                                checked={hideNaEnergy}
+                                onCheckedChange={setHideNaEnergy}
+                            />
+                            <Label htmlFor="hide-na-energy-filter">Hide sessions with N/A energy</Label>
+                        </div>
+
+                        {isLoadingChargingSessions && displayedSessions.length === 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
+                        {displayedSessions.length > 0 ? (
                             <>
                                 <Table>
                                     <TableHeader>
@@ -964,14 +1024,16 @@ const EVChargerPage = () => {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {chargingSessionsData.map((session, index) => {
+                                        {displayedSessions.map((session, index) => {
                                             let energyDisplay = "N/A";
                                             if (typeof session.kwh_delivered === 'number') {
                                                 energyDisplay = session.kwh_delivered.toFixed(2);
                                             } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
                                                 const energyWh = session.meter_stop - session.meter_start;
-                                                const energyKWh = energyWh / 1000;
-                                                energyDisplay = energyKWh.toFixed(2);
+                                                 if (energyWh > 0) { // Only display if positive energy
+                                                    const energyKWh = energyWh / 1000;
+                                                    energyDisplay = energyKWh.toFixed(2);
+                                                }
                                             }
 
                                             return (
@@ -992,9 +1054,9 @@ const EVChargerPage = () => {
                                         </Button>
                                     </div>
                                 )}
-                                {isLoadingChargingSessions && chargingSessionsData.length > 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
+                                {isLoadingChargingSessions && displayedSessions.length > 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
 
-                                {/* New Charts Section */}
+                                {/* Charts Section reflecting filters */}
                                 {!isLoadingChargingSessions && chartSessionData.length > 0 && (
                                   <div className="mt-8 space-y-8">
                                     <div>
@@ -1008,7 +1070,7 @@ const EVChargerPage = () => {
                                               angle={-45} 
                                               textAnchor="end" 
                                               height={80} 
-                                              interval={chartSessionData.length > 20 ? 'preserveStartEnd' : 0} // Reduce labels if too many
+                                              interval={chartSessionData.length > 20 ? 'preserveStartEnd' : 0} 
                                             />
                                             <YAxis label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} allowDecimals={true} />
                                             <Tooltip formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Energy Delivered"]} />
@@ -1042,11 +1104,8 @@ const EVChargerPage = () => {
                                       </div>
                                     </div>
                                     )}
-
                                   </div>
                                 )}
-
-
                             </>
                         ) : (!isLoadingChargingSessions && <p className="text-center text-muted-foreground py-4">No charging sessions found for the selected criteria.</p>)}
                     </CardContent>
