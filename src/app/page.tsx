@@ -93,7 +93,8 @@ export default function HomePage() {
             </Link>
             <Link href="/aj_renewables_info" passHref>
               <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00'}}>
-              <div className="rounded-full bg-black p- dark:bg-transparent"><img src="https://heliosaj.netlify.app/images/ajlogo.png" alt="AJ Renewables" className="h-12 w-auto mb-" /></div> {/* Image for AJ */}
+              <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
+              <h3 className="text-lg font-semibold">AJ Renewables</h3>
                <p className="text-sm text-muted-foreground text-center">
  Your Trusted Partner for Renewable Energy Solutions.
                 </p>
