@@ -9,16 +9,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
-import { getHistoricalEnergyData } from "@/lib/givenergy.ts"; // Explicitly import from .ts
+import { getHistoricalEnergyData } from "@/lib/givenergy.ts"; 
 import type { HistoricalEnergyDataPoint } from "@/lib/types";
-import { format, subDays, parseISO } from "date-fns";
+import { format, subDays, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, LineChartIcon, BatteryCharging, SunMedium, HomeIcon } from "lucide-react";
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
 
 // Helper to format date for display
 const formatDateForDisplay = (date: Date | undefined): string => {
@@ -30,6 +30,7 @@ const formatDateForApi = (date: Date): string => {
   return format(date, "yyyy-MM-dd");
 };
 
+type GroupingOptionValue = "1" | "2" | "3" | "4"; // 1:Daily, 2:Weekly, 3:Monthly, 4:Yearly
 
 export default function HistoryPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
@@ -42,6 +43,8 @@ export default function HistoryPage() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGrouping, setSelectedGrouping] = useState<GroupingOptionValue>("1");
+
 
   const chartColor = theme === 'dark' || theme === 'hc-dark' ? 'hsl(var(--primary))' : 'hsl(var(--foreground))';
   const solarColor = "hsl(var(--chart-1))"; 
@@ -67,10 +70,10 @@ export default function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getHistoricalEnergyData(apiKey, inverterSerial, startDate, endDate);
+      const data = await getHistoricalEnergyData(apiKey, inverterSerial, startDate, endDate, parseInt(selectedGrouping, 10));
       setHistoricalData(data);
-      if (data.length === 0 && !error) { // Only toast if no other error occurred
-        toast({ title: "No Data", description: "No historical data found for the selected range."});
+      if (data.length === 0 && !error) { 
+        toast({ title: "No Data", description: "No historical data found for the selected range and granularity."});
       }
     } catch (e: any) {
       console.error("Error fetching historical data:", e);
@@ -80,7 +83,7 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey, inverterSerial, startDate, endDate, toast, error]); // Added error to dependency array
+  }, [apiKey, inverterSerial, startDate, endDate, selectedGrouping, toast, error]); 
 
   useEffect(() => {
     if (apiKey && inverterSerial && !isLoadingApiKey) {
@@ -89,11 +92,21 @@ export default function HistoryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, inverterSerial, isLoadingApiKey, fetchData]);
 
-  const formattedChartData = historicalData.map(item => ({
-    ...item,
-    // Short date format for XAxis labels
-    shortDate: format(parseISO(item.date), "MMM d"),
-  }));
+  const formattedChartData = historicalData.map(item => {
+    const parsedDate = parseISO(item.date);
+    let label = format(parsedDate, "MMM d"); // Default for Daily (grouping "1")
+    if (selectedGrouping === "2") { // Weekly
+      label = `W/O ${format(parsedDate, "MMM d")}`; // "Week Of MMM d"
+    } else if (selectedGrouping === "3") { // Monthly
+      label = format(parsedDate, "MMM yyyy");
+    } else if (selectedGrouping === "4") { // Yearly
+      label = format(parsedDate, "yyyy");
+    }
+    return {
+      ...item,
+      shortDate: label,
+    };
+  });
   
   const DailyEnergyOverviewChart = () => (
     <ResponsiveContainer width="100%" height={400}>
@@ -103,7 +116,7 @@ export default function HistoryPage() {
         <YAxis yAxisId="left" label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }} />
         <Tooltip 
           formatter={(value: number, name: string) => [`${value.toFixed(2)} kWh`, name.replace(/([A-Z])/g, ' $1').trim()]} 
-          labelFormatter={(label: string) => `Date: ${label}`}
+          labelFormatter={(label: string) => `Period: ${label}`}
         />
         <Legend />
         <Bar yAxisId="left" dataKey="solarGeneration" name="Solar Generation" fill={solarColor} stackId="a" />
@@ -158,10 +171,27 @@ export default function HistoryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Date Range Selection</CardTitle>
-          <CardDescription>Select the start and end dates for the energy history report.</CardDescription>
+          <CardTitle>Report Options</CardTitle>
+          <CardDescription>Select the granularity and date range for the energy history report.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+          <div className="space-y-1">
+            <Label htmlFor="grouping-select">Report Granularity</Label>
+            <Select
+              value={selectedGrouping}
+              onValueChange={(value) => setSelectedGrouping(value as GroupingOptionValue)}
+            >
+              <SelectTrigger id="grouping-select" className="w-full">
+                <SelectValue placeholder="Select granularity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Daily</SelectItem>
+                <SelectItem value="2">Weekly</SelectItem>
+                <SelectItem value="3">Monthly</SelectItem>
+                <SelectItem value="4">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1">
             <Label htmlFor="start-date">Start Date</Label>
             <Popover>
@@ -190,7 +220,7 @@ export default function HistoryPage() {
               </PopoverContent>
             </Popover>
           </div>
-          <Button onClick={() => fetchData()} disabled={loading || !apiKey || !inverterSerial} className="w-full sm:w-auto">
+          <Button onClick={() => fetchData()} disabled={loading || !apiKey || !inverterSerial} className="w-full sm:w-auto md:self-end">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch History"}
           </Button>
         </CardContent>
@@ -240,11 +270,11 @@ export default function HistoryPage() {
 
       {!loading && !error && historicalData.length > 0 && apiKey && inverterSerial && (
         <>
-          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1">
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1"> {/* Changed lg:grid-cols-2 to lg:grid-cols-1 to stack charts */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center"><HomeIcon className="mr-2 h-5 w-5 text-primary"/>Daily Energy Overview</CardTitle>
-                <CardDescription>Summary of daily energy consumption and sources.</CardDescription>
+                <CardTitle className="flex items-center"><HomeIcon className="mr-2 h-5 w-5 text-primary"/>Energy Overview</CardTitle>
+                <CardDescription>Summary of energy consumption and sources for the selected period and granularity.</CardDescription>
               </CardHeader>
               <CardContent className="h-[450px]">
                 <DailyEnergyOverviewChart />
@@ -254,7 +284,7 @@ export default function HistoryPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><SunMedium className="mr-2 h-5 w-5 text-primary"/>Solar Generation Distribution</CardTitle>
-                <CardDescription>How your generated solar energy was used each day.</CardDescription>
+                <CardDescription>How your generated solar energy was used.</CardDescription>
               </CardHeader>
               <CardContent className="h-[450px]">
                 <SolarDistributionChart />
@@ -264,7 +294,7 @@ export default function HistoryPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><BatteryCharging className="mr-2 h-5 w-5 text-primary"/>Battery Usage Patterns</CardTitle>
-                <CardDescription>Daily energy charged into and discharged from your battery.</CardDescription>
+                <CardDescription>Energy charged into and discharged from your battery.</CardDescription>
               </CardHeader>
               <CardContent className="h-[450px]">
                 <BatteryUsageChart />
@@ -273,11 +303,11 @@ export default function HistoryPage() {
           </div>
         </>
       )}
-      {/* Updated "No Data" message display condition and text */}
+      
       {!loading && !error && historicalData.length === 0 && apiKey && inverterSerial && (
          <div className="text-center py-10 text-muted-foreground">
             <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-            <p>No data available for the selected period.</p>
+            <p>No data available for the selected period and granularity.</p>
             <p>Try adjusting the date range or click "Fetch History" again.</p>
         </div>
       )}

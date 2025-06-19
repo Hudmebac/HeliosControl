@@ -487,7 +487,8 @@ export async function getHistoricalEnergyData(
   apiKey: string,
   inverterSerial: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  groupingValue: number
 ): Promise<HistoricalEnergyDataPoint[]> {
   if (!apiKey || !inverterSerial) {
     throw new Error("API Key or Inverter Serial not provided for historical data");
@@ -496,7 +497,7 @@ export async function getHistoricalEnergyData(
   const startTimeFormatted = format(startDate, "yyyy-MM-dd");
   const endTimeFormatted = format(endDate, "yyyy-MM-dd");
 
-  console.log(`[History] Fetching historical energy data for Inverter: ${inverterSerial}, Start: ${startTimeFormatted}, End: ${endTimeFormatted}`);
+  console.log(`[History] Fetching historical energy data for Inverter: ${inverterSerial}, Start: ${startTimeFormatted}, End: ${endTimeFormatted}, Grouping: ${groupingValue}`);
 
   const apiResponse = await _fetchGivEnergyAPI<
     GivEnergyAPIData<{ start_time: string; end_time: string; data: { [key: string]: number } }[]>
@@ -505,8 +506,8 @@ export async function getHistoricalEnergyData(
     body: JSON.stringify({
       start_time: startTimeFormatted,
       end_time: endTimeFormatted,
-      grouping: 1, // Daily grouping
-      types: [0, 1, 2, 3, 4, 5, 6], // All relevant flow types
+      grouping: groupingValue, 
+      types: [0, 1, 2, 3, 4, 5, 6], 
     }),
   });
   
@@ -522,7 +523,7 @@ export async function getHistoricalEnergyData(
   }
   
   if (apiResponse.data.length === 0) {
-    console.log("[History] API returned an empty data array for the selected range.");
+    console.log("[History] API returned an empty data array for the selected range and grouping.");
   }
   
   return apiResponse.data.map(dailyEntry => {
@@ -531,23 +532,25 @@ export async function getHistoricalEnergyData(
     const solarToBattery = flows['1'] || 0;
     const solarToGrid = flows['2'] || 0;
     const gridToHome = flows['3'] || 0;
-    const gridToBattery = flows['4'] || 0;
+    const gridToBattery = flows['4'] || 0; // Note: This flow type is for AC charging of battery, typically from grid
     const batteryToHome = flows['5'] || 0;
     const batteryToGrid = flows['6'] || 0;
 
     const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
-    const totalGridImport = gridToHome + gridToBattery;
-    const totalGridExport = solarToGrid + batteryToGrid;
-    const totalBatteryCharge = solarToBattery + gridToBattery;
-    const totalBatteryDischarge = batteryToHome + batteryToGrid;
+    const totalGridImport = gridToHome + gridToBattery; // Sum of grid directly to home and grid to battery
+    const totalGridExport = solarToGrid + batteryToGrid; // Sum of solar to grid and battery to grid
+    const totalBatteryCharge = solarToBattery + gridToBattery; // Sum of solar to battery and grid to battery
+    const totalBatteryDischarge = batteryToHome + batteryToGrid; // Sum of battery to home and battery to grid
     const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
     
+    // The start_time from the API represents the beginning of the period (day, week, month, year)
+    // For weekly, monthly, yearly, it's the first day of that period.
     const parsedDate = parseISO(dailyEntry.start_time.split('T')[0]);
     const formattedDate = format(parsedDate, "yyyy-MM-dd");
 
 
     return {
-      date: formattedDate,
+      date: formattedDate, // This will be the start_time of the period
       solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
       gridImport: parseFloat(totalGridImport.toFixed(2)),
       gridExport: parseFloat(totalGridExport.toFixed(2)),
@@ -562,5 +565,6 @@ export async function getHistoricalEnergyData(
     };
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
+
 
 
