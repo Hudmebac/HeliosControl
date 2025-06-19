@@ -19,7 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
-import { format, parseISO, formatISO, subDays } from 'date-fns';
+import { format, parseISO, formatISO, subDays, parse as parseDate } from 'date-fns';
 
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
@@ -30,10 +30,6 @@ const EVChargerPage = () => {
   const [isLoadingEvData, setIsLoadingEvData] = useState(true);
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
-
-  // State for original simple analytics chart (to be potentially phased out or kept as quick view)
-  const [simpleChartData, setSimpleChartData] = useState<any[]>([]); // Renamed from chartData
-  const [rawSimpleAnalyticsData, setRawSimpleAnalyticsData] = useState<any[]>([]); // Renamed from analyticsData
 
   // State for new detailed analytics
   const [detailedStartDate, setDetailedStartDate] = useState<Date | undefined>(subDays(new Date(), 7));
@@ -59,12 +55,13 @@ const EVChargerPage = () => {
   const [isLoadingCommandSettings, setIsLoadingCommandSettings] = useState(true);
   const [inputSessionEnergyLimit, setInputSessionEnergyLimit] = useState<string>("");
 
+  // State for Charging Sessions
   const [chargingSessionsData, setChargingSessionsData] = useState<any[]>([]);
   const [isLoadingChargingSessions, setIsLoadingChargingSessions] = useState(false);
   const [chargingSessionsPage, setChargingSessionsPage] = useState(1);
   const [hasMoreChargingSessions, setHasMoreChargingSessions] = useState(true);
-  const [sessionStartDate, setSessionStartDate] = useState('');
-  const [sessionEndDate, setSessionEndDate] = useState('');
+  const [sessionFilterStartDate, setSessionFilterStartDate] = useState<string>(""); // Input as DD/MM/YYYY
+  const [sessionFilterEndDate, setSessionFilterEndDate] = useState<string>("");   // Input as DD/MM/YYYY
 
   const evChargerStatusMap: { [key: string]: string } = {
       Available: 'The EV charger is not plugged in to a vehicle',
@@ -76,7 +73,7 @@ const EVChargerPage = () => {
       Reserved: 'The EV charger has been reserved for a future charging session',
       Unavailable: 'The EV charger cannot start new charging sessions',
       Faulted: 'The EV charger is reporting an error',
-      Unknown: 'Unknown Status', 
+      Unknown: 'Unknown Status',
   };
 
   const evChargerStatusColorMap: { [key: string]: string } = {
@@ -318,34 +315,14 @@ const EVChargerPage = () => {
           } else {
             const meterData = await meterResponse.json();
             let currentPower = null;
-            // Assuming meterData.data is an array of readings, and each reading has a 'measurements' array
             if (meterData && meterData.data && meterData.data.length > 0 && meterData.data[0].measurements) {
                 const latestMeterReading = meterData.data[0];
-                const powerMeasurement = latestMeterReading.measurements.find((m: any) => m.measurand === 13); // 13 for Power.Active.Import
+                const powerMeasurement = latestMeterReading.measurements.find((m: any) => m.measurand === 13);
                 if (powerMeasurement) {
                     currentPower = powerMeasurement.value;
                 }
             }
             setEvChargerData((prevData: any) => ({ ...prevData, current_power: currentPower }));
-          }
-
-          // Fetch for simpleChartData (original analytics chart)
-          const historicalMeterResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/meter-data?page=1&pageSize=50`, { headers });
-          if (!historicalMeterResponse.ok) {
-            console.warn(`Failed to fetch historical meter data for EV charger ${chargerUuid}. Status: ${historicalMeterResponse.status}`);
-          } else {
-            const historicalMeterData = await historicalMeterResponse.json();
-            if (historicalMeterData && historicalMeterData.data) {
-              const formattedData = historicalMeterData.data.slice().reverse().map((dp: any) => {
-                const powerMeasurement = dp.measurements?.find((m: any) => m.measurand === 13);
-                return {
-                  time: new Date(dp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  power: powerMeasurement ? powerMeasurement.value : 0,
-                };
-              }).reverse();
-              setSimpleChartData(formattedData);
-              setRawSimpleAnalyticsData(historicalMeterData.data);
-            }
           }
         } else {
           setEvChargerData(null);
@@ -385,8 +362,6 @@ const EVChargerPage = () => {
 
     try {
         const headers = getAuthHeaders();
-        // Fetch up to 288 * 7 = 2016 data points for a week (5-min intervals)
-        // Adjust pageSize based on expected data density and API limits
         const response = await fetch(
             `/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/meter-data?start_time=${startTime}&end_time=${endTime}&measurands[0]=13&measurands[1]=4&meter_ids[0]=0&pageSize=2016`,
             { headers }
@@ -403,10 +378,10 @@ const EVChargerPage = () => {
 
             const powerData = rawDataPoints
                 .map(dp => {
-                    const powerMeasurement = dp.measurements.find(m => m.measurand === 13); // Power
+                    const powerMeasurement = dp.measurements.find(m => m.measurand === 13);
                     return {
                         timestamp: new Date(dp.timestamp),
-                        power: powerMeasurement && typeof powerMeasurement.value === 'number' ? powerMeasurement.value : 0, // Watts
+                        power: powerMeasurement && typeof powerMeasurement.value === 'number' ? powerMeasurement.value : 0,
                     };
                 })
                 .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
@@ -418,10 +393,10 @@ const EVChargerPage = () => {
 
             const cumulativeEnergyData = rawDataPoints
                 .map(dp => {
-                    const energyMeasurement = dp.measurements.find(m => m.measurand === 4); // Energy.Active.Import.Register
+                    const energyMeasurement = dp.measurements.find(m => m.measurand === 4);
                     return {
                         timestamp: new Date(dp.timestamp),
-                        cumulativeEnergy: energyMeasurement && typeof energyMeasurement.value === 'number' ? energyMeasurement.value : null, // kWh
+                        cumulativeEnergy: energyMeasurement && typeof energyMeasurement.value === 'number' ? energyMeasurement.value : null,
                     };
                 })
                 .filter(dp => dp.cumulativeEnergy !== null)
@@ -430,35 +405,15 @@ const EVChargerPage = () => {
             const intervalEnergy = [];
             let totalEnergy = 0;
             if (cumulativeEnergyData.length > 0) {
-                 // Initialize totalEnergy with the first valid reading if range is short or it's the only point
-                 if (cumulativeEnergyData.length === 1) {
-                    // Cannot calculate interval, but can show a "total so far" if meaningful
-                    // For a single point, interval consumption is not well-defined.
-                    // Could display the single cumulative value if the time range is very short.
-                 } else {
-                    // The first point's cumulative value could be the start of total calculation if it represents start of period.
-                    // However, interval calculation requires at least two points.
-                 }
-
-
                 for (let i = 1; i < cumulativeEnergyData.length; i++) {
                     const energyDiff = cumulativeEnergyData[i].cumulativeEnergy! - cumulativeEnergyData[i - 1].cumulativeEnergy!;
-                    if (energyDiff >= 0) { // Avoid negative consumption due to resets
+                    if (energyDiff >= 0) {
                         intervalEnergy.push({
                             time: format(cumulativeEnergyData[i].timestamp, "HH:mm (MMM d)"),
-                            energy: parseFloat(energyDiff.toFixed(3)), // kWh
+                            energy: parseFloat(energyDiff.toFixed(3)),
                         });
                         totalEnergy += energyDiff;
                     }
-                }
-                 // If there's only one data point, and it represents the cumulative total at that point
-                if (cumulativeEnergyData.length === 1 && cumulativeEnergyData[0].cumulativeEnergy !== null) {
-                    // This isn't interval data, but you could set totalEnergyForPeriod to this single value
-                    // if the context implies it's the total for a very specific, short query.
-                    // Or, acknowledge that interval data requires multiple points.
-                    // For now, intervalEnergy will be empty, totalEnergy will be 0 from loop.
-                    // If the API guarantees the first point of a range is its start total, this could be handled.
-                    // For now, assuming interval calculation is primary.
                 }
             }
             setDetailedEnergyIntervalData(intervalEnergy);
@@ -478,6 +433,64 @@ const EVChargerPage = () => {
     }
   }, [apiKey, evChargerData?.uuid, getAuthHeaders, handleApiError, toast]);
 
+  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDateStr?: string, endDateStr?: string) => {
+    if (!apiKey || !evChargerData?.uuid) return;
+    setIsLoadingChargingSessions(true);
+    try {
+        const headers = getAuthHeaders();
+        const params = new URLSearchParams();
+        params.append('page', String(page));
+        params.append('pageSize', '10');
+
+        if (startDateStr) {
+            try {
+                const parsedStartDate = parseDate(startDateStr, 'dd/MM/yyyy', new Date());
+                if (!isNaN(parsedStartDate.valueOf())) {
+                    params.append('start_time', formatISO(parsedStartDate, { representation: 'date' }));
+                } else {
+                    console.warn("Invalid start date format for session filter:", startDateStr);
+                }
+            } catch (e) { console.warn("Error parsing start date for session filter:", startDateStr, e); }
+        }
+        if (endDateStr) {
+            try {
+                const parsedEndDate = parseDate(endDateStr, 'dd/MM/yyyy', new Date());
+                 if (!isNaN(parsedEndDate.valueOf())) {
+                    params.append('end_time', formatISO(parsedEndDate, { representation: 'date' }));
+                } else {
+                     console.warn("Invalid end date format for session filter:", endDateStr);
+                }
+            } catch (e) { console.warn("Error parsing end date for session filter:", endDateStr, e); }
+        }
+
+        const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/charging-sessions?${params.toString()}`, { headers });
+
+        if (!response.ok) {
+            await handleApiError(response, 'fetching charging sessions');
+            setChargingSessionsData([]);
+            setHasMoreChargingSessions(false);
+            return;
+        }
+        const result = await response.json();
+        if (result && result.data) {
+            const sortedData = result.data.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+            setChargingSessionsData(prev => append ? [...prev, ...sortedData] : sortedData);
+            setChargingSessionsPage(page);
+            setHasMoreChargingSessions(result.data.length > 0 && result.meta && result.meta.current_page < result.meta.last_page);
+        } else {
+            setChargingSessionsData(append ? chargingSessionsData : []);
+            setHasMoreChargingSessions(false);
+        }
+    } catch (error) {
+        console.error('Error fetching charging sessions:', error);
+        setChargingSessionsData(append ? chargingSessionsData : []);
+        setHasMoreChargingSessions(false);
+        toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
+    } finally {
+        setIsLoadingChargingSessions(false);
+    }
+}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
+
 
   useEffect(() => {
     if (!isLoadingApiKey && apiKey) {
@@ -496,16 +509,14 @@ const EVChargerPage = () => {
         fetchSchedules(evChargerData.uuid),
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
-        fetchCurrentSessionEnergyLimit(evChargerData.uuid)
+        fetchCurrentSessionEnergyLimit(evChargerData.uuid),
+        fetchChargingSessions(1, false) // Fetch initial charging sessions
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
-      // Optionally fetch detailed analytics for default range on load
-      // if (detailedStartDate && detailedEndDate) {
-      //   fetchDetailedAnalyticsData(detailedStartDate, detailedEndDate);
-      // }
     }
-  }, [evChargerData?.uuid, apiKey, fetchLegacySettings, fetchSchedules, fetchCurrentChargePowerLimit, fetchCurrentPlugAndGo, fetchCurrentSessionEnergyLimit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evChargerData?.uuid, apiKey, fetchLegacySettings, fetchSchedules, fetchCurrentChargePowerLimit, fetchCurrentPlugAndGo, fetchCurrentSessionEnergyLimit, fetchChargingSessions]);
 
 
   const handleStartCharge = async () => {
@@ -558,8 +569,8 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true); 
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; 
+    await fetchEvChargerData(true);
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT';
 
     if (!isInstantControl) {
       toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
@@ -761,62 +772,14 @@ const EVChargerPage = () => {
     }
   };
 
-  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDate?: string, endDate?: string) => {
-    if (!apiKey || !evChargerData?.uuid) return;
-    setIsLoadingChargingSessions(true);
-    try {
-      const headers = getAuthHeaders();
-      let url = `/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/charging-sessions?page=${page}&pageSize=10`;
-      if (startDate) {
-          const [dd, mm, yyyy] = startDate.split('/');
-          url += `&start_time=${yyyy}-${mm}-${dd}T00:00:00Z`;
-      }
-      if (endDate) {
-           const [dd, mm, yyyy] = endDate.split('/');
-          url += `&end_time=${yyyy}-${mm}-${dd}T23:59:59Z`;
-      }
-      const response = await fetch(url, { headers });
-      if (!response.ok) {
-        await handleApiError(response, 'fetching charging sessions');
-        setChargingSessionsData([]);
-        setHasMoreChargingSessions(false);
-        return;
-      }
-      const result = await response.json();
-      if (result && result.data) {
-        const sortedData = result.data.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
-        setChargingSessionsData(prev => append ? [...prev, ...sortedData] : sortedData);
-        setChargingSessionsPage(page);
-        setHasMoreChargingSessions(result.data.length > 0 && result.meta && result.meta.current_page < result.meta.last_page);
-      } else {
-        setChargingSessionsData(append ? chargingSessionsData : []);
-        setHasMoreChargingSessions(false);
-      }
-    } catch (error) {
-      console.error('Error fetching charging sessions:', error);
-      setChargingSessionsData(append ? chargingSessionsData : []);
-      setHasMoreChargingSessions(false);
-      toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
-    } finally {
-      setIsLoadingChargingSessions(false);
-    }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]);
-
   const handleSessionSearch = (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      fetchChargingSessions(1, false, sessionStartDate, sessionEndDate);
+    event.preventDefault();
+    fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate);
   };
-
-  useEffect(() => {
-    if (evChargerData?.uuid && apiKey) {
-        fetchChargingSessions(1, false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey]);
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
     if (value === null || value === undefined || value === '') {
-      return null; 
+      return null;
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -872,7 +835,7 @@ const EVChargerPage = () => {
               </TabsList>
 
               <TabsContent value="overview">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">                 
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2">
                     <Card>
                       <CardHeader>
@@ -881,8 +844,8 @@ const EVChargerPage = () => {
                           <div className="text-sm text-muted-foreground">Status: <span className={`font-medium ${evChargerStatusColorMap[evChargerData.status] || 'text-foreground'}`}>{mapEVChargerAPIStatus(evChargerData.status) || 'Unknown'}</span> <span className="ml-1 text-xs">{evChargerStatusMap[evChargerData.status] || 'No description available'}</span></div>
                         )}
                       </CardHeader>
-                      <CardContent className="space-y-6 pb-0 border-b border-border/50"> 
-                          <div className="space-y-1"> 
+                      <CardContent className="space-y-6 pb-0 border-b border-border/50">
+                          <div className="space-y-1">
                               {renderStatusValue("Charger", evChargerData?.alias, <FileText />)}
                               {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                               {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
@@ -890,10 +853,10 @@ const EVChargerPage = () => {
                           </div>
                       </CardContent>
 
-                      <CardHeader className="pt-6"> 
+                      <CardHeader className="pt-6">
                         <CardTitle className="flex items-center"><Power className="mr-2 h-5 w-5"/>Instant Control</CardTitle>
                        </CardHeader>
-                      <CardContent className="space-y-6 pt-0"> 
+                      <CardContent className="space-y-6 pt-0">
                          {isLoadingCommandSettings ? (
                            <div className="flex justify-center items-center py-8">
                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -960,11 +923,11 @@ const EVChargerPage = () => {
                             </form>
                           </>
                         )}
-                      </CardContent> 
-                    </Card> 
+                      </CardContent>
+                    </Card>
                   </div>
 
-                 <div className="lg:col-span-1"></div> 
+                 <div className="lg:col-span-1"></div>
 
                 </div>
                  <Card className="mt-6">
@@ -1101,7 +1064,7 @@ const EVChargerPage = () => {
                         </div>
                       </>
                     )}
-                    
+
                     {!isLoadingDetailedAnalytics && detailedEnergyIntervalData.length > 0 && (
                       <>
                         <h3 className="text-lg font-semibold mt-6 mb-2">Energy Consumed Per Interval</h3>
@@ -1125,28 +1088,27 @@ const EVChargerPage = () => {
                             Total Energy Consumed in Period: {totalEnergyForPeriod.toFixed(3)} kWh
                         </p>
                     )}
-                    
+
                     {!isLoadingDetailedAnalytics && detailedPowerData.length === 0 && detailedEnergyIntervalData.length === 0 && (
                         <p className="text-center text-muted-foreground py-4">No detailed analytics data to display for the selected period. Try fetching data.</p>
                     )}
-
                   </CardContent>
                 </Card>
 
                 <Card className="mt-6">
                     <CardHeader>
                         <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History</CardTitle>
-                        <CardDescription>Review past charging sessions.</CardDescription>
+                        <CardDescription>Review past charging sessions. Filter by date (DD/MM/YYYY).</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSessionSearch} className="flex flex-col sm:flex-row gap-2 mb-4">
-                            <Input type="text" value={sessionStartDate} onChange={(e) => setSessionStartDate(e.target.value)} placeholder="Start Date (DD/MM/YYYY)" className="flex-1"/>
-                            <Input type="text" value={sessionEndDate} onChange={(e) => setSessionEndDate(e.target.value)} placeholder="End Date (DD/MM/YYYY)" className="flex-1"/>
+                            <Input type="text" value={sessionFilterStartDate} onChange={(e) => setSessionFilterStartDate(e.target.value)} placeholder="Start Date (DD/MM/YYYY)" className="flex-1"/>
+                            <Input type="text" value={sessionFilterEndDate} onChange={(e) => setSessionFilterEndDate(e.target.value)} placeholder="End Date (DD/MM/YYYY)" className="flex-1"/>
                             <Button type="submit" className="flex-shrink-0">
                                 <ListFilter className="mr-2 h-4 w-4" /> Search
                             </Button>
                         </form>
-                        {isLoadingChargingSessions && chargingSessionsData.length === 0 && <Loader2 className="animate-spin mx-auto my-4" />}
+                        {isLoadingChargingSessions && chargingSessionsData.length === 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
                         {chargingSessionsData.length > 0 ? (
                             <>
                                 <Table>
@@ -1161,24 +1123,30 @@ const EVChargerPage = () => {
                                     <TableBody>
                                         {chargingSessionsData.map((session, index) => (
                                             <TableRow key={session.id || index}>
-                                                <TableCell>{format(new Date(session.started_at), "PPpp")}</TableCell>
-                                                <TableCell>{session.finished_at ? format(new Date(session.finished_at), "PPpp") : 'Ongoing'}</TableCell>
-                                                <TableCell className="text-right">{session.kwh_delivered?.toFixed(2) ?? 'N/A'}</TableCell>
-                                                <TableCell>{session.status || 'N/A'}</TableCell>
+                                                <TableCell>{session.started_at ? format(parseISO(session.started_at), "PPpp") : 'N/A'}</TableCell>
+                                                <TableCell>{session.stopped_at ? format(parseISO(session.stopped_at), "PPpp") : 'Ongoing'}</TableCell>
+                                                <TableCell className="text-right">
+                                                  {typeof session.kwh_delivered === 'number'
+                                                    ? session.kwh_delivered.toFixed(2)
+                                                    : (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start
+                                                      ? (session.meter_stop - session.meter_start).toFixed(2)
+                                                      : 'N/A')}
+                                                </TableCell>
+                                                <TableCell>{session.stop_reason || (session.stopped_at ? 'Completed' : 'Active')}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
                                 {hasMoreChargingSessions && !isLoadingChargingSessions && (
                                     <div className="mt-4 text-center">
-                                        <Button onClick={() => fetchChargingSessions(chargingSessionsPage + 1, true, sessionStartDate, sessionEndDate)}>
+                                        <Button onClick={() => fetchChargingSessions(chargingSessionsPage + 1, true, sessionFilterStartDate, sessionFilterEndDate)}>
                                             Load More
                                         </Button>
                                     </div>
                                 )}
-                                {isLoadingChargingSessions && chargingSessionsData.length > 0 && <Loader2 className="animate-spin mx-auto my-4" />}
+                                {isLoadingChargingSessions && chargingSessionsData.length > 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
                             </>
-                        ) : (!isLoadingChargingSessions && <p>No charging sessions found for the selected criteria.</p>)}
+                        ) : (!isLoadingChargingSessions && <p className="text-center text-muted-foreground py-4">No charging sessions found for the selected criteria.</p>)}
                     </CardContent>
                 </Card>
               </TabsContent>
