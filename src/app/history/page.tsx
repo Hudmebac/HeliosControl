@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
-import { getHistoricalEnergyData } from "@/lib/givenergy";
+import { getHistoricalEnergyData } from "@/lib/givenergy.ts"; // Explicitly import from .ts
 import type { HistoricalEnergyDataPoint } from "@/lib/types";
 import { format, subDays, parseISO } from "date-fns";
 import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, LineChartIcon, BatteryCharging, SunMedium, HomeIcon } from "lucide-react";
@@ -283,3 +283,4 @@ export default function HistoryPage() {
     </div>
   );
 }
+
