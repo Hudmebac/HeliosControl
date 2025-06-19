@@ -407,10 +407,10 @@ const EVChargerPage = () => {
             if (cumulativeEnergyData.length > 0) {
                 for (let i = 1; i < cumulativeEnergyData.length; i++) {
                     const energyDiff = cumulativeEnergyData[i].cumulativeEnergy! - cumulativeEnergyData[i - 1].cumulativeEnergy!;
-                    if (energyDiff >= 0) {
+                    if (energyDiff >= 0) { // Ensure no negative energy consumption due to resets or bad data
                         intervalEnergy.push({
                             time: format(cumulativeEnergyData[i].timestamp, "HH:mm (MMM d)"),
-                            energy: parseFloat(energyDiff.toFixed(3)),
+                            energy: parseFloat(energyDiff.toFixed(3)), // Store as kWh
                         });
                         totalEnergy += energyDiff;
                     }
@@ -440,12 +440,14 @@ const EVChargerPage = () => {
         const headers = getAuthHeaders();
         const params = new URLSearchParams();
         params.append('page', String(page));
-        params.append('pageSize', '10');
+        params.append('pageSize', '10'); // Fetch 10 sessions per page
 
         if (startDate) {
+            // Format date as YYYY-MM-DD for the API
             params.append('start_time', formatISO(startDate, { representation: 'date' }));
         }
         if (endDate) {
+             // Format date as YYYY-MM-DD for the API
              params.append('end_time', formatISO(endDate, { representation: 'date' }));
         }
 
@@ -459,9 +461,11 @@ const EVChargerPage = () => {
         }
         const result = await response.json();
         if (result && result.data) {
+            // Sort data by started_at descending before setting/appending
             const sortedData = result.data.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
             setChargingSessionsData(prev => append ? [...prev, ...sortedData] : sortedData);
             setChargingSessionsPage(page);
+            // Check if there are more pages based on API metadata
             setHasMoreChargingSessions(result.data.length > 0 && result.meta && result.meta.current_page < result.meta.last_page);
         } else {
             setChargingSessionsData(append ? chargingSessionsData : []);
@@ -469,13 +473,13 @@ const EVChargerPage = () => {
         }
     } catch (error) {
         console.error('Error fetching charging sessions:', error);
-        setChargingSessionsData(append ? chargingSessionsData : []);
+        setChargingSessionsData(append ? chargingSessionsData : []); // Reset on error or ensure it stays if appending
         setHasMoreChargingSessions(false);
         toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
     } finally {
         setIsLoadingChargingSessions(false);
     }
-}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
+}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]); // Added chargingSessionsData to deps for append logic stability
 
 
   useEffect(() => {
@@ -496,13 +500,13 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
-        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate)
+        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate) // Initial fetch for sessions
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey, fetchLegacySettings, fetchSchedules, fetchCurrentChargePowerLimit, fetchCurrentPlugAndGo, fetchCurrentSessionEnergyLimit, fetchChargingSessions]);
+  }, [evChargerData?.uuid, apiKey]); // Removed specific fetch functions from deps as they are stable callbacks
 
 
   const handleStartCharge = async () => {
@@ -555,11 +559,14 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true);
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT';
+    // Refetch EV charger data to ensure `status` is current before checking control type
+    await fetchEvChargerData(true); 
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; // Example status, adjust if API uses a different value
 
     if (!isInstantControl) {
       toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
+      // It might be useful to fetch current charge power limit again here to ensure UI consistency
+      // fetchCurrentChargePowerLimit(evChargerData.uuid); 
       return;
     }
 
@@ -613,7 +620,7 @@ const EVChargerPage = () => {
     event.preventDefault();
     if (!apiKey || !evChargerData?.uuid) return;
     const limitValue = parseFloat(inputSessionEnergyLimit);
-    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) {
+    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) { // Assuming API has these limits
         toast({ variant: "destructive", title: "Invalid Input", description: "Session energy limit must be between 0.1 and 250 kWh." });
         return;
     }
@@ -641,20 +648,25 @@ const EVChargerPage = () => {
 
   const handleToggleSolarCharging = async (checked: boolean) => {
     if (!apiKey || !inverterSerial) return;
+    // Optimistically update UI
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, solarCharging: checked }));
     try {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 2 : 0 }),
+        body: JSON.stringify({ value: checked ? 2 : 0 }), // Example values, confirm actual API needs
       });
       if (!response.ok) {
         await handleApiError(response, 'toggling solar charging');
+        // Optionally revert optimistic update on error
+        // setSettingsLegacy(prevSettings => ({ ...prevSettings, solarCharging: !checked }));
         return;
       }
-      fetchEvChargerData(true);
+      // fetchEvChargerData(true); // Or a more specific settings refetch if available
       toast({title: "Solar Charging Setting Updated"});
     } catch (error) {
+      // Optionally revert optimistic update on error
+      // setSettingsLegacy(prevSettings => ({ ...prevSettings, solarCharging: !checked }));
       toast({ variant: "destructive", title: "Solar Charging Error", description: "An unexpected error occurred." });
     }
   };
@@ -672,7 +684,7 @@ const EVChargerPage = () => {
          await handleApiError(response, 'toggling plug and charge (settings)');
         return;
       }
-      fetchEvChargerData(true);
+      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Plug & Charge Setting (Register) Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
@@ -681,18 +693,19 @@ const EVChargerPage = () => {
 
   const handleSetMaxBatteryDischargeToEvc = async (value: number[]) => {
      if (!apiKey || !inverterSerial) return;
+    // Update UI optimistically if desired, or wait for commit
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, maxBatteryDischargeToEvc: value[0] * 1000 }));
     try {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] * 1000 }),
+        body: JSON.stringify({ value: value[0] * 1000 }), // Assuming API expects Watts
       });
       if (!response.ok) {
         await handleApiError(response, 'setting max battery discharge');
         return;
       }
-      fetchEvChargerData(true);
+      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Battery Discharge to EVC Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Battery Discharge Error", description: "An unexpected error occurred." });
@@ -712,12 +725,12 @@ const EVChargerPage = () => {
         await handleApiError(response, 'setting charge rate (settings)');
         return;
       }
-      fetchEvChargerData(true);
+      // fetchEvChargerData(true); // Or specific settings refetch
       toast({title: "Charge Rate Limit (Register) Updated"});
     } catch (error) {
       toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
     }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, fetchEvChargerData]);
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]); // Removed fetchEvChargerData from deps as it's stable
 
   const handleAddSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -726,14 +739,24 @@ const EVChargerPage = () => {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const scheduleName = formData.get('scheduleName') as string;
-    const startTime = formData.get('startTime') as string;
-    const endTime = formData.get('endTime') as string;
-    const daysSelected = Array.from(formData.getAll('days')) as string[];
+    const startTime = formData.get('startTime') as string; // "HH:mm"
+    const endTime = formData.get('endTime') as string;   // "HH:mm"
+    const daysSelected = Array.from(formData.getAll('days')) as string[]; // e.g., ["Mon", "Tue"]
 
+    // API expects days as a comma-separated string, e.g., "Mon,Tue,Wed"
+    // Example: "start_time":"00:30","end_time":"04:30","days":"Mon,Tue,Wed,Thu,Fri,Sat,Sun"
     const payload = {
-      name: scheduleName || "Unnamed Schedule",
-      active: true,
-      rules: [ { start_time: startTime, end_time: endTime, days: daysSelected.join(','), } ]
+      name: scheduleName || "Unnamed Schedule", // API might require a name, or have a default
+      active: true, // Assuming new schedules should be active
+      // The structure for rules might be an array if multiple rules per schedule are supported by API.
+      // For now, assuming one rule per "named" schedule from this form.
+      rules: [
+        {
+          start_time: startTime,
+          end_time: endTime,
+          days: daysSelected.join(','), // Convert array to comma-separated string
+        }
+      ]
     };
 
     try {
@@ -749,7 +772,7 @@ const EVChargerPage = () => {
       const data = await response.json();
       if (data && data.data && data.data.success) {
         toast({ title: "Schedule Updated", description: data.data.message || "Schedule command accepted." });
-        fetchSchedules(evChargerData.uuid);
+        fetchSchedules(evChargerData.uuid); // Refetch schedules to update the list
       } else {
         toast({ variant: "destructive", title: "Schedule Update Not Confirmed", description: data?.data?.message || data?.error || "Command sent, but success not confirmed." });
       }
@@ -765,7 +788,7 @@ const EVChargerPage = () => {
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
     if (value === null || value === undefined || value === '') {
-      return null;
+      return null; // Don't render if value is not meaningful
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -1133,20 +1156,25 @@ const EVChargerPage = () => {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {chargingSessionsData.map((session, index) => (
-                                            <TableRow key={session.id || index}>
-                                                <TableCell>{session.started_at ? format(parseISO(session.started_at), "PPpp") : 'N/A'}</TableCell>
-                                                <TableCell>{session.stopped_at ? format(parseISO(session.stopped_at), "PPpp") : 'Ongoing'}</TableCell>
-                                                <TableCell className="text-right">
-                                                  {typeof session.kwh_delivered === 'number'
-                                                    ? session.kwh_delivered.toFixed(2)
-                                                    : (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start
-                                                      ? (session.meter_stop - session.meter_start).toFixed(2)
-                                                      : 'N/A')}
-                                                </TableCell>
-                                                <TableCell>{session.stop_reason || (session.stopped_at ? 'Completed' : 'Active')}</TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {chargingSessionsData.map((session, index) => {
+                                            let energyDisplay = "N/A";
+                                            if (typeof session.kwh_delivered === 'number') {
+                                                energyDisplay = session.kwh_delivered.toFixed(2);
+                                            } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
+                                                const energyWh = session.meter_stop - session.meter_start;
+                                                const energyKWh = energyWh / 1000;
+                                                energyDisplay = energyKWh.toFixed(2);
+                                            }
+
+                                            return (
+                                                <TableRow key={session.id || index}>
+                                                    <TableCell>{session.started_at ? format(parseISO(session.started_at), "PPpp") : 'N/A'}</TableCell>
+                                                    <TableCell>{session.stopped_at ? format(parseISO(session.stopped_at), "PPpp") : 'Ongoing'}</TableCell>
+                                                    <TableCell className="text-right">{energyDisplay}</TableCell>
+                                                    <TableCell>{session.stop_reason || (session.stopped_at ? 'Completed' : 'Active')}</TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                                 {hasMoreChargingSessions && !isLoadingChargingSessions && (
@@ -1206,11 +1234,11 @@ const EVChargerPage = () => {
                           <Slider
                             id="max-battery-discharge-evc"
                             min={0}
-                            max={7}
+                            max={7} // Example max, adjust as needed
                             step={0.1}
                             value={[settingsLegacy.maxBatteryDischargeToEvc / 1000]}
-                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))}
-                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])}
+                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))} // Live update for visual feedback
+                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])} // API call on release
                             disabled={!inverterSerial}
                           />
                           <p className="text-sm text-muted-foreground mt-1">
@@ -1222,8 +1250,8 @@ const EVChargerPage = () => {
                             <Label htmlFor="charge-rate-limit-settings">Charge Rate Limit (Amps - Register 621)</Label>
                             <Slider
                                 id="charge-rate-limit-settings"
-                                min={6}
-                                max={32}
+                                min={6} // Typical minimum
+                                max={32} // Typical maximum
                                 step={1}
                                 value={[settingsLegacy.chargeRate]}
                                 onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, chargeRate: value[0]}))}
