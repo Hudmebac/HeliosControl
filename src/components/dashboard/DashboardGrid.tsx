@@ -425,15 +425,11 @@ function getEVChargerCardDetails(
         {`${statusText} (${mappedDescription})`}
       </p>
     );
-    if (typeof evData.dailyTotalKWh === 'number' && !isNaN(evData.dailyTotalKWh)) {
+    if (typeof evData.dailyTotalKWh === 'number' && !isNaN(evData.dailyTotalKWh) && evData.dailyTotalKWh > 0) {
         descriptionElements.push(<div key="dailyTotal">{`Today's Energy: ${evData.dailyTotalKWh.toFixed(1)} kWh`}</div>);
-    } else {
-        descriptionElements.push(<div key="dailyTotal">{`Today's Energy: N/A`}</div>);
     }
     if (typeof evData.sessionKWhDelivered === 'number' && !isNaN(evData.sessionKWhDelivered)) {
         descriptionElements.push(<div key="sessionTotal">{`Session Energy: ${evData.sessionKWhDelivered.toFixed(1)} kWh`}</div>);
-    } else {
-        descriptionElements.push(<div key="sessionTotal">{`Session Energy: N/A`}</div>);
     }
     descriptionElements.push(<div key="time" className="text-xs text-muted-foreground">{`Updated: ${new Date(timestamp).toLocaleTimeString()}`}</div>);
 
