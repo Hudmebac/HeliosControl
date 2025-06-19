@@ -528,7 +528,7 @@ export async function getHistoricalEnergyData(
 
     if (isEmptyObject) {
       console.log(
-        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. Interpreting as no data.`
+        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. Interpreting as no data entries.`
       );
     } else {
       console.warn(
@@ -549,18 +549,36 @@ export async function getHistoricalEnergyData(
     const solarToBattery = flows['1'] || 0;
     const solarToGrid = flows['2'] || 0;
     const gridToHome = flows['3'] || 0;
-    const gridToBattery = flows['4'] || 0; // Note: This flow type is for AC charging of battery, typically from grid
+    const gridToBattery = flows['4'] || 0; 
     const batteryToHome = flows['5'] || 0;
     const batteryToGrid = flows['6'] || 0;
 
     const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
-    const totalGridImport = gridToHome + gridToBattery; // Sum of grid directly to home and grid to battery
-    const totalGridExport = solarToGrid + batteryToGrid; // Sum of solar to grid and battery to grid
-    const totalBatteryCharge = solarToBattery + gridToBattery; // Sum of solar to battery and grid to battery
-    const totalBatteryDischarge = batteryToHome + batteryToGrid; // Sum of battery to home and battery to grid
+    const totalGridImport = gridToHome + gridToBattery; 
+    const totalGridExport = solarToGrid + batteryToGrid; 
+    const totalBatteryCharge = solarToBattery + gridToBattery; 
+    const totalBatteryDischarge = batteryToHome + batteryToGrid; 
     const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
     
-    const parsedDate = parseISO(dailyEntry.start_time.split('T')[0]);
+    // Robust date parsing for dailyEntry.start_time
+    // Handles "YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD HH:MM", or "YYYY-MM-DD"
+    const datePart = dailyEntry.start_time.split(' ')[0];
+    let parsedDate;
+    try {
+      parsedDate = parseISO(datePart); // parseISO expects 'YYYY-MM-DD'
+      if (isNaN(parsedDate.getTime())) { // Check if parseISO returned Invalid Date
+        throw new Error('Invalid date from parseISO');
+      }
+    } catch (e) {
+      console.warn(`[History] Could not parse date string "${dailyEntry.start_time}" (date part: "${datePart}") using parseISO. Falling back to direct Date constructor. Error: ${e}`);
+      // Fallback for formats parseISO might not like but `new Date` might handle (e.g. some non-standard variations)
+      // This is less reliable than parseISO for strict ISO formats but more forgiving for others.
+      parsedDate = new Date(datePart); 
+      if (isNaN(parsedDate.getTime())) {
+         console.error(`[History] Fallback date parsing also failed for "${dailyEntry.start_time}". Using current date as placeholder.`);
+         parsedDate = new Date(); // Should not happen if API provides a date string
+      }
+    }
     const formattedDate = format(parsedDate, "yyyy-MM-dd");
 
 
@@ -580,7 +598,4 @@ export async function getHistoricalEnergyData(
     };
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
-
-
-
 
