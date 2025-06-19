@@ -496,6 +496,8 @@ export async function getHistoricalEnergyData(
   const startTimeFormatted = format(startDate, "yyyy-MM-dd");
   const endTimeFormatted = format(endDate, "yyyy-MM-dd");
 
+  console.log(`[History] Fetching historical energy data for Inverter: ${inverterSerial}, Start: ${startTimeFormatted}, End: ${endTimeFormatted}`);
+
   const apiResponse = await _fetchGivEnergyAPI<
     GivEnergyAPIData<{ start_time: string; end_time: string; data: { [key: string]: number } }[]>
   >(apiKey, `/inverter/${inverterSerial}/energy-flows`, {
@@ -507,10 +509,20 @@ export async function getHistoricalEnergyData(
       types: [0, 1, 2, 3, 4, 5, 6], // All relevant flow types
     }),
   });
+  
+  console.log("[History] Raw API response from energy-flows:", JSON.stringify(apiResponse, null, 2));
 
-  if (!apiResponse || !Array.isArray(apiResponse.data)) {
-    console.warn("Historical energy flows API returned unexpected data structure or no data array for the given range. API Response:", apiResponse);
+  if (!apiResponse || !apiResponse.data || !Array.isArray(apiResponse.data)) {
+    console.warn(
+      "[History] Historical energy flows API returned unexpected data structure or no data array.",
+      "apiResponse.data type:", typeof apiResponse?.data,
+      "Is Array:", Array.isArray(apiResponse?.data)
+    );
     return [];
+  }
+  
+  if (apiResponse.data.length === 0) {
+    console.log("[History] API returned an empty data array for the selected range.");
   }
   
   return apiResponse.data.map(dailyEntry => {
@@ -550,4 +562,5 @@ export async function getHistoricalEnergyData(
     };
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
+
 

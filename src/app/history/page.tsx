@@ -69,7 +69,7 @@ export default function HistoryPage() {
     try {
       const data = await getHistoricalEnergyData(apiKey, inverterSerial, startDate, endDate);
       setHistoricalData(data);
-      if (data.length === 0) {
+      if (data.length === 0 && !error) { // Only toast if no other error occurred
         toast({ title: "No Data", description: "No historical data found for the selected range."});
       }
     } catch (e: any) {
@@ -80,14 +80,14 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey, inverterSerial, startDate, endDate, toast]);
+  }, [apiKey, inverterSerial, startDate, endDate, toast, error]); // Added error to dependency array
 
   useEffect(() => {
     if (apiKey && inverterSerial && !isLoadingApiKey) {
       fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, inverterSerial, isLoadingApiKey, fetchData]); // Added fetchData to dependency array
+  }, [apiKey, inverterSerial, isLoadingApiKey, fetchData]);
 
   const formattedChartData = historicalData.map(item => ({
     ...item,
@@ -190,7 +190,7 @@ export default function HistoryPage() {
               </PopoverContent>
             </Popover>
           </div>
-          <Button onClick={fetchData} disabled={loading || !apiKey || !inverterSerial} className="w-full sm:w-auto">
+          <Button onClick={() => fetchData()} disabled={loading || !apiKey || !inverterSerial} className="w-full sm:w-auto">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch History"}
           </Button>
         </CardContent>
@@ -273,11 +273,12 @@ export default function HistoryPage() {
           </div>
         </>
       )}
+      {/* Updated "No Data" message display condition and text */}
       {!loading && !error && historicalData.length === 0 && apiKey && inverterSerial && (
          <div className="text-center py-10 text-muted-foreground">
             <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-            <p>No data to display for the selected period, or initial load pending.</p>
-            <p>Try adjusting the date range or click "Fetch History".</p>
+            <p>No data available for the selected period.</p>
+            <p>Try adjusting the date range or click "Fetch History" again.</p>
         </div>
       )}
     </div>
