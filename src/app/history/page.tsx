@@ -1,6 +1,7 @@
 
 "use client";
 
+import * as React from 'react'; // Added React import
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -43,8 +44,8 @@ const groupingOptions: GroupingOption[] = [
   { value: "2", label: "Weekly", apiGroupingValue: 2, datePickerLabel: "Select Day in Target Week", datePickerType: 'calendar' },
   { value: "3", label: "Monthly", apiGroupingValue: 3, datePickerLabel: "Select Month", datePickerType: 'month_select' },
   { value: "4", label: "Yearly", apiGroupingValue: 4, datePickerLabel: "Select Day in Target Year", datePickerType: 'calendar' },
-  { value: "5", label: "All Time", apiGroupingValue: 4, datePickerType: 'none' },
-  { value: "6", label: "Custom Range", apiGroupingValue: 1, datePickerType: 'range' },
+  { value: "5", label: "All Time", apiGroupingValue: 4, datePickerType: 'none' }, // API grouping 4 for yearly data
+  { value: "6", label: "Custom Range", apiGroupingValue: 1, datePickerType: 'range' }, // API grouping 1 for daily data
 ];
 
 const generateMonthOptions = () => {
@@ -125,15 +126,17 @@ export default function HistoryPage() {
             setError("Invalid period selection for chosen report type."); setLoading(false); return;
         }
         break;
-      case "none": // All Time
-        apiStartDate = new Date('2000-01-01');
-        apiEndDate = new Date();
+      case "none": // All Time (fetch yearly data from a very early date)
+        apiStartDate = new Date('2000-01-01'); // A sufficiently early date
+        apiEndDate = new Date(); // Current date
+        // apiGrouping is already set to 4 (yearly) by groupingOptions
         break;
-      case "range": // Custom Range
+      case "range": // Custom Range (fetch daily data for the range)
         if (!customStartDate || !customEndDate) { setError("Please select a start and end date."); setLoading(false); return; }
         if (customEndDate < customStartDate) { setError("End date cannot be before start date."); setLoading(false); return; }
         apiStartDate = customStartDate;
         apiEndDate = customEndDate;
+        // apiGrouping is already set to 1 (daily) by groupingOptions
         break;
       default:
         setError("Invalid grouping or date picker type configuration.");
@@ -144,18 +147,18 @@ export default function HistoryPage() {
     try {
       const data = await getHistoricalEnergyData(apiKey, inverterSerial, apiStartDate, apiEndDate, apiGrouping);
       setHistoricalData(data);
-      if (data.length === 0 && !error) {
+      if (data.length === 0 && !error) { // Ensure error is null before showing no data toast
         toast({ title: "No Data", description: "No historical data found for the selected period and granularity."});
       }
     } catch (e: any) {
       console.error("Error fetching historical data:", e);
       setError(e.message || "Failed to fetch historical data.");
-      setHistoricalData([]);
+      setHistoricalData([]); // Clear data on error
       toast({ variant: "destructive", title: "Fetch Error", description: e.message || "Could not load historical data."});
     } finally {
       setLoading(false);
     }
-  }, [apiKey, inverterSerial, periodDate, customStartDate, customEndDate, selectedGrouping, toast, error]);
+  }, [apiKey, inverterSerial, periodDate, customStartDate, customEndDate, selectedGrouping, toast, error]); // Added error to dependency array
 
   useEffect(() => {
     if (apiKey && inverterSerial && !isLoadingApiKey) {
@@ -164,15 +167,15 @@ export default function HistoryPage() {
   }, [apiKey, inverterSerial, isLoadingApiKey, fetchData]);
 
   const formattedChartData = historicalData.map(item => {
-    const parsedDate = parseISO(item.date);
+    const parsedDate = parseISO(item.date); // Date from API is already start of period
     let label = "";
     const currentApiGrouping = groupingOptions.find(opt => opt.value === selectedGrouping)?.apiGroupingValue || 1;
 
-    if (currentApiGrouping === 1) label = format(parsedDate, "MMM d, yy");
-    else if (currentApiGrouping === 2) label = `W/C ${format(parsedDate, "MMM d, yy")}`;
-    else if (currentApiGrouping === 3) label = format(parsedDate, "MMM yyyy");
-    else if (currentApiGrouping === 4) label = format(parsedDate, "yyyy");
-    else label = format(parsedDate, "MMM d, yy");
+    if (currentApiGrouping === 1) label = format(parsedDate, "MMM d, yy"); // Daily
+    else if (currentApiGrouping === 2) label = `W/C ${format(parsedDate, "MMM d, yy")}`; // Weekly (start of week)
+    else if (currentApiGrouping === 3) label = format(parsedDate, "MMM yyyy"); // Monthly (start of month)
+    else if (currentApiGrouping === 4) label = format(parsedDate, "yyyy"); // Yearly (start of year)
+    else label = format(parsedDate, "MMM d, yy"); // Default/fallback
 
     return {
       ...item,
@@ -263,13 +266,14 @@ export default function HistoryPage() {
                 // but preserve if switching to a type that still uses periodDate (e.g. Daily to Weekly)
                 const newGroupingType = groupingOptions.find(opt => opt.value === value)?.datePickerType;
                 if (newGroupingType !== 'month_select' && newGroupingType !== 'calendar') {
-                    setPeriodDate(new Date()); 
+                    setPeriodDate(new Date()); // Default for "All Time" or if current date is better
                 } else if (newGroupingType === 'month_select' && periodDate && format(periodDate, 'yyyy-MM-dd') !== format(startOfMonth(periodDate), 'yyyy-MM-dd')) {
-                    setPeriodDate(startOfMonth(new Date())); // Default to start of current month if current periodDate is not suitable
-                } else if (!periodDate) {
+                    // If switching to month_select and current periodDate is not start of a month, reset to current month's start
+                    setPeriodDate(startOfMonth(new Date())); 
+                } else if (!periodDate) { // If periodDate was undefined
                     setPeriodDate(new Date());
                 }
-
+                // Clear errors when changing selection type
                 setError(null); 
               }}
             >
@@ -361,6 +365,7 @@ export default function HistoryPage() {
             </>
           )}
           
+          {/* Adjust column span for the button based on visible pickers */}
           <div className={`flex items-end ${currentGroupingDetails?.datePickerType === 'range' ? 'lg:col-span-3' : (currentGroupingDetails?.datePickerType === 'none' ? 'md:col-start-2 lg:col-start-3' : '')}`}>
             <Button onClick={() => fetchData()} disabled={disableFetchButton} className="w-full sm:w-auto">
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch History"}
@@ -413,13 +418,13 @@ export default function HistoryPage() {
 
       {!loading && !error && historicalData.length > 0 && apiKey && inverterSerial && (
         <>
-          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1">
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1"> {/* Changed to lg:grid-cols-1 to stack charts */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><HomeIcon className="mr-2 h-5 w-5 text-primary"/>Energy Overview</CardTitle>
                 <CardDescription>Summary of energy consumption and sources for the selected period and granularity.</CardDescription>
               </CardHeader>
-              <CardContent className="h-[450px] p-2 sm:p-4">
+              <CardContent className="h-[450px] p-2 sm:p-4"> {/* Added padding for smaller screens */}
                 <EnergyOverviewChart />
               </CardContent>
             </Card>
@@ -447,6 +452,7 @@ export default function HistoryPage() {
         </>
       )}
       
+      {/* Condition to show "No data" message only if not loading, no error, but data array is empty AND relevant date pickers are filled (or not needed) */}
       {!loading && !error && historicalData.length === 0 && apiKey && inverterSerial && (
         (currentGroupingDetails?.datePickerType === 'calendar' && !periodDate) ||
         (currentGroupingDetails?.datePickerType === 'month_select' && !periodDate) ||
