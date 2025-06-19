@@ -14,88 +14,117 @@ import { useToast } from "@/hooks/use-toast";
 import { getHistoricalEnergyData } from "@/lib/givenergy.ts";
 import type { HistoricalEnergyDataPoint } from "@/lib/types";
 import { format, subDays, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
-import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, LineChartIcon, BatteryCharging, SunMedium, HomeIcon } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, HomeIcon, SunMedium, BatteryCharging } from "lucide-react";
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Helper to format date for display
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
 };
 
-type GroupingOptionValue = "1" | "2" | "3" | "4"; // 1:Daily, 2:Weekly, 3:Monthly, 4:Yearly
+type GroupingOptionValue = "1" | "2" | "3" | "4" | "5" | "6"; 
 
 interface GroupingOption {
   value: GroupingOptionValue;
   label: string;
-  datePickerLabel: string;
+  apiGroupingValue: number; 
+  datePickerLabel?: string;
+  showSingleDatePicker: boolean;
+  showRangeDatePicker: boolean;
 }
 
 const groupingOptions: GroupingOption[] = [
-  { value: "1", label: "Daily", datePickerLabel: "Select Day" },
-  { value: "2", label: "Weekly", datePickerLabel: "Select Day in Target Week" },
-  { value: "3", label: "Monthly", datePickerLabel: "Select Day in Target Month" },
-  { value: "4", label: "Yearly", datePickerLabel: "Select Day in Target Year" },
+  { value: "1", label: "Daily", apiGroupingValue: 1, datePickerLabel: "Select Day", showSingleDatePicker: true, showRangeDatePicker: false },
+  { value: "2", label: "Weekly", apiGroupingValue: 2, datePickerLabel: "Select Day in Target Week", showSingleDatePicker: true, showRangeDatePicker: false },
+  { value: "3", label: "Monthly", apiGroupingValue: 3, datePickerLabel: "Select Day in Target Month", showSingleDatePicker: true, showRangeDatePicker: false },
+  { value: "4", label: "Yearly", apiGroupingValue: 4, datePickerLabel: "Select Day in Target Year", showSingleDatePicker: true, showRangeDatePicker: false },
+  { value: "5", label: "All Time", apiGroupingValue: 4, showSingleDatePicker: false, showRangeDatePicker: false }, 
+  { value: "6", label: "Custom Range", apiGroupingValue: 1, showSingleDatePicker: false, showRangeDatePicker: true }, 
 ];
+
 
 export default function HistoryPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
   const { theme } = useTheme();
 
+  const [selectedGrouping, setSelectedGrouping] = useState<GroupingOptionValue>("1");
   const [periodDate, setPeriodDate] = useState<Date | undefined>(new Date());
-  const [historicalData, setHistoricalData] = useState<HistoricalEnergyDataPoint[]>([]);
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(subDays(new Date(), 7));
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(new Date());
   
+  const [historicalData, setHistoricalData] = useState<HistoricalEnergyDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedGrouping, setSelectedGrouping] = useState<GroupingOptionValue>("1");
 
-  const chartColor = theme === 'dark' || theme === 'hc-dark' ? 'hsl(var(--primary))' : 'hsl(var(--foreground))';
   const solarColor = "hsl(var(--chart-1))"; 
   const gridImportColor = "hsl(var(--chart-2))";
   const batteryDischargeColor = "hsl(var(--chart-3))";
   const batteryChargeColor = "hsl(var(--chart-4))";
   const consumptionColor = "hsl(var(--chart-5))";
-  const gridExportColor = "hsl(var(--chart-1))"; 
+
 
   const fetchData = useCallback(async () => {
-    if (!apiKey || !inverterSerial || !periodDate) {
-      setError("API key, inverter serial, or date not set.");
+    if (!apiKey || !inverterSerial) {
+      setError("API key or inverter serial not set.");
       setHistoricalData([]);
+      setLoading(false);
       return;
     }
-
     setLoading(true);
     setError(null);
 
+    const currentGroupingDetails = groupingOptions.find(opt => opt.value === selectedGrouping);
+    if (!currentGroupingDetails) {
+      setError("Invalid grouping selected.");
+      setLoading(false);
+      return;
+    }
+
     let apiStartDate: Date;
     let apiEndDate: Date;
+    const apiGrouping = currentGroupingDetails.apiGroupingValue;
 
     switch (selectedGrouping) {
       case "1": // Daily
+        if (!periodDate) { setError("Please select a day."); setLoading(false); return; }
         apiStartDate = periodDate;
         apiEndDate = periodDate;
         break;
       case "2": // Weekly
-        apiStartDate = startOfWeek(periodDate, { weekStartsOn: 1 }); // Monday as start of week
+        if (!periodDate) { setError("Please select a day in the target week."); setLoading(false); return; }
+        apiStartDate = startOfWeek(periodDate, { weekStartsOn: 1 });
         apiEndDate = endOfWeek(periodDate, { weekStartsOn: 1 });
         break;
       case "3": // Monthly
+        if (!periodDate) { setError("Please select a day in the target month."); setLoading(false); return; }
         apiStartDate = startOfMonth(periodDate);
         apiEndDate = endOfMonth(periodDate);
         break;
       case "4": // Yearly
+        if (!periodDate) { setError("Please select a day in the target year."); setLoading(false); return; }
         apiStartDate = startOfYear(periodDate);
         apiEndDate = endOfYear(periodDate);
         break;
+      case "5": // All Time
+        apiStartDate = new Date('2000-01-01'); 
+        apiEndDate = new Date();
+        break;
+      case "6": // Custom Range
+        if (!customStartDate || !customEndDate) { setError("Please select a start and end date for the custom range."); setLoading(false); return; }
+        if (customEndDate < customStartDate) { setError("End date cannot be before start date."); setLoading(false); return; }
+        apiStartDate = customStartDate;
+        apiEndDate = customEndDate;
+        break;
       default:
-        apiStartDate = periodDate;
-        apiEndDate = periodDate;
+        setError("Invalid grouping selected.");
+        setLoading(false);
+        return;
     }
     
     try {
-      const data = await getHistoricalEnergyData(apiKey, inverterSerial, apiStartDate, apiEndDate, parseInt(selectedGrouping, 10));
+      const data = await getHistoricalEnergyData(apiKey, inverterSerial, apiStartDate, apiEndDate, apiGrouping);
       setHistoricalData(data);
       if (data.length === 0 && !error) { 
         toast({ title: "No Data", description: "No historical data found for the selected period and granularity."});
@@ -108,33 +137,32 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, inverterSerial, periodDate, selectedGrouping, toast]); 
+  }, [apiKey, inverterSerial, periodDate, customStartDate, customEndDate, selectedGrouping, toast, error]); // Added error to dep array
 
   useEffect(() => {
     if (apiKey && inverterSerial && !isLoadingApiKey) {
       fetchData();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, inverterSerial, isLoadingApiKey, fetchData]);
 
   const formattedChartData = historicalData.map(item => {
     const parsedDate = parseISO(item.date);
-    let label = format(parsedDate, "MMM d"); // Default for Daily (grouping "1")
-    if (selectedGrouping === "2") { // Weekly
-      label = `W/O ${format(parsedDate, "MMM d")}`; 
-    } else if (selectedGrouping === "3") { // Monthly
-      label = format(parsedDate, "MMM yyyy");
-    } else if (selectedGrouping === "4") { // Yearly
-      label = format(parsedDate, "yyyy");
-    }
+    let label = "";
+    const currentApiGrouping = groupingOptions.find(opt => opt.value === selectedGrouping)?.apiGroupingValue || 1;
+
+    if (currentApiGrouping === 1) label = format(parsedDate, "MMM d, yy");
+    else if (currentApiGrouping === 2) label = `W/C ${format(parsedDate, "MMM d, yy")}`;
+    else if (currentApiGrouping === 3) label = format(parsedDate, "MMM yyyy");
+    else if (currentApiGrouping === 4) label = format(parsedDate, "yyyy");
+    else label = format(parsedDate, "MMM d, yy");
+
     return {
       ...item,
       shortDate: label,
     };
   });
   
-  const DailyEnergyOverviewChart = () => (
+  const EnergyOverviewChart = () => (
     <ResponsiveContainer width="100%" height={400}>
       <ComposedChart data={formattedChartData}>
         <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
@@ -147,7 +175,7 @@ export default function HistoryPage() {
         <Legend />
         <Bar yAxisId="left" dataKey="solarGeneration" name="Solar Generation" fill={solarColor} stackId="a" />
         <Bar yAxisId="left" dataKey="gridImport" name="Grid Import" fill={gridImportColor} stackId="a" />
-        <Bar yAxisId="left" dataKey="batteryDischarge" name="Battery Discharge to Home/Grid" fill={batteryDischargeColor} stackId="a" />
+        <Bar yAxisId="left" dataKey="batteryDischarge" name="Battery Discharge" fill={batteryDischargeColor} stackId="a" />
         <Line yAxisId="left" type="monotone" dataKey="consumption" name="Total Consumption" stroke={consumptionColor} strokeWidth={2} dot={{r:3}} />
       </ComposedChart>
     </ResponsiveContainer>
@@ -182,7 +210,11 @@ export default function HistoryPage() {
     </ResponsiveContainer>
   );
 
-  const currentGroupingOption = groupingOptions.find(opt => opt.value === selectedGrouping);
+  const currentGroupingDetails = groupingOptions.find(opt => opt.value === selectedGrouping);
+  const disableFetchButton = loading || !apiKey || !inverterSerial ||
+    (currentGroupingDetails?.showSingleDatePicker && !periodDate) ||
+    (currentGroupingDetails?.showRangeDatePicker && (!customStartDate || !customEndDate));
+
 
   return (
     <div className="w-full space-y-8 py-8">
@@ -198,18 +230,21 @@ export default function HistoryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Report Options</CardTitle>
-          <CardDescription>Select the granularity and date for the energy history report.</CardDescription>
+          <CardTitle>Generate a Report</CardTitle>
+          <CardDescription>Select report type and date(s) for the energy history.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="space-y-1">
-            <Label htmlFor="grouping-select">Report Granularity</Label>
+            <Label htmlFor="grouping-select">Report Type</Label>
             <Select
               value={selectedGrouping}
-              onValueChange={(value) => setSelectedGrouping(value as GroupingOptionValue)}
+              onValueChange={(value) => {
+                setSelectedGrouping(value as GroupingOptionValue);
+                setError(null); // Clear errors when changing type
+              }}
             >
               <SelectTrigger id="grouping-select" className="w-full">
-                <SelectValue placeholder="Select granularity" />
+                <SelectValue placeholder="Select report type" />
               </SelectTrigger>
               <SelectContent>
                 {groupingOptions.map(opt => (
@@ -218,23 +253,62 @@ export default function HistoryPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="period-date">{currentGroupingOption?.datePickerLabel || "Select Date"}</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button id="period-date" variant="outline" className="w-full justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formatDateForDisplay(periodDate)}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={periodDate} onSelect={setPeriodDate} initialFocus />
-              </PopoverContent>
-            </Popover>
+
+          {currentGroupingDetails?.showSingleDatePicker && (
+            <div className="space-y-1">
+              <Label htmlFor="period-date">{currentGroupingDetails.datePickerLabel || "Select Date"}</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button id="period-date" variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formatDateForDisplay(periodDate)}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={periodDate} onSelect={setPeriodDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+
+          {currentGroupingDetails?.showRangeDatePicker && (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="custom-start-date">Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button id="custom-start-date" variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatDateForDisplay(customStartDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={customStartDate} onSelect={setCustomStartDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="custom-end-date">End Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button id="custom-end-date" variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatDateForDisplay(customEndDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={customEndDate} onSelect={setCustomEndDate} disabled={(date) => customStartDate && date < customStartDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
+          )}
+          
+          <div className="md:col-span-full lg:col-span-1 flex items-end">
+            <Button onClick={() => fetchData()} disabled={disableFetchButton} className="w-full sm:w-auto">
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch History"}
+            </Button>
           </div>
-          <Button onClick={() => fetchData()} disabled={loading || !apiKey || !inverterSerial || !periodDate} className="w-full sm:w-auto md:self-end">
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch History"}
-          </Button>
         </CardContent>
       </Card>
 
@@ -282,14 +356,14 @@ export default function HistoryPage() {
 
       {!loading && !error && historicalData.length > 0 && apiKey && inverterSerial && (
         <>
-          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1">
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-1"> {/* Changed to 1 column for charts to stack */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><HomeIcon className="mr-2 h-5 w-5 text-primary"/>Energy Overview</CardTitle>
                 <CardDescription>Summary of energy consumption and sources for the selected period and granularity.</CardDescription>
               </CardHeader>
-              <CardContent className="h-[450px]">
-                <DailyEnergyOverviewChart />
+              <CardContent className="h-[450px] p-2 sm:p-4">
+                <EnergyOverviewChart />
               </CardContent>
             </Card>
 
@@ -298,7 +372,7 @@ export default function HistoryPage() {
                 <CardTitle className="flex items-center"><SunMedium className="mr-2 h-5 w-5 text-primary"/>Solar Generation Distribution</CardTitle>
                 <CardDescription>How your generated solar energy was used.</CardDescription>
               </CardHeader>
-              <CardContent className="h-[450px]">
+              <CardContent className="h-[450px] p-2 sm:p-4">
                 <SolarDistributionChart />
               </CardContent>
             </Card>
@@ -308,7 +382,7 @@ export default function HistoryPage() {
                 <CardTitle className="flex items-center"><BatteryCharging className="mr-2 h-5 w-5 text-primary"/>Battery Usage Patterns</CardTitle>
                 <CardDescription>Energy charged into and discharged from your battery.</CardDescription>
               </CardHeader>
-              <CardContent className="h-[450px]">
+              <CardContent className="h-[450px] p-2 sm:p-4">
                 <BatteryUsageChart />
               </CardContent>
             </Card>
@@ -316,14 +390,22 @@ export default function HistoryPage() {
         </>
       )}
       
-      {!loading && !error && historicalData.length === 0 && apiKey && inverterSerial && periodDate && (
+      {!loading && !error && historicalData.length === 0 && apiKey && inverterSerial && (
+        currentGroupingDetails?.showSingleDatePicker && !periodDate ||
+        currentGroupingDetails?.showRangeDatePicker && (!customStartDate || !customEndDate)
+      ) ? (
+        <div className="text-center py-10 text-muted-foreground">
+            <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+            <p>Please select a date or date range for the chosen report type.</p>
+        </div>
+      ) : (
+         !loading && !error && historicalData.length === 0 && apiKey && inverterSerial &&
          <div className="text-center py-10 text-muted-foreground">
             <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-3" />
             <p>No data available for the selected period and granularity.</p>
-            <p>Try adjusting the date or click "Fetch History" again.</p>
+            <p>Try adjusting the date/range or click "Fetch History" again.</p>
         </div>
       )}
     </div>
   );
 }
-
