@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter } from 'lucide-react';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -353,7 +353,7 @@ const EVChargerPage = () => {
         const headers = getAuthHeaders();
         const params = new URLSearchParams();
         params.append('page', String(page));
-        params.append('pageSize', '10'); 
+        params.append('pageSize', '50'); 
 
         if (startDate) {
             params.append('start_time', formatISO(startDate, { representation: 'date' }));
@@ -712,7 +712,7 @@ const EVChargerPage = () => {
         if (!hideNaEnergy) return true;
         let energyDisplay = "N/A";
         if (typeof session.kwh_delivered === 'number') {
-            energyDisplay = session.kwh_delivered.toFixed(2);
+            energyDisplay = (session.kwh_delivered / 1000).toFixed(2); // Convert Wh to kWh if kwh_delivered is in Wh
         } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
             const energyWh = session.meter_stop - session.meter_start;
             if (energyWh > 0) {
@@ -725,7 +725,7 @@ const EVChargerPage = () => {
   }, [chargingSessionsData, statusFilter, hideNaEnergy]);
 
   const chartSessionData = React.useMemo(() => {
-    return displayedSessions // Use filtered sessions for chart data
+    return displayedSessions 
       .map(session => {
         let energyKWh = 0;
         if (typeof session.kwh_delivered === 'number') {
@@ -741,7 +741,7 @@ const EVChargerPage = () => {
         }
 
         return {
-          id: session.id || session.started_at, // Add a unique key
+          id: session.id || session.started_at, 
           formattedStartTime: session.started_at ? format(parseISO(session.started_at), "MMM d, HH:mm") : 'N/A',
           energyKWh: energyKWh,
           durationMinutes: durationMinutes > 0 ? durationMinutes : null, 
@@ -750,6 +750,44 @@ const EVChargerPage = () => {
       })
       .filter(item => item.energyKWh > 0) 
       .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(a.formattedStartTime).getTime() - new Date(b.formattedStartTime).getTime()); 
+  }, [displayedSessions]);
+
+  const dailyEnergyChartData = React.useMemo(() => {
+    if (!displayedSessions || displayedSessions.length === 0) {
+      return [];
+    }
+
+    const dailyTotals: { [date: string]: number } = {};
+
+    displayedSessions.forEach(session => {
+      if (!session.started_at) return;
+
+      const sessionDate = format(parseISO(session.started_at), "yyyy-MM-dd");
+      let energyKWh = 0;
+
+      if (typeof session.kwh_delivered === 'number') {
+        energyKWh = session.kwh_delivered;
+      } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
+        const energyWh = session.meter_stop - session.meter_start;
+        energyKWh = energyWh / 1000;
+      }
+
+      if (energyKWh > 0) {
+        if (dailyTotals[sessionDate]) {
+          dailyTotals[sessionDate] += energyKWh;
+        } else {
+          dailyTotals[sessionDate] = energyKWh;
+        }
+      }
+    });
+
+    return Object.entries(dailyTotals)
+      .map(([date, totalEnergyKWh]) => ({
+        date,
+        formattedDate: format(parseISO(date), "MMM d, yy"),
+        totalEnergyKWh: parseFloat(totalEnergyKWh.toFixed(2)),
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [displayedSessions]);
 
 
@@ -1124,6 +1162,37 @@ const EVChargerPage = () => {
                                       </div>
                                     </div>
                                     )}
+
+                                    {dailyEnergyChartData.length > 0 && (
+                                      <div>
+                                        <h3 className="text-lg font-semibold mb-2 text-center">Total Energy Delivered per Day</h3>
+                                        <div className="h-[400px] md:h-[450px]">
+                                          <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={dailyEnergyChartData} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
+                                              <CartesianGrid strokeDasharray="3 3" />
+                                              <XAxis 
+                                                dataKey="formattedDate" 
+                                                angle={-45} 
+                                                textAnchor="end" 
+                                                height={80} 
+                                                interval={dailyEnergyChartData.length > 15 ? 'preserveStartEnd' : 0} 
+                                                tick={{ fontSize: 12 }}
+                                              />
+                                              <YAxis 
+                                                label={{ value: 'Total Energy (kWh)', angle: -90, position: 'insideLeft', dy: 60 }} 
+                                                allowDecimals={true}
+                                                tick={{ fontSize: 12 }}
+                                              />
+                                              <Tooltip 
+                                                formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Total Energy"]} 
+                                              />
+                                              <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                              <Bar dataKey="totalEnergyKWh" name="Total Energy per Day" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--chart-4))" : "hsl(var(--chart-5))"} radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                          </ResponsiveContainer>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                             </>
@@ -1216,6 +1285,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
-
     
