@@ -293,7 +293,7 @@ const EVChargerPage = () => {
         }
 
         toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
-        reloadLocalSchedulesFromHook(); 
+        reloadLocalSchedulesFromHook();
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
@@ -324,7 +324,7 @@ const EVChargerPage = () => {
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
             let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
-            if (!apiDayString) { 
+            if (!apiDayString) {
                 apiDayString = displayDayOrApiDay.toUpperCase();
             }
             return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
@@ -1491,7 +1491,7 @@ const EVChargerPage = () => {
                             onCheckedChange={handleTogglePlugAndCharge}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground -mt-4 px-3">Controls whether charging starts automatically on plug-in. This setting uses the 'set-plug-and-go' command which may affect register 616.</p>
+                        <p className="text-xs text-muted-foreground -mt-4 px-3">Enables automatic charging upon plug-in using the 'set-plug-and-go' command.</p>
 
                         <div className="p-3 bg-muted/30 rounded-md">
                           <Label htmlFor="max-battery-discharge-evc">Max Battery Power to EVC (kW)</Label>
@@ -1551,7 +1551,7 @@ const EVChargerPage = () => {
                 <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the schedule
                     "{scheduleToDelete?.name}" from your local list.
-                    This action does NOT delete the schedule from the EV charger device itself.
+                    This action DOES NOT delete the schedule from the EV charger device itself.
                     If this schedule was active on the device, it may continue to run until another schedule is activated.
                 </AlertDialogDescription>
             </AlertDialogHeader>
