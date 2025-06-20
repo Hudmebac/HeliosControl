@@ -25,6 +25,8 @@ import type {
   EnergyFlowApiResponse, // Added for getEnergyFlows
   EnergyFlowTypeID, // Added for getEnergyFlows
 } from "@/lib/types";
+import { format, parseISO } from 'date-fns';
+
 
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
 const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1';
@@ -69,8 +71,7 @@ async function _fetchGivEnergyAPI<T>(
       } else if (detailMessage === null || detailMessage === undefined) {
         detailMessage = "";
       }
-
-      // Ensure the error message starts with a parsable status for the outer catch
+      
       const errorMessage = `API Request Error: ${response.status} ${response.statusText}${detailMessage ? ` - Detail: ${String(detailMessage)}` : ''}`;
 
 
@@ -96,7 +97,6 @@ async function _fetchGivEnergyAPI<T>(
       originalMessage = (error as {message: string}).message;
     }
 
-    // Check if this error's status code was meant to be suppressed
     if (statusCodeFromError && suppressErrorForStatus.includes(statusCodeFromError)) {
         // Suppressed error, do not log the generic "API Request Failed via Proxy"
     } else if (error instanceof TypeError &&
@@ -116,7 +116,7 @@ async function _fetchGivEnergyAPI<T>(
       const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
       console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
     }
-    throw error; // Re-throw the original error so the calling function can handle it
+    throw error; 
   }
 }
 
@@ -165,7 +165,6 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     const primaryDevice = allCommDevices.find(device => device.inverter?.serial);
     if (primaryDevice && primaryDevice.inverter?.serial) {
         inverterSerial = primaryDevice.inverter.serial;
-        // Calculate battery capacity
         const batteryInfo = primaryDevice.inverter.info?.battery;
         if (batteryInfo && typeof batteryInfo.nominal_capacity === 'number' && typeof batteryInfo.nominal_voltage === 'number' && batteryInfo.nominal_capacity > 0 && batteryInfo.nominal_voltage > 0) {
             batteryNominalCapacityKWh = (batteryInfo.nominal_capacity * batteryInfo.nominal_voltage) / 1000;
@@ -202,7 +201,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
     try {
       while (evChargersNextPageEndpoint) {
         const evChargersResponse = await _fetchGivEnergyAPI<RawEVChargersResponse>(apiKey, evChargersNextPageEndpoint, {suppressErrorForStatus: [404]});
-        if (evChargersResponse && evChargersResponse.data) { // Check if response and data exist
+        if (evChargersResponse && evChargersResponse.data) { 
             allEVChargers.push(...evChargersResponse.data);
         }
 
@@ -234,7 +233,7 @@ async function _getPrimaryDeviceIDs(apiKey: string): Promise<GivEnergyIDs> {
             originalMessage = error.message;
             if (originalMessage.includes("404")) {
                 console.info(`EV charger list endpoint (/ev-charger) returned 404. This is expected if no EV chargers are set up. Original error: ${originalMessage}`);
-                evChargersNextPageEndpoint = null; // Stop pagination
+                evChargersNextPageEndpoint = null; 
             } else {
                  console.warn(`Could not fetch EV chargers list (pagination via proxy, this is optional): ${originalMessage}. EV Charger data will likely be unavailable.`);
             }
@@ -320,8 +319,8 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const consumptionWatts = typeof rawData.consumption === 'number' ? rawData.consumption : 0;
   const solarPowerWatts = typeof rawData.solar?.power === 'number' ? rawData.solar.power : 0;
-  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; // -ve for import, +ve for export
-  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0; // -ve for charge, +ve for discharge
+  const gridPowerWatts = typeof rawData.grid?.power === 'number' ? rawData.grid.power : 0; 
+  const apiBatteryPowerWatts = typeof rawData.battery?.power === 'number' ? rawData.battery.power : 0;
   const batteryPercentage = typeof rawData.battery?.percent === 'number' ? rawData.battery.percent : 0;
 
   const inferredBatteryPowerWattsCalculation = consumptionWatts - solarPowerWatts + gridPowerWatts;
@@ -337,27 +336,15 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     }
   }
 
-  const formatPower = (watts: number): { value: number | string; unit: string } => {
-    const absWatts = Math.abs(watts);
-    if (absWatts >= 1000) {
-      return {
-        value: parseFloat((watts / 1000).toFixed(2)),
-        unit: "kW",
-      };
-    } else {
-      return {
-        value: Math.round(watts), // Round to nearest Watt
-        unit: "W",
-      };
-    }
-  };
 
   const homeConsumption: Metric = {
-    ...formatPower(consumptionWatts),
+    value: parseFloat((consumptionWatts / 1000).toFixed(2)),
+    unit: "kW",
   };
 
   const solarGeneration: Metric = {
-    ...formatPower(solarPowerWatts),
+    value: parseFloat((solarPowerWatts / 1000).toFixed(2)),
+    unit: "kW",
   };
   
   const actualCapacityKWh = batteryNominalCapacityKWh !== null && batteryNominalCapacityKWh > 0 ? batteryNominalCapacityKWh : undefined;
@@ -375,22 +362,24 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
 
   const GRID_IDLE_THRESHOLD_WATTS = 50;
   const grid: Metric & { flow: 'importing' | 'exporting' | 'idle' } = {
-    ...formatPower(gridPowerWatts),
+    value: parseFloat((Math.abs(gridPowerWatts) / 1000).toFixed(2)),
+    unit: "kW",
     flow: gridPowerWatts > GRID_IDLE_THRESHOLD_WATTS ? 'exporting' : (gridPowerWatts < -GRID_IDLE_THRESHOLD_WATTS ? 'importing' : 'idle'),
   };
 
   let evCharger: EVChargerStatus = {
     value: "N/A",
     unit: "kW",
-    status: mapEVChargerAPIStatus("unavailable"),
-    dailyTotalKWh: dailyTotals.acCharge,
+    status: mapEVChargerAPIStatus("unavailable"), 
+    rawStatus: "unavailable",
+    dailyTotalKWh: dailyTotals.acCharge || 0, 
     sessionKWhDelivered: undefined,
   };
+   let evApiStatusString: string | undefined | null = "unavailable";
 
   if (evChargerId && apiKey) {
     const S_evChargerId = typeof evChargerId === 'string' ? evChargerId : 'unknown EV ID';
     let evPowerInWatts: number | null | undefined = null;
-    let evApiStatusString: string | undefined | null = "unavailable";
     let sessionKWh: number | undefined = undefined;
 
     try {
@@ -413,7 +402,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
       try {
         const evBasicInfoResponse = await _fetchGivEnergyAPI<GivEnergyAPIData<RawEVCharger>>(apiKey, `/ev-charger/${S_evChargerId}`);
         evApiStatusString = evBasicInfoResponse.data.status;
-        // sessionKWh might not be available in basic info
       } catch (errorBasic) {
         console.warn(`Fallback EV basic info fetch also failed for ${S_evChargerId}. EV charger will be marked as unavailable. Error: ${errorBasic instanceof Error ? errorBasic.message : String(errorBasic)}`);
         evApiStatusString = "unavailable";
@@ -421,9 +409,11 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     }
 
     evCharger = {
-      ...(typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts) ? formatPower(evPowerInWatts) : { value: "N/A", unit: "kW" }),
-      status: mapEVChargerAPIStatus(evApiStatusString),
-      dailyTotalKWh: dailyTotals.acCharge,
+      value: (typeof evPowerInWatts === 'number' && !isNaN(evPowerInWatts)) ? parseFloat((evPowerInWatts / 1000).toFixed(1)) : "N/A",
+      unit: "kW",
+      status: mapEVChargerAPIStatus(evApiStatusString), 
+      rawStatus: evApiStatusString || "unavailable",
+      dailyTotalKWh: dailyTotals.acCharge || 0, 
       sessionKWhDelivered: typeof sessionKWh === 'number' ? parseFloat(sessionKWh.toFixed(1)) : undefined,
     };
 
@@ -445,7 +435,7 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
     rawGridPowerWatts: gridPowerWatts,
     rawBatteryPowerWattsFromAPI: apiBatteryPowerWatts, 
     inferredRawBatteryPowerWatts: !isNaN(inferredBatteryPowerWattsCalculation) ? inferredBatteryPowerWattsCalculation : undefined,
-    today: dailyTotals,
+    today: dailyTotals
   };
 
   return dataToReturn;
@@ -459,13 +449,68 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   return response.data;
 }
 
+
+// This function is deprecated and replaced by getEnergyFlows.
+// Keeping it here to avoid breaking existing code, but it should be removed.
+export async function getHistoricalEnergyData(
+  apiKey: string,
+  inverterSerial: string,
+  startDate: Date,
+  endDate: Date,
+  groupingValue: number
+): Promise<any[]> { // Changed return type to any[] for broader compatibility
+    console.warn("getHistoricalEnergyData is deprecated. Use getEnergyFlows instead.");
+    const startTimeFormatted = format(startDate, "yyyy-MM-dd");
+    const endTimeFormatted = format(endDate, "yyyy-MM-dd");
+    
+    try {
+        const rawFlows = await getEnergyFlows(apiKey, inverterSerial, startTimeFormatted, endTimeFormatted, groupingValue);
+        return rawFlows.map(dailyEntry => {
+            const flows = dailyEntry.data;
+            const solarToHome = flows['0'] || 0;
+            const solarToBattery = flows['1'] || 0;
+            const solarToGrid = flows['2'] || 0;
+            const gridToHome = flows['3'] || 0;
+            const gridToBattery = flows['4'] || 0; 
+            const batteryToHome = flows['5'] || 0;
+            const batteryToGrid = flows['6'] || 0;
+
+            const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
+            const totalGridImport = gridToHome + gridToBattery; 
+            const totalGridExport = solarToGrid + batteryToGrid; 
+            const totalBatteryCharge = solarToBattery + gridToBattery; 
+            const totalBatteryDischarge = batteryToHome + batteryToGrid; 
+            const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
+            
+            return {
+              date: parseISO(dailyEntry.start_time.split(' ')[0]), // Return as Date object
+              solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
+              gridImport: parseFloat(totalGridImport.toFixed(2)),
+              gridExport: parseFloat(totalGridExport.toFixed(2)),
+              batteryCharge: parseFloat(totalBatteryCharge.toFixed(2)),
+              batteryDischarge: parseFloat(totalBatteryDischarge.toFixed(2)),
+              consumption: parseFloat(totalHomeConsumption.toFixed(2)),
+              solarToHome: parseFloat(solarToHome.toFixed(2)),
+              solarToBattery: parseFloat(solarToBattery.toFixed(2)),
+              solarToGrid: parseFloat(solarToGrid.toFixed(2)),
+              batteryToHome: parseFloat(batteryToHome.toFixed(2)),
+              gridToHome: parseFloat(gridToHome.toFixed(2)),
+            };
+        }).sort((a, b) => a.date.getTime() - b.date.getTime());
+    } catch(error) {
+        console.error("Error in deprecated getHistoricalEnergyData (using getEnergyFlows):", error);
+        throw error; 
+    }
+}
+
+
 export async function getEnergyFlows(
   apiKey: string,
   inverterSerial: string,
-  startTime: string, // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
-  endTime: string,   // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
-  grouping: number,  // API grouping ID (0-4)
-  types?: EnergyFlowTypeID[] // Uses the stringified version of type IDs
+  startTime: string, 
+  endTime: string,   
+  grouping: number,  
+  types?: EnergyFlowTypeID[] 
 ): Promise<EnergyFlowRawEntry[]> {
   if (!apiKey || !inverterSerial) {
     throw new Error("API Key or Inverter Serial not provided for energy flows.");
@@ -475,7 +520,7 @@ export async function getEnergyFlows(
     start_time: string;
     end_time: string;
     grouping: number;
-    types?: string[]; // API expects string array for types
+    types?: number[]; // Changed to number[] to match API expectation
   } = {
     start_time: startTime,
     end_time: endTime,
@@ -483,7 +528,7 @@ export async function getEnergyFlows(
   };
 
   if (types && types.length > 0) {
-    body.types = types.map(String); // Convert EnergyFlowTypeID to string array as API expects strings for type IDs
+    body.types = types.map(Number); // Convert string EnergyFlowTypeID to number
   }
 
   const response = await _fetchGivEnergyAPI<EnergyFlowApiResponse>(
@@ -494,8 +539,6 @@ export async function getEnergyFlows(
       body: JSON.stringify(body),
     }
   );
-  // Ensure data field exists and is an array before returning
   return (response && Array.isArray(response.data)) ? response.data : [];
 }
 
-    
