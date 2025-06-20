@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye } from 'lucide-react';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -58,6 +58,7 @@ const EVChargerPage = () => {
     updateSchedule: updateLocalSchedule,
     deleteSchedule: deleteLocalSchedule,
     isLoading: isLoadingLocalSchedules,
+    reloadSchedules: reloadLocalSchedules,
   } = useLocalStorageSchedules(storedEvChargerId || "unknown-charger");
 
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
@@ -1078,9 +1079,14 @@ const EVChargerPage = () => {
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <CardTitle>My Saved Charging Schedules</CardTitle>
-                                <Button onClick={() => handleOpenScheduleDialog()} size="sm">
-                                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Schedule
-                                </Button>
+                                <div className="flex items-center space-x-2">
+                                    <Button onClick={() => reloadLocalSchedules()} variant="outline" size="sm" disabled={isLoadingLocalSchedules}>
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Refresh List
+                                    </Button>
+                                    <Button onClick={() => handleOpenScheduleDialog()} size="sm">
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Add New Schedule
+                                    </Button>
+                                </div>
                             </div>
                             <CardDescription>
                                 Manage your list of saved charging schedules. These are stored in your browser. Select one and click "Send to Device" to make it active.

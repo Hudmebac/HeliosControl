@@ -15,8 +15,7 @@ export function useLocalStorageSchedules(chargerId: string | null) {
   const [schedules, setSchedules] = useState<NamedEVChargerSchedule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load schedules from localStorage on mount and when chargerId changes
-  useEffect(() => {
+  const loadSchedulesFromStorage = useCallback(() => {
     setIsLoading(true);
     const storageKey = getStorageKey();
     if (!storageKey) {
@@ -40,7 +39,12 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [chargerId, getStorageKey]);
+  }, [getStorageKey]);
+
+  // Load schedules from localStorage on mount and when chargerId changes
+  useEffect(() => {
+    loadSchedulesFromStorage();
+  }, [chargerId, loadSchedulesFromStorage]); // chargerId is implicitly handled by getStorageKey -> loadSchedulesFromStorage
 
   // Save schedules to localStorage whenever they change
   useEffect(() => {
@@ -91,5 +95,6 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     deleteSchedule,
     getSchedule,
     isLoading,
+    reloadSchedules: loadSchedulesFromStorage, // Expose the reload function
   };
 }
