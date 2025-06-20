@@ -1124,7 +1124,7 @@ const EVChargerPage = () => {
             <h1 className="text-3xl font-bold text-primary">EV Charger</h1>
             <div className="flex items-center space-x-4">
               <Link href="/" passHref>
-                <Button variant="outline" className="flex items-center">
+                <Button variant="default" className="flex items-center">
                   <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
                 </Button>
               </Link>
