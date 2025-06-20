@@ -53,7 +53,7 @@ const DAY_MAP_API_STRING_TO_NUMERIC: { [key: string]: number } = Object.fromEntr
   ALL_DAYS_API_FORMAT.map((day, i) => [day, i])
 );
 
-const DEFAULT_CHARGE_LIMIT = 32; // Default Amps for schedules
+const DEFAULT_CHARGE_LIMIT = 32; 
 const CHARGE_LIMIT_OPTIONS = [6, 8.5, 10, 12, 16, 24, 32];
 
 
@@ -238,7 +238,7 @@ const EVChargerPage = () => {
     } finally {
         setIsLoadingDeviceSchedule(false);
     }
-  }, [apiKey, getAuthHeaders, toast]);
+  }, [apiKey, getAuthHeaders, toast, handleApiError]);
 
 
   const syncSchedulesFromDevice = async () => {
@@ -382,30 +382,32 @@ const EVChargerPage = () => {
   };
 
   const handleSaveLocalSchedule = (scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
-    const wasActive = editingSchedule?.name === deviceActiveScheduleName;
+    const wasActiveBeforeEdit = editingSchedule?.name === deviceActiveScheduleName;
     let savedScheduleName = scheduleData.name;
+    let savedScheduleId = scheduleData.id;
 
     if (editingSchedule && scheduleData.id) {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
       const {id: newId} = addLocalSchedule(scheduleData); 
-      scheduleData.id = newId; 
+      savedScheduleId = newId; 
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
     
-    if (wasActive && scheduleData.id && evChargerData?.uuid) {
+    if (wasActiveBeforeEdit && savedScheduleId && evChargerData?.uuid) {
         const fullScheduleForActivation: NamedEVChargerSchedule = {
             ...scheduleData,
-            id: scheduleData.id, 
+            id: savedScheduleId, 
             rules: scheduleData.rules || [], 
             createdAt: editingSchedule?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
-    } else if (scheduleData.id && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActive) {
+    } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
+        // If the name now matches the active device schedule (e.g. renamed to it), refresh status.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
     setEditingSchedule(null);
@@ -849,6 +851,9 @@ const EVChargerPage = () => {
     if (label === "Last Offline" && displayValue === 'N/A') {
       return null;
     }
+    if (label === "Last Offline" && evChargerData?.went_offline_at === null) {
+        return null; 
+    }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
         {icon && <span className="mr-2 text-muted-foreground">{icon}</span>}
@@ -959,6 +964,16 @@ const EVChargerPage = () => {
         return `${days}: ${rule.start_time} - ${rule.end_time}${limitString}`;
     }).join('; ');
   };
+  
+  const canStartCharging = useMemo(() => {
+    if (!evChargerData?.online || !evChargerData?.status) return false;
+    return ['Available', 'Preparing', 'SuspendedEVSE', 'SuspendedEV'].includes(evChargerData.status);
+  }, [evChargerData]);
+
+  const canStopCharging = useMemo(() => {
+    if (!evChargerData?.online || !evChargerData?.status) return false;
+    return evChargerData.status === 'Charging';
+  }, [evChargerData]);
 
   return (
     <>
@@ -1031,8 +1046,8 @@ const EVChargerPage = () => {
                          ) : (
                            <>
                             <div className="flex flex-col sm:flex-row gap-4">
-                              <Button onClick={handleStartCharge} className="flex-1 bg-green-600 hover:bg-green-700 text-white">Start Charging</Button>
-                              <Button onClick={handleStopCharge} className="flex-1 bg-red-600 hover:bg-red-700 text-white">Stop Charging</Button>
+                              <Button onClick={handleStartCharge} className="flex-1 bg-green-600 hover:bg-green-700 text-white" disabled={isLoadingCommandSettings || !canStartCharging}>Start Charging</Button>
+                              <Button onClick={handleStopCharge} className="flex-1 bg-red-600 hover:bg-red-700 text-white" disabled={isLoadingCommandSettings || !canStopCharging}>Stop Charging</Button>
                             </div>
 
                             <div>
@@ -1043,6 +1058,7 @@ const EVChargerPage = () => {
                                     key={limit}
                                     variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
                                     onClick={() => handleAdjustChargePowerLimit(limit)}
+                                    disabled={isLoadingCommandSettings}
                                   >
                                     {limit} {commandChargePowerLimit?.unit || "A"}
                                   </Button>
@@ -1068,8 +1084,9 @@ const EVChargerPage = () => {
                                   step="0.1"
                                   placeholder={`e.g., ${commandSessionEnergyLimit?.value ?? '10'}`}
                                   className="flex-grow"
+                                  disabled={isLoadingCommandSettings}
                                 />
-                                <Button type="submit">Set Limit</Button>
+                                <Button type="submit" disabled={isLoadingCommandSettings}>Set Limit</Button>
                               </div>
                               {commandSessionEnergyLimit && (
                                   <p className="text-xs text-muted-foreground">
