@@ -250,14 +250,41 @@ export interface EVChargerAPIRule {
   days: string[];     // e.g., ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 }
 
-export interface EVChargerAPISchedule { // Payload for POST /commands/set-schedule and response from GET
+export interface EVChargerAPISchedule { // Payload for POST /commands/set-schedule and structure for activeDeviceSchedule state
   rules: EVChargerAPIRule[];
   active: boolean;
 }
 
-export interface EVChargerDeviceScheduleResponse { // For GET /commands/set-schedule
+// Represents a single period within a schedule as returned by the device API
+export interface RawDeviceApiPeriod {
+  start_time: string; // "HH:mm"
+  end_time: string;   // "HH:mm"
+  limit: number;      // Amps
+  phase_count: number | null;
+  duration: string;   // e.g., "03h 00m"
+  days: number[];     // Array of numbers [0, 1, 2, 3, 4, 5, 6]
+}
+
+// Represents a single schedule entry as returned by the device API's schedules array
+export interface RawDeviceApiScheduleEntry {
+  id: number;
+  name: string;
+  is_active: boolean;
+  periods: RawDeviceApiPeriod[];
+}
+
+// For GET /commands/set-schedule when it returns a list of schedules
+export interface EVChargerDeviceScheduleListResponse {
+  data: {
+    schedules: RawDeviceApiScheduleEntry[];
+  };
+}
+
+// For GET /commands/set-schedule if it returns a single active schedule (previous assumption)
+export interface EVChargerDeviceScheduleResponse {
   data: EVChargerAPISchedule;
 }
+
 
 export type EVChargerSetSchedulePayload = EVChargerAPISchedule; // For POST /commands/set-schedule
 

@@ -23,7 +23,7 @@ import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
 import { format, parseISO, formatISO, subDays, differenceInMinutes } from 'date-fns';
-import type { EVChargerAPISchedule, EVChargerDeviceScheduleResponse, EVChargerSetSchedulePayload, EVChargerClearScheduleResponse, NamedEVChargerSchedule, EVChargerAPIRule } from '@/lib/types';
+import type { EVChargerAPISchedule, EVChargerDeviceScheduleListResponse, EVChargerSetSchedulePayload, EVChargerClearScheduleResponse, NamedEVChargerSchedule, EVChargerAPIRule, RawDeviceApiScheduleEntry } from '@/lib/types';
 import { ScheduleDialog } from '@/components/ev-charger/ScheduleDialog';
 import { useLocalStorageSchedules } from '@/hooks/use-local-storage-schedules';
 
@@ -31,7 +31,6 @@ const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
 };
 
-// Day mapping constants remain relevant for rule display and API conversion
 const ALL_DAYS_API_FORMAT = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
 const ALL_DAYS_DISPLAY_FORMAT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
@@ -40,6 +39,11 @@ const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
 const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = Object.fromEntries(
   ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [day, ALL_DAYS_API_FORMAT[i]])
 );
+// Mapping numeric day from API (assuming 0=Monday, ..., 6=Sunday) to API string day
+const NUMERIC_DAY_TO_API_DAY: { [key: number]: string } = {
+    0: "MONDAY", 1: "TUESDAY", 2: "WEDNESDAY", 3: "THURSDAY",
+    4: "FRIDAY", 5: "SATURDAY", 6: "SUNDAY"
+};
 
 
 const EVChargerPage = () => {
@@ -48,7 +52,6 @@ const EVChargerPage = () => {
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
 
-  // --- State for Local Storage Schedules ---
   const {
     schedules: localSchedules,
     addSchedule: addLocalSchedule,
@@ -62,7 +65,6 @@ const EVChargerPage = () => {
   const [scheduleToDelete, setScheduleToDelete] = useState<NamedEVChargerSchedule | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   
-  // --- State for Device's Active Schedule ---
   const [activeDeviceSchedule, setActiveDeviceSchedule] = useState<EVChargerAPISchedule | null>(null);
   const [isLoadingDeviceSchedule, setIsLoadingDeviceSchedule] = useState(false);
   const [showDeviceScheduleDetails, setShowDeviceScheduleDetails] = useState(false);
@@ -82,7 +84,6 @@ const EVChargerPage = () => {
   const [isLoadingCommandSettings, setIsLoadingCommandSettings] = useState(true);
   const [inputSessionEnergyLimit, setInputSessionEnergyLimit] = useState<string>("");
 
-  // State for Charging Sessions
   const [chargingSessionsData, setChargingSessionsData] = useState<any[]>([]);
   const [isLoadingChargingSessions, setIsLoadingChargingSessions] = useState(false);
   const [chargingSessionsPage, setChargingSessionsPage] = useState(1);
@@ -186,38 +187,64 @@ const EVChargerPage = () => {
     }
   }, [apiKey, getAuthHeaders]);
 
-  // --- Device Schedule API Functions ---
   const fetchDeviceSchedule = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
     setIsLoadingDeviceSchedule(true);
+    setActiveDeviceSchedule(null); // Clear previous schedule first
     try {
-      const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers, cache: 'no-store' });
-      if (!response.ok) {
-        if (response.status === 404) {
-            setActiveDeviceSchedule(null);
-            toast({ title: "No Active Schedule", description: "No charging schedule is currently set on the device."});
-        } else {
-            await handleApiError(response, 'fetching device schedule');
-            setActiveDeviceSchedule(null);
+        const headers = getAuthHeaders();
+        const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers, cache: 'no-store' });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                toast({ title: "No Active Schedule", description: "No charging schedule is currently set on the device." });
+            } else {
+                await handleApiError(response, 'fetching device schedule');
+            }
+            return;
         }
-        return;
-      }
-      const scheduleResponse = await response.json() as EVChargerDeviceScheduleResponse;
-      if (scheduleResponse && scheduleResponse.data) {
-          setActiveDeviceSchedule(scheduleResponse.data);
-      } else {
-          setActiveDeviceSchedule(null);
-          toast({ title: "Schedule Data Empty", description: "Received an empty or unexpected schedule from the device."});
-      }
+
+        const scheduleListResponse = await response.json() as EVChargerDeviceScheduleListResponse;
+        
+        if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
+            const activeRawSchedule = scheduleListResponse.data.schedules.find(s => s.is_active);
+
+            if (activeRawSchedule && activeRawSchedule.periods && activeRawSchedule.periods.length > 0) {
+                const firstPeriod = activeRawSchedule.periods[0];
+                const apiDays: string[] = firstPeriod.days
+                    .map(dayNum => NUMERIC_DAY_TO_API_DAY[dayNum])
+                    .filter((dayStr): dayStr is string => !!dayStr); // Filter out undefined if mapping fails
+
+                const transformedSchedule: EVChargerAPISchedule = {
+                    active: true, // Since we found an active schedule
+                    rules: [{
+                        start_time: firstPeriod.start_time,
+                        end_time: firstPeriod.end_time,
+                        days: apiDays,
+                    }],
+                };
+                setActiveDeviceSchedule(transformedSchedule);
+            } else {
+                // No active schedule found in the list, or active schedule has no periods
+                toast({ title: "No Active Schedule Rules", description: "The device reported schedules, but none are currently active or configured with rules." });
+            }
+        } else {
+            // This case handles if the API returns a single schedule object directly (old expected format)
+            // or if the structure is completely unexpected.
+            const singleScheduleResponse = scheduleListResponse as any as EVChargerDeviceScheduleListResponse; // Re-cast to try parsing old structure
+            if (singleScheduleResponse && singleScheduleResponse.data && (singleScheduleResponse.data as any).rules) {
+                 setActiveDeviceSchedule(singleScheduleResponse.data as any);
+            } else {
+                 toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device." });
+            }
+        }
     } catch (error) {
-      console.error('Error fetching device schedule:', error);
-      setActiveDeviceSchedule(null);
-      if (!(error instanceof Error && error.message.startsWith("API Request Error:"))) {
-        toast({ variant: "destructive", title: "Fetch Schedule Error", description: "Could not load device schedule." });
-      }
+        console.error('Error fetching device schedule:', error);
+        if (!(error instanceof Error && error.message.startsWith("API Request Error:"))) {
+            toast({ variant: "destructive", title: "Fetch Schedule Error", description: "Could not load device schedule." });
+        }
     } finally {
-      setIsLoadingDeviceSchedule(false);
+        setIsLoadingDeviceSchedule(false);
     }
   }, [apiKey, getAuthHeaders, toast]);
 
@@ -231,8 +258,8 @@ const EVChargerPage = () => {
     setIsLoadingDeviceSchedule(true);
     
     const payloadToDevice: EVChargerSetSchedulePayload = {
-      rules: schedule.rules, // Directly use the rules from the local schedule
-      active: schedule.isLocallyActive, // Use the local active status
+      rules: schedule.rules, 
+      active: schedule.isLocallyActive, 
     };
 
     try {
@@ -249,7 +276,7 @@ const EVChargerPage = () => {
       const result = await response.json();
       if (result && (result.success || (result.data && result.data.success))) {
         toast({ title: "Schedule Sent to Device", description: `Schedule "${schedule.name}" ${result.data?.message || "updated successfully on device."}` });
-        fetchDeviceSchedule(evChargerData.uuid); // Re-fetch device's active schedule
+        fetchDeviceSchedule(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Send Not Confirmed", description: result.data?.message || result.error || "Failed to send schedule to device." });
       }
@@ -277,7 +304,7 @@ const EVChargerPage = () => {
       const result = await response.json() as EVChargerClearScheduleResponse;
        if (result && result.data && result.data.success) {
         toast({ title: "Device Schedules Cleared", description: result.data.message || "All schedules cleared from device." });
-        fetchDeviceSchedule(evChargerData.uuid); // Re-fetch, should be null
+        fetchDeviceSchedule(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Clear Not Confirmed", description: result.data?.message || "Failed to clear schedules." });
       }
@@ -289,7 +316,6 @@ const EVChargerPage = () => {
     }
   };
   
-  // --- Local Schedule Management Dialog ---
   const handleOpenScheduleDialog = (schedule: NamedEVChargerSchedule | null = null) => {
     setEditingSchedule(schedule);
     setIsScheduleDialogOpen(true);
@@ -321,8 +347,6 @@ const EVChargerPage = () => {
     setScheduleToDelete(null);
   };
   
-  // --- End Local Schedule Management ---
-
 
   const fetchCurrentChargePowerLimit = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
@@ -427,7 +451,7 @@ const EVChargerPage = () => {
       }
 
       if (chargerUuid) {
-        setEvChargerData((prev: any) => ({ ...prev, uuid: chargerUuid })); // Set UUID early for other fetches
+        setEvChargerData((prev: any) => ({ ...prev, uuid: chargerUuid })); 
 
         const specificChargerResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}`, { headers });
         if (!specificChargerResponse.ok) {
@@ -1261,7 +1285,6 @@ const EVChargerPage = () => {
                                 )}
                                 {isLoadingChargingSessions && displayedSessions.length > 0 && <div className="text-center py-4"><Loader2 className="animate-spin mx-auto my-4 h-6 w-6" /></div>}
 
-                                {/* Charts Section reflecting filters */}
                                 {!isLoadingChargingSessions && chartSessionData.length > 0 && (
                                   <div className="mt-8 space-y-8">
                                     <div>
