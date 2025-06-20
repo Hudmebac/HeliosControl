@@ -242,3 +242,21 @@ export interface HistoricalEnergyDataPoint {
   batteryToHome: number; // kWh
   gridToHome: number; // kWh
 }
+
+// EV Charger Firebase Schedule Types
+export interface EVChargerScheduleRule {
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+  days: string[];    // e.g., ["Mon", "Tue"], or ["Everyday"]
+}
+
+export interface EVChargerFirebaseSchedule {
+  id?: string; // Firestore document ID
+  name: string;
+  chargerId: string; 
+  rules: EVChargerScheduleRule[]; // For simplicity, UI will manage one rule per schedule doc
+  active: boolean;
+  // userId?: string; // Placeholder for future multi-user support
+  createdAt?: any; // Firestore Timestamp or serverTimestamp()
+  updatedAt?: any; // Firestore Timestamp or serverTimestamp()
+}

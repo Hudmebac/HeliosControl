@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig } from 'lucide-react';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -16,11 +16,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
 import { format, parseISO, formatISO, subDays, differenceInMinutes } from 'date-fns';
+import type { EVChargerFirebaseSchedule } from '@/lib/types';
+import { addSchedule, updateSchedule, deleteSchedule, getSchedulesSubscription } from '@/lib/firebase/schedules';
+import { ScheduleDialog } from '@/components/ev-charger/ScheduleDialog';
+
 
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
@@ -32,7 +37,16 @@ const EVChargerPage = () => {
   const { apiKey, isLoadingApiKey, inverterSerial, evChargerId: storedEvChargerId } = useApiKey();
   const { toast } = useToast();
 
-  const [schedules, setSchedules] = useState<any[]>([]);
+  // Legacy Schedules - to be phased out or re-evaluated. Kept for now to avoid breaking other parts.
+  // const [schedules, setSchedules] = useState<any[]>([]);
+
+  // Firebase Schedules
+  const [firebaseSchedules, setFirebaseSchedules] = useState<EVChargerFirebaseSchedule[]>([]);
+  const [isLoadingFirebaseSchedules, setIsLoadingFirebaseSchedules] = useState(true);
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [scheduleToEdit, setScheduleToEdit] = useState<EVChargerFirebaseSchedule | null>(null);
+
+
   const [settingsLegacy, setSettingsLegacy] = useState<any>({
     solarCharging: false,
     plugAndCharge: false,
@@ -55,9 +69,8 @@ const EVChargerPage = () => {
   const [sessionFilterStartDate, setSessionFilterStartDate] = useState<Date | undefined>(subDays(new Date(), 1));
   const [sessionFilterEndDate, setSessionFilterEndDate] = useState<Date | undefined>(new Date());
 
-  // New filter states for session history
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(true); // Default to true
+  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(true); 
   const [uniqueSessionStatuses, setUniqueSessionStatuses] = useState<string[]>([]);
 
 
@@ -152,34 +165,52 @@ const EVChargerPage = () => {
     }
   }, [apiKey, getAuthHeaders]);
 
-  const fetchSchedules = useCallback(async (chargerUuid: string | null) => {
-    if (!apiKey || !chargerUuid) return;
-    try {
-      const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers });
-      if (!response.ok) {
-        await handleApiError(response, 'fetching schedules');
-        setSchedules([]);
-        return;
-      }
-      const data = await response.json();
-      if (data && data.data) {
-        if (Array.isArray(data.data)) {
-          setSchedules(data.data);
-        } else if (typeof data.data === 'object' && data.data !== null) {
-          setSchedules([data.data]);
-        } else {
-          setSchedules([]);
-        }
-      } else {
-        setSchedules([]);
-      }
-    } catch (error) {
-      console.error('Error fetching schedules:', error);
-      setSchedules([]);
-      toast({variant: "destructive", title: "Fetch Schedules Error", description: "Could not load EV charging schedules."});
+  // Removed old fetchSchedules as it's being replaced by Firebase
+  // const fetchSchedules = useCallback(async (chargerUuid: string | null) => { ... }, []);
+
+  // Firebase Schedules Effect
+  useEffect(() => {
+    if (evChargerData?.uuid) {
+      setIsLoadingFirebaseSchedules(true);
+      const unsubscribe = getSchedulesSubscription(evChargerData.uuid, (schedules) => {
+        setFirebaseSchedules(schedules);
+        setIsLoadingFirebaseSchedules(false);
+      });
+      return () => unsubscribe(); // Cleanup subscription on unmount
+    } else {
+      setFirebaseSchedules([]);
+      setIsLoadingFirebaseSchedules(false);
     }
-  }, [apiKey, getAuthHeaders, toast]);
+  }, [evChargerData?.uuid]);
+
+  const handleSaveFirebaseSchedule = async (
+    scheduleData: Omit<EVChargerFirebaseSchedule, 'id' | 'chargerId' | 'createdAt' | 'updatedAt'>,
+    scheduleId?: string
+  ) => {
+    if (!evChargerData?.uuid) {
+      throw new Error("Charger ID not available to save schedule.");
+    }
+    if (scheduleId) {
+      await updateSchedule(scheduleId, scheduleData);
+    } else {
+      await addSchedule(evChargerData.uuid, scheduleData);
+    }
+  };
+  
+  const handleDeleteFirebaseSchedule = async (scheduleId: string) => {
+    try {
+      await deleteSchedule(scheduleId);
+      toast({ title: "Schedule Deleted", description: "The schedule has been removed." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Delete Failed", description: error.message || "Could not delete the schedule." });
+    }
+  };
+
+  const handleOpenScheduleDialog = (schedule?: EVChargerFirebaseSchedule) => {
+    setScheduleToEdit(schedule || null);
+    setIsScheduleDialogOpen(true);
+  };
+
 
   const fetchCurrentChargePowerLimit = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
@@ -412,7 +443,7 @@ const EVChargerPage = () => {
       setIsLoadingCommandSettings(true);
       Promise.all([
         fetchLegacySettings(evChargerData.uuid),
-        fetchSchedules(evChargerData.uuid),
+        // fetchSchedules(evChargerData.uuid), // Replaced by Firebase listener
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
@@ -635,51 +666,6 @@ const EVChargerPage = () => {
     }
   }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]); 
 
-  const handleAddSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!apiKey || !evChargerData?.uuid) return;
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const scheduleName = formData.get('scheduleName') as string;
-    const startTime = formData.get('startTime') as string; 
-    const endTime = formData.get('endTime') as string;   
-    const daysSelected = Array.from(formData.getAll('days')) as string[]; 
-
-    const payload = {
-      name: scheduleName || "Unnamed Schedule", 
-      active: true, 
-      rules: [
-        {
-          start_time: startTime,
-          end_time: endTime,
-          days: daysSelected.join(','), 
-        }
-      ]
-    };
-
-    try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        await handleApiError(response, 'adding/updating schedule');
-        return;
-      }
-      const data = await response.json();
-      if (data && data.data && data.data.success) {
-        toast({ title: "Schedule Updated", description: data.data.message || "Schedule command accepted." });
-        fetchSchedules(evChargerData.uuid); 
-      } else {
-        toast({ variant: "destructive", title: "Schedule Update Not Confirmed", description: data?.data?.message || data?.error || "Command sent, but success not confirmed." });
-      }
-    } catch (error) {
-      toast({ variant: "destructive", title: "Schedule Error", description: "Could not update schedule." });
-    }
-  };
-
   const handleSessionSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate);
@@ -712,7 +698,7 @@ const EVChargerPage = () => {
         if (!hideNaEnergy) return true;
         let energyDisplay = "N/A";
         if (typeof session.kwh_delivered === 'number') {
-            energyDisplay = (session.kwh_delivered).toFixed(2); // Assuming kwh_delivered is already in kWh
+            energyDisplay = (session.kwh_delivered).toFixed(2); 
         } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
             const energyWh = session.meter_stop - session.meter_start;
             if (energyWh > 0) {
@@ -749,7 +735,7 @@ const EVChargerPage = () => {
         };
       })
       .filter(item => item.energyKWh > 0) 
-      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(a.formattedStartTime).getTime() - new Date(b.formattedStartTime).getTime()); 
+      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(parseISO(a.id)).getTime() - new Date(parseISO(b.id)).getTime()); 
   }, [displayedSessions]);
 
   const dailyEnergyChartData = React.useMemo(() => {
@@ -941,48 +927,104 @@ const EVChargerPage = () => {
 
               <TabsContent value="schedules">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Charging Schedules</CardTitle>
-                    <CardDescription>Manage your EV charging schedules.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoadingCommandSettings ? <Loader2 className="animate-spin" /> : (
-                      schedules.length > 0 ? (
-                        <ul className="space-y-2">
-                          {schedules.map((schedule, index) => (
-                            <li key={index} className="p-2 border rounded-md">
-                              <p className="font-semibold">{schedule.name || `Schedule ${index + 1}`}</p>
-                              {schedule.rules?.map((rule: any, ruleIndex: number) => (
-                                <p key={ruleIndex} className="text-sm text-muted-foreground">
-                                  {rule.start_time} - {rule.end_time} on {rule.days} ({schedule.active ? 'Active' : 'Inactive'})
-                                </p>
-                              ))}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : <p>No schedules found or API does not return current schedules via GET.</p>
-                    )}
-                    <form onSubmit={handleAddSchedule} className="mt-4 space-y-4">
-                      <Input name="scheduleName" placeholder="Schedule Name (Optional)" />
-                      <div className="grid grid-cols-2 gap-4">
-                        <Input name="startTime" type="time" required />
-                        <Input name="endTime" type="time" required />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Days:</Label>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                            <div key={day} className="flex items-center">
-                              <input type="checkbox" name="days" value={day} id={`day-${day}`} className="mr-2"/>
-                              <Label htmlFor={`day-${day}`}>{day}</Label>
-                            </div>
-                          ))}
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Charging Schedules (Firebase)</CardTitle>
+                            <CardDescription>Manage your EV charging schedules stored in Firebase. These schedules are for your reference and planning.</CardDescription>
                         </div>
-                      </div>
-                      <Button type="submit">Add/Update Schedule</Button>
-                       <p className="text-xs text-muted-foreground">Note: GivEnergy's current API for `set-schedule` may overwrite existing schedules or create new ones. This form attempts to set a single schedule rule. Refer to official GivEnergy documentation for detailed behavior.</p>
-                    </form>
-                  </CardContent>
+                        <Button onClick={() => handleOpenScheduleDialog()} size="sm">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add New Schedule
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingFirebaseSchedules ? (
+                            <div className="flex justify-center items-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                <p className="ml-3 text-muted-foreground">Loading schedules...</p>
+                            </div>
+                        ) : firebaseSchedules.length > 0 ? (
+                            <div className="space-y-4">
+                                {firebaseSchedules.map((schedule) => (
+                                    <Card key={schedule.id} className="shadow-sm">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <CardTitle className="text-lg">{schedule.name}</CardTitle>
+                                                    <CardDescription>
+                                                        Status: <span className={schedule.active ? "text-green-600 font-medium" : "text-muted-foreground"}>{schedule.active ? 'Active' : 'Inactive'}</span>
+                                                    </CardDescription>
+                                                </div>
+                                                <div className="flex space-x-2">
+                                                    <Button variant="outline" size="icon" onClick={() => handleOpenScheduleDialog(schedule)}>
+                                                        <Edit className="h-4 w-4" />
+                                                        <span className="sr-only">Edit</span>
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="destructive" size="icon">
+                                                                <Trash2 className="h-4 w-4" />
+                                                                <span className="sr-only">Delete</span>
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    This action cannot be undone. This will permanently delete the schedule "{schedule.name}".
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDeleteFirebaseSchedule(schedule.id!)}>Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {schedule.rules.map((rule, index) => (
+                                                <div key={index} className="text-sm text-muted-foreground">
+                                                    <p>Time: {rule.startTime} - {rule.endTime}</p>
+                                                    <p>Days: {rule.days.join(', ')}</p>
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-muted-foreground py-6">No schedules found. Click "Add New Schedule" to create one.</p>
+                        )}
+                    </CardContent>
+                </Card>
+                {isScheduleDialogOpen && evChargerData?.uuid && (
+                    <ScheduleDialog
+                        open={isScheduleDialogOpen}
+                        onOpenChange={setIsScheduleDialogOpen}
+                        scheduleToEdit={scheduleToEdit}
+                        onSave={handleSaveFirebaseSchedule}
+                        chargerId={evChargerData.uuid}
+                    />
+                )}
+                 <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle className="text-base">Note on Schedule Actuation</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                            The schedules managed here are stored in Firebase for your planning and organization. 
+                            They do <strong className="text-foreground">not</strong> automatically control your GivEnergy EV charger. 
+                            To make these schedules control your charger, you would typically need:
+                        </p>
+                        <ul className="list-disc list-inside text-sm text-muted-foreground pl-4 mt-2 space-y-1">
+                            <li>Client-side logic (e.g., in this app if kept open) to monitor these schedules and send "Start Charge" / "Stop Charge" commands to the GivEnergy API at the appropriate times.</li>
+                            <li>Or, a separate backend service/server that listens to Firebase changes and interacts with the GivEnergy API.</li>
+                        </ul>
+                        <p className="text-sm text-muted-foreground mt-2">
+                            The "Instant Control" options on the "Overview" tab can be used for manual control.
+                        </p>
+                    </CardContent>
                 </Card>
               </TabsContent>
 
