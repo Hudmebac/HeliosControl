@@ -5,72 +5,82 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import type { NamedEVChargerSchedule, EVChargerAPIRule } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { v4 as uuidv4 } from 'uuid';
+
+// Day mapping constants
+const ALL_DAYS_DISPLAY_FORMAT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = {
+  "Mon": "MONDAY", "Tue": "TUESDAY", "Wed": "WEDNESDAY", "Thu": "THURSDAY",
+  "Fri": "FRIDAY", "Sat": "SATURDAY", "Sun": "SUNDAY"
+};
+const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
+  Object.entries(DAY_MAP_DISPLAY_TO_API).map(([key, value]) => [value, key])
+);
 
 interface ScheduleDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (schedule: Omit<NamedEVChargerSchedule, 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   existingSchedule: NamedEVChargerSchedule | null;
-  evChargerId: string; // Used to ensure schedules are associated correctly if needed for future backend sync
+  evChargerId: string | null; // Added evChargerId for context if needed, though not directly used in this version for save logic
 }
-
-const ALL_DAYS_DISPLAY_FORMAT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = {
-  "Mon": "MONDAY", "Tue": "TUESDAY", "Wed": "WEDNESDAY", "Thu": "THURSDAY",
-  "Fri": "FRIDAY", "Sat": "SATURDAY", "Sun": "SUNDAY"
-};
 
 export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose, onSave, existingSchedule, evChargerId }) => {
   const [name, setName] = useState('');
-  // For simplicity, this dialog manages one rule. Multi-rule UI would be more complex.
   const [startTime, setStartTime] = useState('00:00');
   const [endTime, setEndTime] = useState('06:00');
-  const [selectedDays, setSelectedDays] = useState<string[]>([]); // Stores display format days e.g. "Mon"
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [isEveryday, setIsEveryday] = useState(false);
   const [isLocallyActive, setIsLocallyActive] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (existingSchedule) {
-      setName(existingSchedule.name);
-      setIsLocallyActive(existingSchedule.isLocallyActive);
-      if (existingSchedule.rules && existingSchedule.rules.length > 0) {
-        const rule = existingSchedule.rules[0]; // Assuming one rule for this UI
-        setStartTime(rule.start_time);
-        setEndTime(rule.end_time);
-        const displayDays = rule.days.map(apiDay => 
-            Object.keys(DAY_MAP_DISPLAY_TO_API).find(key => DAY_MAP_DISPLAY_TO_API[key] === apiDay.toUpperCase()) || apiDay
-        ).filter(Boolean);
+    if (isOpen) { // Reset form when dialog opens, based on existingSchedule
+      if (existingSchedule) {
+        setName(existingSchedule.name);
+        setIsLocallyActive(existingSchedule.isLocallyActive);
+        if (existingSchedule.rules && existingSchedule.rules.length > 0) {
+          const rule = existingSchedule.rules[0]; // Assuming one rule per named schedule for now
+          setStartTime(rule.start_time);
+          setEndTime(rule.end_time);
+          
+          const displayDays = rule.days.map(apiDay => DAY_MAP_API_TO_DISPLAY[apiDay.toUpperCase()] || apiDay).filter(Boolean);
+          
+          // Check if all API equivalent days are present for "Everyday"
+          const isAllApiDaysPresent = ALL_DAYS_DISPLAY_FORMAT.every(displayDay => {
+            const apiDayEquivalent = DAY_MAP_DISPLAY_TO_API[displayDay];
+            return rule.days.map(d => d.toUpperCase()).includes(apiDayEquivalent);
+          });
 
-        const isAllApiDaysPresent = Object.values(DAY_MAP_DISPLAY_TO_API).every(apiDay => rule.days.map(d => d.toUpperCase()).includes(apiDay));
-        if (isAllApiDaysPresent || rule.days.map(d=>d.toUpperCase()).includes("EVERYDAY")) {
-             setIsEveryday(true);
-             setSelectedDays(ALL_DAYS_DISPLAY_FORMAT);
+          if (isAllApiDaysPresent || rule.days.map(d => d.toUpperCase()).includes("EVERYDAY")) {
+            setIsEveryday(true);
+            setSelectedDays(ALL_DAYS_DISPLAY_FORMAT);
+          } else {
+            setIsEveryday(false);
+            setSelectedDays(displayDays);
+          }
         } else {
-             setIsEveryday(false);
-             setSelectedDays(displayDays);
+          // Default for existing schedule with no rules (should ideally not happen)
+          setStartTime('00:00');
+          setEndTime('06:00');
+          setSelectedDays([]);
+          setIsEveryday(false);
         }
       } else {
-        // Default if no rules
+        // Reset form for new schedule
+        setName('');
         setStartTime('00:00');
         setEndTime('06:00');
         setSelectedDays([]);
         setIsEveryday(false);
+        setIsLocallyActive(true);
       }
-    } else {
-      // Reset form for new schedule
-      setName('');
-      setStartTime('00:00');
-      setEndTime('06:00');
-      setSelectedDays([]);
-      setIsEveryday(false);
-      setIsLocallyActive(true);
     }
   }, [existingSchedule, isOpen]);
 
@@ -79,7 +89,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     if (checked) {
       setSelectedDays(ALL_DAYS_DISPLAY_FORMAT);
     } else {
-      setSelectedDays([]);
+      setSelectedDays([]); // Clear individual days if "Everyday" is unchecked
     }
   };
 
@@ -91,7 +101,8 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
       newSelectedDays = selectedDays.filter(d => d !== day);
     }
     setSelectedDays(newSelectedDays);
-    setIsEveryday(newSelectedDays.length === ALL_DAYS_DISPLAY_FORMAT.length);
+    // Update "Everyday" checkbox if all days are selected/deselected individually
+    setIsEveryday(newSelectedDays.length === ALL_DAYS_DISPLAY_FORMAT.length && ALL_DAYS_DISPLAY_FORMAT.every(d => newSelectedDays.includes(d)));
   };
 
   const handleSubmit = () => {
@@ -99,44 +110,58 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
       toast({ variant: "destructive", title: "Validation Error", description: "Schedule name is required." });
       return;
     }
-    if (selectedDays.length === 0 && !isEveryday) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Please select at least one day or 'Everyday'." });
+    if (selectedDays.length === 0) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Please select at least one day." });
       return;
     }
     if (endTime <= startTime) {
-      toast({ variant: "destructive", title: "Validation Error", description: "End time must be after start time." });
+      // Simple validation for same-day. More complex needed for overnight.
+      // For now, GivEnergy API might handle overnight (e.g. 22:00 - 06:00) as two rules or specific format.
+      // This basic check ensures end time is after start for a single day rule.
+      toast({ variant: "destructive", title: "Validation Error", description: "End time must be after start time for a single day rule." });
       return;
     }
 
-    const apiDays = isEveryday 
-        ? Object.values(DAY_MAP_DISPLAY_TO_API)
-        : selectedDays.map(day => DAY_MAP_DISPLAY_TO_API[day] || day.toUpperCase());
+    const apiDays = selectedDays.map(day => DAY_MAP_DISPLAY_TO_API[day] || day.toUpperCase());
 
     const rule: EVChargerAPIRule = {
       start_time: startTime,
       end_time: endTime,
-      days: apiDays,
+      days: apiDays, // API expects ["MONDAY", "TUESDAY"...]
     };
     
     const scheduleToSave: Omit<NamedEVChargerSchedule, 'createdAt' | 'updatedAt'> & { id?: string } = {
-      id: existingSchedule?.id, // Include ID if editing
+      id: existingSchedule?.id, // Will be undefined for new schedules
       name,
-      rules: [rule], // Storing as an array even if UI handles one
+      rules: [rule], // Storing as an array of rules, even if UI supports one per named schedule
       isLocallyActive,
-      // chargerId: evChargerId, // chargerId is not part of NamedEVChargerSchedule for local storage, managed by hook key
+      // chargerId: evChargerId || undefined // Store chargerId if available, useful for future multi-charger support
     };
+    
+    // If it's a new schedule (no existingSchedule.id), the useLocalStorageSchedules hook will assign an ID.
+    // Or we can explicitly add one here if onSave expects it for new items.
+    // For consistency with update, if we're adding, we might want to pass the ID.
+    // The hook structure suggests the hook handles ID generation for `addSchedule`.
+    if(!existingSchedule?.id) { // This is a new schedule
+        // The useLocalStorageSchedules hook expects Omit<..., 'id' | 'createdAt' | 'updatedAt'> for add
+        // and it will generate the id and timestamps.
+        // So, we don't need to pass id here for new schedules if onSave calls addSchedule.
+    }
+
+
     onSave(scheduleToSave);
+    onClose(); // Close dialog after saving
   };
 
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{existingSchedule ? 'Edit Schedule' : 'Add New Schedule'}</DialogTitle>
+          <DialogTitle>{existingSchedule ? 'Edit Local Schedule' : 'Add New Local Schedule'}</DialogTitle>
           <DialogDescription>
-            {existingSchedule ? 'Modify the details of your charging schedule.' : 'Create a new charging schedule for your list.'}
+            {existingSchedule ? 'Modify details for this locally stored schedule.' : 'Create a new schedule and save it to your local list.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -166,7 +191,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
                             id={`schedule-day-${day}`}
                             checked={selectedDays.includes(day)}
                             onCheckedChange={(checked) => handleDayChange(day, !!checked)}
-                            disabled={isEveryday}
+                            disabled={isEveryday && !selectedDays.includes(day)} // Disable if "Everyday" is checked and this day wasn't part of the initial "Everyday" set (edge case, usually all are selected)
                         />
                         <Label htmlFor={`schedule-day-${day}`} className="font-normal">{day}</Label>
                     </div>
@@ -176,6 +201,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
 
           <div className="grid grid-cols-4 items-center gap-4">
              <Label htmlFor="is-locally-active" className="text-right col-span-3">Enabled in my list</Label>
+            {/* Tooltip or description can be added here for clarity */}
             <Switch id="is-locally-active" checked={isLocallyActive} onCheckedChange={setIsLocallyActive} className="justify-self-start"/>
           </div>
         </div>
@@ -187,3 +213,4 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     </Dialog>
   );
 };
+
