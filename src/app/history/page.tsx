@@ -15,14 +15,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
-import { getEnergyFlows } from "@/lib/givenergy.tsx";
+import { getEnergyFlows } from "@/lib/givenergy"; // Corrected: Now imports from givenergy.ts
 import type { EnergyFlowRawEntry, ProcessedEnergyFlowDataPoint, GroupingOptionConfig, EnergyFlowTypeID } from "@/lib/types";
 import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types";
 import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO, addDays } from "date-fns";
-import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, InfoIcon, HelpCircle } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, InfoIcon, HelpCircle, BarChartHorizontalBig } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { EnergyFlowSummaryCard } from "@/components/history/EnergyFlowSummaryCard";
+
 
 const formatDateForDisplay = (date: Date | undefined): string => {
  return date ? format(date, "PPP") : "Pick a date";
@@ -39,7 +41,7 @@ const formatYearForDisplay = (date: Date | undefined): string => {
 const MAX_DATE_RANGE_DAYS = 366;
 
 const groupingOptions: GroupingOptionConfig[] = [
-  { id: "half_hourly", label: "Half-Hourly", apiValue: 0, datePickerType: 'single_day_half_hourly' },
+  // { id: "half_hourly", label: "Half-Hourly", apiValue: 0, datePickerType: 'single_day_half_hourly' }, // Removed as requested
   { id: "daily", label: "Daily", apiValue: 1, datePickerType: 'single_day_daily' },
   { id: "weekly", label: "Weekly (Aggregated Daily)", apiValue: 1, datePickerType: 'week_daily' },
   { id: "monthly", label: "Monthly", apiValue: 2, datePickerType: 'month_monthly' },
@@ -82,7 +84,7 @@ export default function EnergyHistoryPage() {
   const { toast } = useToast();
   const { theme } = useTheme();
 
-  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[1].id);
+  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[0].id); // Default to Daily
 
   const [date1, setDate1] = useState<Date | undefined>(new Date());
   const [date2, setDate2] = useState<Date | undefined>(new Date());
@@ -138,7 +140,7 @@ export default function EnergyHistoryPage() {
       const endDate = parseApiTimestamp(entry.end_time);
 
       switch (currentGroupingConfig.apiValue) {
-        case 0:
+        case 0: // This case is effectively unused now that Half-Hourly is removed, but kept for structural integrity if re-added
           timeLabel = `${format(startDate, "HH:mm")}`;
           break;
         case 1:
@@ -188,14 +190,14 @@ export default function EnergyHistoryPage() {
 
     setIsLoadingData(true);
     setError(null);
-    setUsedFallbackRange(false); // Reset fallback status
+    setUsedFallbackRange(false);
 
     let initialApiStartDateStr: string;
     let initialApiEndDateStrForQuery: string;
     const today = new Date();
 
     switch (currentGroupingConfig.datePickerType) {
-      case 'single_day_half_hourly':
+      case 'single_day_half_hourly': // Maintained for structure, though option removed
         if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
         initialApiStartDateStr = format(date1, "yyyy-MM-dd");
         initialApiEndDateStrForQuery = format(date1, "yyyy-MM-dd");
@@ -214,7 +216,7 @@ export default function EnergyHistoryPage() {
       case 'month_monthly':
         if (!date1) { setError("Please select a month."); setIsLoadingData(false); return; }
         initialApiStartDateStr = format(startOfMonth(date1), "yyyy-MM-dd");
-        initialApiEndDateStrForQuery = format(endOfMonth(date1), "yyyy-MM-dd"); // For monthly/yearly, API likely inclusive
+        initialApiEndDateStrForQuery = format(endOfMonth(date1), "yyyy-MM-dd");
         break;
       case 'year_yearly':
         if (!date1) { setError("Please select a year."); setIsLoadingData(false); return; }
@@ -234,7 +236,7 @@ export default function EnergyHistoryPage() {
             return;
         }
         initialApiStartDateStr = format(date1, "yyyy-MM-dd");
-        initialApiEndDateStrForQuery = format(addDays(date2, 1), "yyyy-MM-dd"); // Daily query, end date is exclusive
+        initialApiEndDateStrForQuery = format(addDays(date2, 1), "yyyy-MM-dd");
         break;
       default:
         setError("Invalid date picker type.");
@@ -258,7 +260,7 @@ export default function EnergyHistoryPage() {
         const fallbackEndDateInclusive = addDays(date1, 3);
 
         const fallbackApiQueryStartDateStr = format(fallbackStartDate, "yyyy-MM-dd");
-        const fallbackApiQueryEndDateStr = format(addDays(fallbackEndDateInclusive, 1), "yyyy-MM-dd"); // Daily grouping needs end_date as next day
+        const fallbackApiQueryEndDateStr = format(addDays(fallbackEndDateInclusive, 1), "yyyy-MM-dd");
 
         console.log("[HistoryPage] Attempting fallback fetch with start:", fallbackApiQueryStartDateStr, "end:", fallbackApiQueryEndDateStr, "grouping:", currentGroupingConfig.apiValue);
         const fallbackRawData = await getEnergyFlows(apiKey!, inverterSerial!, fallbackApiQueryStartDateStr, fallbackApiQueryEndDateStr, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
@@ -285,12 +287,6 @@ export default function EnergyHistoryPage() {
     }
   }, [apiKey, inverterSerial, currentGroupingConfig, date1, date2, selectedFlowTypeIDs, transformData, toast]);
 
-  useEffect(() => {
-    // Optional: Fetch on initial load if desired, or only on button click
-    // if (apiKey && inverterSerial && !isLoadingApiKey) {
-    // fetchData();
-    // }
-  }, [apiKey, inverterSerial, isLoadingApiKey]);
 
   const chartData = useMemo(() => {
     return flowData.map(entry => {
@@ -307,10 +303,12 @@ export default function EnergyHistoryPage() {
         { Header: 'Start Time', accessor: 'startTimeOriginal' },
         { Header: 'End Time', accessor: 'endTimeOriginal' }
     ];
-    if (currentGroupingConfig.apiValue !== 0) {
-        timeCols.splice(1,1);
-        timeCols[0].Header = "Period";
+    // For non-half-hourly, only show one date/period column.
+    if (currentGroupingConfig.apiValue !== 0) { // 0 was half-hourly
+        timeCols.splice(1,1); // Remove end time column
+        timeCols[0].Header = "Period"; // Rename start time to Period
     }
+
 
     const flowCols = selectedFlowTypeIDs.map(typeId => ({
       Header: () => (
@@ -336,7 +334,7 @@ export default function EnergyHistoryPage() {
 
   const renderDatePicker = () => {
     switch (currentGroupingConfig.datePickerType) {
-      case 'single_day_half_hourly':
+      case 'single_day_half_hourly': // Maintained for structure, though option removed
       case 'single_day_daily':
       case 'week_daily':
         return (
@@ -529,6 +527,11 @@ export default function EnergyHistoryPage() {
 
       {!isLoadingData && !error && flowData.length > 0 && apiKey && inverterSerial && (
         <>
+          <EnergyFlowSummaryCard
+            flowData={flowData}
+            selectedFlowTypeIDs={selectedFlowTypeIDs}
+            groupingLabel={currentGroupingConfig.label}
+          />
           <Card>
             <CardHeader>
               <CardTitle>Energy Flow Chart</CardTitle>
@@ -575,7 +578,7 @@ export default function EnergyHistoryPage() {
                         if (col.accessor.startsWith('values.')) {
                             const typeId = col.accessor.split('.')[1] as EnergyFlowTypeID;
                             cellValue = row.values[typeId];
-                        } else if (col.accessor === 'startTimeOriginal' && currentGroupingConfig.apiValue !== 0) {
+                        } else if (col.accessor === 'startTimeOriginal' && currentGroupingConfig.apiValue !== 0) { // 0 was half-hourly
                              cellValue = row.timeLabel;
                         }
 
