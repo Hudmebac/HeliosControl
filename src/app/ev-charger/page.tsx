@@ -17,7 +17,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
@@ -51,7 +50,7 @@ const NUMERIC_DAY_TO_API_DAY_STRING: { [key: number]: string } = {
 };
 
 const DAY_MAP_API_STRING_TO_NUMERIC: { [key: string]: number } = Object.fromEntries(
-  ALL_DAYS_API_FORMAT.map((day, i) => [DAY_MAP_DISPLAY_TO_API_STRING[day], i])
+  ALL_DAYS_API_FORMAT.map((apiDay) => [apiDay, ALL_DAYS_DISPLAY_FORMAT.findIndex(displayDay => DAY_MAP_DISPLAY_TO_API_STRING[displayDay] === apiDay)])
 );
 
 
@@ -179,15 +178,15 @@ const EVChargerPage = () => {
     if (!apiKey || !chargerUuid) return;
     try {
       const headers = getAuthHeaders();
-      const plugAndChargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/616`, { headers });
+      const plugAndChargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/616`, { headers }); // Assumes read for 616 is GET
       const plugAndChargeData = await plugAndChargeResponse.json();
-      const plugAndChargeEnabled = plugAndChargeData?.data?.value === 1;
+      const plugAndChargeEnabled = plugAndChargeData?.data?.value === 1; // Or however the API indicates enabled
 
       const chargeRateResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/621`, { headers });
       const chargeRateData = await chargeRateResponse.json();
       const chargeRateLimit = chargeRateData?.data?.value;
 
-      const batteryDischargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/622`, { headers });
+      const batteryDischargeResponse = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/read`, { headers });
       const batteryDischargeData = await batteryDischargeResponse.json();
       const maxBatteryDischargeToEvcSetting = batteryDischargeData?.data?.value || 0;
 
@@ -200,7 +199,8 @@ const EVChargerPage = () => {
     } catch (error) {
       console.error('Error fetching legacy settings:', error);
     }
-  }, [apiKey, getAuthHeaders]);
+  }, [apiKey, getAuthHeaders, inverterSerial]);
+
 
  const fetchDeviceActiveScheduleInfo = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
@@ -293,7 +293,7 @@ const EVChargerPage = () => {
         }
 
         toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
-        reloadLocalSchedulesFromHook(); // Refresh local list display
+        reloadLocalSchedulesFromHook(); 
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
@@ -324,7 +324,7 @@ const EVChargerPage = () => {
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
             let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
-            if (!apiDayString) { // If it's already in API format (e.g., "MONDAY")
+            if (!apiDayString) { 
                 apiDayString = displayDayOrApiDay.toUpperCase();
             }
             return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
@@ -409,9 +409,6 @@ const EVChargerPage = () => {
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
-        // This case handles if a new schedule is added with the same name as the active device schedule
-        // or if a schedule not previously active is edited to match the active device schedule name.
-        // Re-fetch to ensure the active status indicator is correct.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
     setEditingSchedule(null);
@@ -433,7 +430,7 @@ const EVChargerPage = () => {
         toast({
             variant: "default",
             title: "Device Schedule Note",
-            description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
+            description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated.`,
             duration: 8000
         });
       }
@@ -802,14 +799,19 @@ const EVChargerPage = () => {
       });
       if (!response.ok) {
          await handleApiError(response, 'toggling plug and charge (settings)');
-         if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch to revert optimistic UI
+         if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
         return;
       }
-      toast({title: "Plug & Charge Setting Updated"});
-      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch to confirm state
+      const data = await response.json();
+      if (data?.data?.success) {
+        toast({title: "Plug & Charge Setting Updated", description: data.data.message});
+      } else {
+         toast({title: "Plug & Charge Setting Update Sent", description: data.data.message || "Command sent, API confirmation pending."});
+      }
+      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
     } catch (error) {
       toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
-      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch on error
+      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
     }
   };
 
@@ -1064,21 +1066,20 @@ const EVChargerPage = () => {
 
                             <div>
                               <Label className="mb-2 block">Charge Power Limit ({commandChargePowerLimit?.unit || "A"})</Label>
-                              <RadioGroup
-                                value={commandChargePowerLimit?.value ? String(commandChargePowerLimit.value) : ""}
-                                onValueChange={(value) => handleAdjustChargePowerLimit(parseFloat(value))}
-                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-2"
-                                disabled={isLoadingCommandSettings}
-                              >
+                               <div className="flex flex-wrap gap-2">
                                 {chargePowerLimitPresets.map(limit => (
-                                  <div key={limit} className="flex items-center space-x-2">
-                                    <RadioGroupItem value={String(limit)} id={`limit-${limit}`} />
-                                    <Label htmlFor={`limit-${limit}`} className="font-normal cursor-pointer">
-                                      {limit} {commandChargePowerLimit?.unit || "A"}
-                                    </Label>
-                                  </div>
+                                  <Button
+                                    key={limit}
+                                    size="sm"
+                                    variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
+                                    onClick={() => handleAdjustChargePowerLimit(limit)}
+                                    disabled={isLoadingCommandSettings}
+                                    className="flex-grow sm:flex-grow-0"
+                                  >
+                                    {limit} {commandChargePowerLimit?.unit || "A"}
+                                  </Button>
                                 ))}
-                              </RadioGroup>
+                              </div>
                               {commandChargePowerLimit && (
                                 <p className="text-xs text-muted-foreground mt-1">
                                   Current Limit: {commandChargePowerLimit.value} {commandChargePowerLimit.unit} (Min: {commandChargePowerLimit.min}, Max: {commandChargePowerLimit.max})
@@ -1551,7 +1552,7 @@ const EVChargerPage = () => {
                     This action cannot be undone. This will permanently delete the schedule
                     "{scheduleToDelete?.name}" from your local list.
                     This action does NOT delete the schedule from the EV charger device itself.
-                    If this schedule was active on the device, it may continue to run until another schedule is activated or all schedules are cleared from the device.
+                    If this schedule was active on the device, it may continue to run until another schedule is activated.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1565,4 +1566,3 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
-
