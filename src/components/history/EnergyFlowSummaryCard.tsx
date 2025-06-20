@@ -12,6 +12,7 @@ interface EnergyFlowSummaryCardProps {
   flowData: ProcessedEnergyFlowDataPoint[];
   selectedFlowTypeIDs: EnergyFlowTypeID[];
   groupingLabel?: string;
+  selectedGroupingId: string; // Add selectedGroupingId prop
 }
 
 interface FlowSummaryItem {
@@ -124,6 +125,7 @@ export function EnergyFlowSummaryCard({
   flowData,
   selectedFlowTypeIDs,
   groupingLabel,
+  selectedGroupingId, // Destructure the new prop
 }: EnergyFlowSummaryCardProps) {
   if (!flowData || flowData.length === 0 || selectedFlowTypeIDs.length === 0) {
     return null;

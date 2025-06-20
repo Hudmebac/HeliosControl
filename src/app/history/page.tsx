@@ -205,7 +205,7 @@ export default function EnergyHistoryPage() {
       case 'single_day_daily':
         if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
         initialApiStartDateStr = format(date1, "yyyy-MM-dd");
-        initialApiEndDateStrForQuery = format(addDays(date1, 1), "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(date1, "yyyy-MM-dd");
         break;
       case 'week_daily':
         if (!date1) { setError("Please select a day in the target week."); setIsLoadingData(false); return; }
@@ -288,15 +288,25 @@ export default function EnergyHistoryPage() {
   }, [apiKey, inverterSerial, currentGroupingConfig, date1, date2, selectedFlowTypeIDs, transformData, toast]);
 
 
+  const filteredFlowDataForDisplay = useMemo(() => {
+    if (selectedGroupingId === 'daily' && date1) {
+      const selectedDayString = format(date1, "yyyy-MM-dd");
+      return flowData.filter(entry => entry.startTimeOriginal.startsWith(selectedDayString));
+    }
+    // For other groupings, or if date1 is not set for daily, use the raw flowData
+    return flowData;
+  }, [flowData, selectedGroupingId, date1]);
+
+
   const chartData = useMemo(() => {
-    return flowData.map(entry => {
+    return filteredFlowDataForDisplay.map(entry => {
       const chartEntry: any = { timeLabel: entry.timeLabel };
       selectedFlowTypeIDs.forEach(typeId => {
         chartEntry[typeId] = entry.values[typeId] || 0;
       });
       return chartEntry;
     });
-  }, [flowData, selectedFlowTypeIDs]);
+  }, [filteredFlowDataForDisplay, selectedFlowTypeIDs]);
 
   const tableColumns = useMemo(() => {
     const timeCols = [
@@ -496,10 +506,10 @@ export default function EnergyHistoryPage() {
 
       {usedFallbackRange && (
         <Alert variant="default" className="mt-4">
-          <InfoIcon className="h-4 w-4" />
-          <AlertTitle>Fallback Range Used</AlertTitle>
-          <AlertDescription>
-            No data was found for the initially selected day. Displaying data for a 7-day period around that date instead.
+ <InfoIcon className="h-4 w-4" />
+ <AlertTitle>Unable to give Summary for a single day, as this is the same as Energy Flow Data Table.</AlertTitle>
+ <AlertDescription>
+            Displaying data for a 7-day period around that date instead.
           </AlertDescription>
         </Alert>
       )}
@@ -529,7 +539,8 @@ export default function EnergyHistoryPage() {
         <>
           <EnergyFlowSummaryCard
             flowData={flowData}
-            selectedFlowTypeIDs={selectedFlowTypeIDs}
+ selectedGroupingId={selectedGroupingId}
+ selectedFlowTypeIDs={selectedFlowTypeIDs}
             groupingLabel={currentGroupingConfig.label}
           />
           <Card>
@@ -571,7 +582,7 @@ export default function EnergyHistoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {flowData.map((row, rowIndex) => (
+                  {filteredFlowDataForDisplay.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
                       {tableColumns.map((col, colIndex) => {
                         let cellValue: any = row[col.accessor as keyof ProcessedEnergyFlowDataPoint];
