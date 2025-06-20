@@ -21,11 +21,11 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  EnergyFlowRawEntry, // New
-  EnergyFlowApiResponse, // New
-  EnergyFlowTypeID, // New
-  ENERGY_FLOW_TYPE_DETAILS, // Import added
+  EnergyFlowRawEntry,
+  EnergyFlowApiResponse,
+  EnergyFlowTypeID,
 } from "@/lib/types";
+import { ENERGY_FLOW_TYPE_DETAILS } from "@/lib/types"; // Ensure this is imported as a value
 import { format, parseISO } from 'date-fns';
 
 
@@ -530,12 +530,10 @@ export async function getEnergyFlows(
     grouping: grouping,
   };
 
-  // Only include the 'types' field if specific types are selected and not all types.
   if (types && types.length > 0 && types.length < ALL_POSSIBLE_TYPE_IDS_COUNT) {
-    body.types = types.map(Number); // Convert string IDs to numbers for the API
+    body.types = types.map(Number);
   }
-  // If 'types' is undefined, empty, or includes all types, omit it from the body
-  // to let the API default to "all types".
+
 
   console.log("[getEnergyFlows] Request Body Sent:", JSON.stringify(body, null, 2));
 
@@ -550,11 +548,8 @@ export async function getEnergyFlows(
 
   console.log("[getEnergyFlows] Raw API Response:", JSON.stringify(response, null, 2));
 
-  // Handle cases where response.data might be an empty object {} instead of an array
   if (response && response.data && !Array.isArray(response.data) && Object.keys(response.data).length === 0) {
-    return []; // Treat empty object as no data entries
+    return [];
   }
   return (response && response.data && Array.isArray(response.data)) ? response.data : [];
 }
-
-    
