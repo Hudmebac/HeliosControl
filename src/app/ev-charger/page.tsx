@@ -287,20 +287,20 @@ const EVChargerPage = () => {
           }
         }
         
-        toast({ title: "Sync Complete", description: `${importedCount} new schedules imported, ${updatedCount} schedules updated from device.` });
+        toast({ title: "Update from Device Complete", description: `${importedCount} new schedules imported, ${updatedCount} schedules updated in your local list.` });
         reloadLocalSchedulesFromHook(); 
       } else {
-        toast({ variant: "destructive", title: "Sync Error", description: "Unexpected schedule format from device during sync." });
+        toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
 
     } catch (error) {
-      console.error('Error syncing schedules from device:', error);
-      toast({ variant: "destructive", title: "Sync Failed", description: "Could not sync schedules from device." });
+      console.error('Error updating schedules from device:', error);
+      toast({ variant: "destructive", title: "Update Failed", description: "Could not update schedules from device." });
     } finally {
       setIsSyncingFromDevice(false);
       if (activeDeviceScheduleNameFromSync) {
         setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync);
-      } else if (evChargerData?.uuid) { // Check if evChargerData.uuid is defined
+      } else if (evChargerData?.uuid) { 
         fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
       }
     }
@@ -337,8 +337,7 @@ const EVChargerPage = () => {
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
         days: apiNumericDays,
-        // Assuming limit is handled by device or a default; otherwise, it needs to be part of NamedEVChargerSchedule
-        limit: 32 // Default or placeholder, adjust if schedule object contains limit
+        limit: 32 // Default limit - this should ideally be part of the NamedEVChargerSchedule if variable
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
@@ -707,14 +706,7 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true); // Refresh data to get latest status
-    // The EV charger status for "Instant Control" might vary, this needs to be confirmed from API docs or observed behavior.
-    // For now, let's assume it's generally available or check if the command itself errors out.
-    // if (evChargerData?.status !== 'CHARGING_INSTANT') { // This status might be specific/not standard
-    //   toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit adjustment might only be available in specific modes." });
-    //   return;
-    // }
-
+    await fetchEvChargerData(true); 
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/adjust-charge-power-limit`, {
         method: 'POST',
@@ -1143,7 +1135,7 @@ const EVChargerPage = () => {
                                 <div className="flex items-center space-x-2">
                                     <Button onClick={syncSchedulesFromDevice} variant="outline" size="sm" disabled={isSyncingFromDevice || !evChargerData?.uuid || isLoadingDeviceSchedule}>
                                         {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                                        Sync from Device
+                                        Update Schedule
                                     </Button>
                                     <Button onClick={() => handleOpenScheduleDialog()} size="sm">
                                         <PlusCircle className="mr-2 h-4 w-4" /> Add New Schedule
@@ -1151,7 +1143,7 @@ const EVChargerPage = () => {
                                 </div>
                             </div>
                             <CardDescription>
-                                Create and manage a list of schedules. Click "Activate" to send a schedule to your EV charger.
+                                Create, edit, and manage charging schedules saved in your browser. Click "Activate" to send a schedule to your EV charger.
                                 {(isLoadingLocalSchedules || isLoadingDeviceSchedule) && <span className="text-xs text-muted-foreground italic block pt-1"> Fetching schedule info...</span>}
                             </CardDescription>
                         </CardHeader>
@@ -1160,7 +1152,7 @@ const EVChargerPage = () => {
                                 <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading schedules...</div>
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length === 0 && (
-                                <p className="text-muted-foreground text-center py-4">No saved schedules yet. Click "Add New Schedule" or "Sync from Device".</p>
+                                <p className="text-muted-foreground text-center py-4">No saved schedules yet. Click "Add New Schedule" or "Update Schedule" to fetch from device.</p>
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length > 0 && (
                                 <div className="space-y-3">
@@ -1232,9 +1224,9 @@ const EVChargerPage = () => {
                         <CardHeader><CardTitle className="text-base">Note on Schedule Management</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Schedules listed above are saved in your browser. Click "Activate" to send a schedule to your GivEnergy EV Charger, making it the active one.
-                                The "Active on Device" badge indicates which schedule is currently running on your charger.
-                                "Sync from Device" imports or updates your local list with schedules programmed directly on the charger.
+                                Schedules are saved in your browser. Click "Activate" to send one to your GivEnergy EV Charger.
+                                The "Active on Device" badge shows the charger's current schedule.
+                                "Update Schedule" fetches all schedules from the device, adding new ones and updating existing local ones by name.
                                 "Refresh Device Active Status" re-checks which schedule is currently active on the device.
                             </p>
                         </CardContent>
