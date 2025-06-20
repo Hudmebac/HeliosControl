@@ -21,7 +21,10 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  HistoricalEnergyDataPoint,
+  HistoricalEnergyDataPoint, // Keep if used by other parts of old history page
+  EnergyFlowRawEntry, // New
+  EnergyFlowApiResponse, // New
+  EnergyFlowTypeID, // New
 } from "@/lib/types";
 import { formatISO, parseISO, format } from 'date-fns';
 
@@ -327,7 +330,6 @@ export async function getRealTimeData(apiKey: string): Promise<RealTimeData> {
         start_time: today,
         end_time: today,
         grouping: 1, // Daily grouping for these summary flows
-        // types: [0, 1, 2, 3, 4, 5, 6], // Omitted to fetch all types by default
       }),
     });
 
@@ -483,6 +485,9 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   return response.data;
 }
 
+
+// This function is deprecated and replaced by getEnergyFlows.
+// Keeping it here to avoid breaking existing code, but it should be removed.
 export async function getHistoricalEnergyData(
   apiKey: string,
   inverterSerial: string,
@@ -490,108 +495,86 @@ export async function getHistoricalEnergyData(
   endDate: Date,
   groupingValue: number
 ): Promise<HistoricalEnergyDataPoint[]> {
-  if (!apiKey || !inverterSerial) {
-    throw new Error("API Key or Inverter Serial not provided for historical data");
-  }
-
-  const startTimeFormatted = format(startDate, "yyyy-MM-dd");
-  const endTimeFormatted = format(endDate, "yyyy-MM-dd");
-
-  console.log(`[History] Fetching historical energy data for Inverter: ${inverterSerial}, Start: ${startTimeFormatted}, End: ${endTimeFormatted}, Grouping: ${groupingValue}`);
-
-  const apiResponse = await _fetchGivEnergyAPI<
-    GivEnergyAPIData<{ start_time: string; end_time: string; data: { [key: string]: number } }[]>
-  >(apiKey, `/inverter/${inverterSerial}/energy-flows`, {
-    method: 'POST',
-    body: JSON.stringify({
-      start_time: startTimeFormatted,
-      end_time: endTimeFormatted,
-      grouping: groupingValue,
-      // types: [0, 1, 2, 3, 4, 5, 6], // Omitted to fetch all types by default as per API spec
-    }),
-  });
-  
-  console.log("[History] Raw API response from energy-flows:", JSON.stringify(apiResponse, null, 2));
-
-  if (!apiResponse || typeof apiResponse.data === 'undefined') {
-    console.warn(
-      "[History] Historical energy flows API returned a malformed response or apiResponse.data is undefined.",
-      "apiResponse:", apiResponse
-    );
-    return [];
-  }
-
-  if (!Array.isArray(apiResponse.data)) {
-    const dataType = typeof apiResponse.data;
-    const isObject = dataType === 'object' && apiResponse.data !== null;
-    const isEmptyObject = isObject && Object.keys(apiResponse.data).length === 0;
-
-    if (isEmptyObject) {
-      console.log(
-        `[History] API returned 'data' as an empty object for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}. This is interpreted as no data entries for the period.`
-      );
-    } else {
-      console.warn(
-        `[History] Historical energy flows API returned 'data' field that is not an array (type: ${dataType}). Interpreting as no data. Value:`, 
-        JSON.stringify(apiResponse.data, null, 2)
-      );
-    }
-    return [];
-  }
-  
-  if (apiResponse.data.length === 0) {
-    console.log(`[History] API returned an empty 'data' array for period ${startTimeFormatted}-${endTimeFormatted}, grouping ${groupingValue}, indicating no energy flow entries.`);
-  }
-  
-  return apiResponse.data.map(dailyEntry => {
-    const flows = dailyEntry.data;
-    const solarToHome = flows['0'] || 0;
-    const solarToBattery = flows['1'] || 0;
-    const solarToGrid = flows['2'] || 0;
-    const gridToHome = flows['3'] || 0;
-    const gridToBattery = flows['4'] || 0; 
-    const batteryToHome = flows['5'] || 0;
-    const batteryToGrid = flows['6'] || 0;
-
-    const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
-    const totalGridImport = gridToHome + gridToBattery; 
-    const totalGridExport = solarToGrid + batteryToGrid; 
-    const totalBatteryCharge = solarToBattery + gridToBattery; 
-    const totalBatteryDischarge = batteryToHome + batteryToGrid; 
-    const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
+    console.warn("getHistoricalEnergyData is deprecated. Use getEnergyFlows instead.");
+    const startTimeFormatted = format(startDate, "yyyy-MM-dd");
+    const endTimeFormatted = format(endDate, "yyyy-MM-dd");
     
-    const dateStringFromApi = dailyEntry.start_time; // e.g., "2022-01-01 00:00" or "2022-01-01"
-    const datePart = dateStringFromApi.split(' ')[0]; // Extracts "YYYY-MM-DD"
-    let parsedDate;
     try {
-      parsedDate = parseISO(datePart); 
-      if (isNaN(parsedDate.getTime())) { 
-        throw new Error('Invalid date from parseISO');
-      }
-    } catch (e) {
-      console.warn(`[History] Could not parse date string "${dateStringFromApi}" (date part: "${datePart}") using parseISO. Falling back to direct Date constructor. Error: ${e}`);
-      parsedDate = new Date(datePart); 
-      if (isNaN(parsedDate.getTime())) {
-         console.error(`[History] Fallback date parsing also failed for "${dateStringFromApi}". Using current date as placeholder.`);
-         parsedDate = new Date(); 
-      }
+        const rawFlows = await getEnergyFlows(apiKey, inverterSerial, startTimeFormatted, endTimeFormatted, groupingValue);
+        return rawFlows.map(dailyEntry => {
+            const flows = dailyEntry.data;
+            const solarToHome = flows['0'] || 0;
+            const solarToBattery = flows['1'] || 0;
+            const solarToGrid = flows['2'] || 0;
+            const gridToHome = flows['3'] || 0;
+            const gridToBattery = flows['4'] || 0; 
+            const batteryToHome = flows['5'] || 0;
+            const batteryToGrid = flows['6'] || 0;
+
+            const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
+            const totalGridImport = gridToHome + gridToBattery; 
+            const totalGridExport = solarToGrid + batteryToGrid; 
+            const totalBatteryCharge = solarToBattery + gridToBattery; 
+            const totalBatteryDischarge = batteryToHome + batteryToGrid; 
+            const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
+            
+            return {
+              date: dailyEntry.start_time.split(' ')[0], // Use start_time for the date
+              solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
+              gridImport: parseFloat(totalGridImport.toFixed(2)),
+              gridExport: parseFloat(totalGridExport.toFixed(2)),
+              batteryCharge: parseFloat(totalBatteryCharge.toFixed(2)),
+              batteryDischarge: parseFloat(totalBatteryDischarge.toFixed(2)),
+              consumption: parseFloat(totalHomeConsumption.toFixed(2)),
+              solarToHome: parseFloat(solarToHome.toFixed(2)),
+              solarToBattery: parseFloat(solarToBattery.toFixed(2)),
+              solarToGrid: parseFloat(solarToGrid.toFixed(2)),
+              batteryToHome: parseFloat(batteryToHome.toFixed(2)),
+              gridToHome: parseFloat(gridToHome.toFixed(2)),
+            };
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    } catch(error) {
+        console.error("Error in deprecated getHistoricalEnergyData (using getEnergyFlows):", error);
+        throw error; // Re-throw to maintain original behavior
     }
-    const formattedDate = format(parsedDate, "yyyy-MM-dd");
+}
 
 
-    return {
-      date: formattedDate, 
-      solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
-      gridImport: parseFloat(totalGridImport.toFixed(2)),
-      gridExport: parseFloat(totalGridExport.toFixed(2)),
-      batteryCharge: parseFloat(totalBatteryCharge.toFixed(2)),
-      batteryDischarge: parseFloat(totalBatteryDischarge.toFixed(2)),
-      consumption: parseFloat(totalHomeConsumption.toFixed(2)),
-      solarToHome: parseFloat(solarToHome.toFixed(2)),
-      solarToBattery: parseFloat(solarToBattery.toFixed(2)),
-      solarToGrid: parseFloat(solarToGrid.toFixed(2)),
-      batteryToHome: parseFloat(batteryToHome.toFixed(2)),
-      gridToHome: parseFloat(gridToHome.toFixed(2)),
-    };
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+export async function getEnergyFlows(
+  apiKey: string,
+  inverterSerial: string,
+  startTime: string, // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  endTime: string,   // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  grouping: number,  // API grouping ID (0-4)
+  types?: EnergyFlowTypeID[] // Uses the stringified version of type IDs
+): Promise<EnergyFlowRawEntry[]> {
+  if (!apiKey || !inverterSerial) {
+    throw new Error("API Key or Inverter Serial not provided for energy flows.");
+  }
+
+  const body: {
+    start_time: string;
+    end_time: string;
+    grouping: number;
+    types?: string[]; // API expects string array for types
+  } = {
+    start_time: startTime,
+    end_time: endTime,
+    grouping: grouping,
+  };
+
+  if (types && types.length > 0) {
+    body.types = types.map(String); // Convert EnergyFlowTypeID to string array
+  }
+
+  const response = await _fetchGivEnergyAPI<EnergyFlowApiResponse>(
+    apiKey,
+    `/inverter/${inverterSerial}/energy-flows`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
+  // Ensure data field exists and is an array before returning
+  return (response && Array.isArray(response.data)) ? response.data : [];
 }

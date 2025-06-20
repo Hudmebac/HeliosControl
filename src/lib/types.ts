@@ -227,7 +227,7 @@ export interface RawMeterDataLatest {
 }
 export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
 
-// New type for historical energy data points
+// Old HistoricalEnergyDataPoint - to be replaced or adapted for energy flows
 export interface HistoricalEnergyDataPoint {
   date: string; // YYYY-MM-DD
   solarGeneration: number; // kWh
@@ -242,6 +242,53 @@ export interface HistoricalEnergyDataPoint {
   batteryToHome: number; // kWh
   gridToHome: number; // kWh
 }
+
+
+// --- Energy Flow Specific Types ---
+export type EnergyFlowTypeID = "0" | "1" | "2" | "3" | "4" | "5" | "6";
+
+export const ENERGY_FLOW_TYPE_DETAILS: Record<EnergyFlowTypeID, { name: string; description: string; color: string }> = {
+  "0": { name: "PV to Home", description: "Energy from solar panels used directly by the home.", color: "hsl(var(--chart-1))" },
+  "1": { name: "PV to Battery", description: "Energy from solar panels used to charge the battery.", color: "hsl(var(--chart-2))"  },
+  "2": { name: "PV to Grid", description: "Excess solar energy exported to the grid.", color: "hsl(var(--chart-3))"  },
+  "3": { name: "Grid to Home", description: "Energy imported from the grid used directly by the home.", color: "hsl(var(--chart-4))"  },
+  "4": { name: "Grid to Battery", description: "Energy imported from the grid used to charge the battery.", color: "hsl(var(--chart-5))"  },
+  "5": { name: "Battery to Home", description: "Energy discharged from the battery used by the home.", color: "hsl(var(--accent))"  },
+  "6": { name: "Battery to Grid", description: "Energy discharged from the battery exported to the grid.", color: "hsl(var(--muted-foreground))"  },
+};
+
+export interface EnergyFlowRawDataItem {
+  [key: string]: number; // API returns keys as strings e.g., "0", "1"
+}
+
+export interface EnergyFlowRawEntry {
+  start_time: string; // e.g., "2022-01-01 00:00"
+  end_time: string;   // e.g., "2022-01-01 00:30"
+  data: EnergyFlowRawDataItem;
+}
+
+export interface EnergyFlowApiResponse {
+  data: EnergyFlowRawEntry[];
+}
+
+// Type for data processed and ready for display in charts/tables
+export interface ProcessedEnergyFlowDataPoint {
+  timeLabel: string; // Formatted start_time for X-axis
+  startTimeOriginal: string;
+  endTimeOriginal: string;
+  values: { // Dynamic keys based on selected flow types
+    [key in EnergyFlowTypeID]?: number;
+  };
+  // You can add specific, always-present calculated values if needed, e.g., totalPvProduction
+}
+
+export interface GroupingOptionConfig {
+  id: string;
+  label: string;
+  apiValue: number; // Actual API grouping value (0-4)
+  datePickerType: 'single_day_half_hourly' | 'single_day_daily' | 'week_daily' | 'month_monthly' | 'year_yearly' | 'all_time_total' | 'custom_range_daily';
+}
+
 
 // EV Charger Schedule types
 export interface EVChargerAPIRule {
@@ -277,6 +324,7 @@ export interface EVChargerDeviceScheduleListResponse {
 export interface EVChargerSetSchedulePayload {
   name: string;
   is_active: boolean;
+  schedule_id?: number; // Optional: for updating an existing schedule by its device ID
   periods: RawDeviceApiPeriod[];
 }
 
