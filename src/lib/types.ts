@@ -268,7 +268,7 @@ export interface EnergyFlowRawEntry {
 }
 
 export interface EnergyFlowApiResponse {
-  // data can be an array of entries, or potentially an empty object if no data and API responds with 200 OK
+  // data can be an array of entries, or an empty object if no data and API responds with 200 OK
   data: EnergyFlowRawEntry[] | Record<string, never>;
 }
 

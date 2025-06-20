@@ -21,9 +21,10 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  EnergyFlowRawEntry, // Added for getEnergyFlows
-  EnergyFlowApiResponse, // Added for getEnergyFlows
-  EnergyFlowTypeID, // Added for getEnergyFlows
+  EnergyFlowRawEntry,
+  EnergyFlowApiResponse,
+  EnergyFlowTypeID,
+  ENERGY_FLOW_TYPE_DETAILS, // Import for checking count
 } from "@/lib/types";
 import { format, parseISO } from 'date-fns';
 
@@ -510,17 +511,19 @@ export async function getEnergyFlows(
   startTime: string,
   endTime: string,
   grouping: number,
-  types?: EnergyFlowTypeID[]
+  types?: EnergyFlowTypeID[] // Expects an array of string IDs like "0", "1", etc.
 ): Promise<EnergyFlowRawEntry[]> {
   if (!apiKey || !inverterSerial) {
     throw new Error("API Key or Inverter Serial not provided for energy flows.");
   }
 
+  const ALL_POSSIBLE_TYPE_IDS_COUNT = Object.keys(ENERGY_FLOW_TYPE_DETAILS).length;
+
   const body: {
     start_time: string;
     end_time: string;
     grouping: number;
-    types?: number[];
+    types?: number[]; // API expects number array for types
   } = {
     start_time: startTime,
     end_time: endTime,
@@ -528,10 +531,19 @@ export async function getEnergyFlows(
   };
 
   if (types && types.length > 0) {
-    body.types = types.map(Number);
+    // If the number of selected types is less than the total number of possible flow types,
+    // it means the user has specifically filtered, so send those specific types.
+    // Otherwise (if all types are effectively selected), omit the 'types' parameter
+    // to let the API default to "all types" as per documentation ("Leave blank to fetch all types").
+    if (types.length < ALL_POSSIBLE_TYPE_IDS_COUNT) {
+      body.types = types.map(Number); // Convert string IDs to numbers for the API
+    }
+    // If types.length === ALL_POSSIBLE_TYPE_IDS_COUNT, body.types remains undefined,
+    // so it will not be included in the JSON.stringify, effectively omitting it.
   }
+  // If 'types' was initially undefined or empty, body.types also remains undefined.
 
-  console.log("[getEnergyFlows] Request Body:", JSON.stringify(body, null, 2)); // For debugging request
+  console.log("[getEnergyFlows] Request Body Sent:", JSON.stringify(body, null, 2));
 
   const response = await _fetchGivEnergyAPI<EnergyFlowApiResponse>(
     apiKey,
@@ -542,8 +554,12 @@ export async function getEnergyFlows(
     }
   );
 
-  console.log("[getEnergyFlows] Raw API Response:", JSON.stringify(response, null, 2)); // For debugging response
+  console.log("[getEnergyFlows] Raw API Response:", JSON.stringify(response, null, 2));
 
-  // Ensure data field exists and is an array before returning
+  // Handle cases where response.data might be an empty object {} instead of an array
+  if (response && response.data && !Array.isArray(response.data) && Object.keys(response.data).length === 0) {
+    return []; // Treat empty object as no data entries
+  }
   return (response && response.data && Array.isArray(response.data)) ? response.data : [];
 }
+
