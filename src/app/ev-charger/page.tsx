@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye, RefreshCw, DownloadCloud } from 'lucide-react';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye, RefreshCw, DownloadCloud, Zap as ZapIcon, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -17,15 +17,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used directly here
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
 import { format, parseISO, formatISO, subDays, differenceInMinutes } from 'date-fns';
-import type { EVChargerAPISchedule, EVChargerDeviceScheduleListResponse, EVChargerSetSchedulePayload, EVChargerClearScheduleResponse, NamedEVChargerSchedule, EVChargerAPIRule, RawDeviceApiScheduleEntry } from '@/lib/types';
+import type { EVChargerAPIRule, EVChargerDeviceScheduleListResponse, EVChargerSetSchedulePayload, EVChargerClearScheduleResponse, NamedEVChargerSchedule, RawDeviceApiScheduleEntry, RawDeviceApiPeriod } from '@/lib/types';
 import { ScheduleDialog } from '@/components/ev-charger/ScheduleDialog';
 import { useLocalStorageSchedules } from '@/hooks/use-local-storage-schedules';
+import { Badge } from '@/components/ui/badge';
+
 
 const formatDateForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "PPP") : "Pick a date";
@@ -33,16 +35,25 @@ const formatDateForDisplay = (date: Date | undefined): string => {
 
 const ALL_DAYS_API_FORMAT = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
 const ALL_DAYS_DISPLAY_FORMAT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
   ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [ALL_DAYS_API_FORMAT[i], day])
 );
-const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = Object.fromEntries(
+
+const DAY_MAP_DISPLAY_TO_API_STRING: { [key: string]: string } = Object.fromEntries(
   ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [day, ALL_DAYS_API_FORMAT[i]])
 );
-// Mapping numeric day from API (assuming 0=Monday, ..., 6=Sunday) to API string day
-const NUMERIC_DAY_TO_API_DAY: { [key: number]: string } = {
+
+// Mapping numeric day from API (0=Monday, ..., 6=Sunday) to API string day
+const NUMERIC_DAY_TO_API_DAY_STRING: { [key: number]: string } = {
     0: "MONDAY", 1: "TUESDAY", 2: "WEDNESDAY", 3: "THURSDAY",
     4: "FRIDAY", 5: "SATURDAY", 6: "SUNDAY"
+};
+
+// Mapping display day string to numeric day for API POST
+const DAY_MAP_DISPLAY_TO_API_NUMERIC: { [key: string]: number } = {
+    "Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3,
+    "Fri": 4, "Sat": 5, "Sun": 6
 };
 
 
@@ -58,6 +69,7 @@ const EVChargerPage = () => {
     updateSchedule: updateLocalSchedule,
     deleteSchedule: deleteLocalSchedule,
     isLoading: isLoadingLocalSchedules,
+    reloadSchedules: reloadLocalSchedules,
   } = useLocalStorageSchedules(storedEvChargerId || "unknown-charger");
 
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
@@ -65,7 +77,7 @@ const EVChargerPage = () => {
   const [scheduleToDelete, setScheduleToDelete] = useState<NamedEVChargerSchedule | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   
-  const [activeDeviceSchedule, setActiveDeviceSchedule] = useState<EVChargerAPISchedule | null>(null);
+  const [deviceActiveScheduleName, setDeviceActiveScheduleName] = useState<string | null>(null);
   const [isLoadingDeviceSchedule, setIsLoadingDeviceSchedule] = useState(false);
   const [isSyncingFromDevice, setIsSyncingFromDevice] = useState(false);
 
@@ -187,19 +199,19 @@ const EVChargerPage = () => {
     }
   }, [apiKey, getAuthHeaders]);
 
-  const fetchDeviceSchedule = useCallback(async (chargerUuid: string) => {
+ const fetchDeviceActiveScheduleInfo = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
     setIsLoadingDeviceSchedule(true);
-    setActiveDeviceSchedule(null); 
+    setDeviceActiveScheduleName(null);
     try {
         const headers = getAuthHeaders();
         const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers, cache: 'no-store' });
 
         if (!response.ok) {
             if (response.status === 404) {
-                toast({ title: "No Active Schedule", description: "No charging schedule is currently set on the device." });
+                toast({ title: "No Active Schedule on Device", description: "No charging schedule is currently set on the EV charger." });
             } else {
-                await handleApiError(response, 'fetching device schedule');
+                await handleApiError(response, 'fetching device schedule info');
             }
             return;
         }
@@ -207,43 +219,23 @@ const EVChargerPage = () => {
         const scheduleListResponse = await response.json() as EVChargerDeviceScheduleListResponse;
         
         if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
-            const activeRawSchedule = scheduleListResponse.data.schedules.find(s => s.is_active);
-
-            if (activeRawSchedule && activeRawSchedule.periods && activeRawSchedule.periods.length > 0) {
-                const firstPeriod = activeRawSchedule.periods[0];
-                const apiDays: string[] = firstPeriod.days
-                    .map(dayNum => NUMERIC_DAY_TO_API_DAY[dayNum])
-                    .filter((dayStr): dayStr is string => !!dayStr); 
-
-                const transformedSchedule: EVChargerAPISchedule = {
-                    active: true, 
-                    rules: [{
-                        start_time: firstPeriod.start_time,
-                        end_time: firstPeriod.end_time,
-                        days: apiDays,
-                    }],
-                };
-                setActiveDeviceSchedule(transformedSchedule);
+            const activeDeviceScheduleEntry = scheduleListResponse.data.schedules.find(s => s.is_active);
+            if (activeDeviceScheduleEntry) {
+                setDeviceActiveScheduleName(activeDeviceScheduleEntry.name);
             } else {
-                toast({ title: "No Active Schedule Rules", description: "The device reported schedules, but none are currently active or configured with rules." });
+                 toast({ title: "No Active Schedule Found", description: "The device reported schedules, but none are currently active." });
             }
         } else {
-            const singleScheduleResponse = scheduleListResponse as any as EVChargerDeviceScheduleListResponse; 
-            if (singleScheduleResponse && singleScheduleResponse.data && (singleScheduleResponse.data as any).rules) {
-                 setActiveDeviceSchedule(singleScheduleResponse.data as any);
-            } else {
-                 toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device." });
-            }
+            toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device when fetching active schedule." });
         }
     } catch (error) {
-        console.error('Error fetching device schedule:', error);
-        if (!(error instanceof Error && error.message.startsWith("API Request Error:"))) {
-            toast({ variant: "destructive", title: "Fetch Schedule Error", description: "Could not load device schedule." });
-        }
+        console.error('Error fetching device active schedule info:', error);
+        toast({ variant: "destructive", title: "Fetch Schedule Info Error", description: "Could not load device's active schedule information." });
     } finally {
         setIsLoadingDeviceSchedule(false);
     }
   }, [apiKey, getAuthHeaders, toast]);
+
 
   const syncSchedulesFromDevice = async () => {
     if (!apiKey || !evChargerData?.uuid) {
@@ -265,30 +257,36 @@ const EVChargerPage = () => {
       if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
         let importedCount = 0;
         let updatedCount = 0;
+        let activeDeviceScheduleNameFromSync: string | null = null;
 
         for (const deviceSchedule of scheduleListResponse.data.schedules) {
           if (deviceSchedule.periods && deviceSchedule.periods.length > 0) {
             const firstPeriod = deviceSchedule.periods[0];
             const apiDays: string[] = firstPeriod.days
-              .map(dayNum => NUMERIC_DAY_TO_API_DAY[dayNum])
+              .map(dayNum => NUMERIC_DAY_TO_API_DAY_STRING[dayNum])
               .filter((dayStr): dayStr is string => !!dayStr);
 
             const scheduleToSave: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> = {
-              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id}`, // Fallback name
+              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id}`, 
               rules: [{
                 start_time: firstPeriod.start_time,
                 end_time: firstPeriod.end_time,
                 days: apiDays,
               }],
-              isLocallyActive: deviceSchedule.is_active,
             };
-            // addLocalSchedule now handles add or update by name logic
+            
             const result = addLocalSchedule(scheduleToSave); 
             if (result.type === 'added') importedCount++;
             if (result.type === 'updated') updatedCount++;
+
+            if (deviceSchedule.is_active) {
+              activeDeviceScheduleNameFromSync = scheduleToSave.name;
+            }
           }
         }
+        setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync); // Update active name based on sync
         toast({ title: "Sync Complete", description: `${importedCount} new schedules imported, ${updatedCount} schedules updated from device.` });
+        reloadLocalSchedules(); // Explicitly reload from local storage after sync
       } else {
         toast({ variant: "destructive", title: "Sync Error", description: "Unexpected schedule format from device." });
       }
@@ -301,7 +299,7 @@ const EVChargerPage = () => {
     }
   };
 
-  const handleSendScheduleToDevice = async (schedule: NamedEVChargerSchedule) => {
+  const handleActivateScheduleOnDevice = async (schedule: NamedEVChargerSchedule) => {
     if (!apiKey || !evChargerData?.uuid) return;
     if (!schedule.rules || schedule.rules.length === 0) {
         toast({ variant: "destructive", title: "Invalid Schedule", description: "The selected local schedule has no rules to send." });
@@ -310,32 +308,46 @@ const EVChargerPage = () => {
 
     setIsLoadingDeviceSchedule(true);
     
+    const firstRule = schedule.rules[0];
+    const devicePeriods: RawDeviceApiPeriod[] = [{
+        start_time: firstRule.start_time,
+        end_time: firstRule.end_time,
+        days: firstRule.days.map(dayString => DAY_MAP_DISPLAY_TO_API_NUMERIC[dayString]).filter(dayNum => dayNum !== undefined),
+        // limit: 32 // Example: If limit needs to be sent, it should be part of NamedEVChargerSchedule
+    }];
+
     const payloadToDevice: EVChargerSetSchedulePayload = {
-      rules: schedule.rules, 
-      active: schedule.isLocallyActive, 
+      name: schedule.name,
+      is_active: true, // When activating, this schedule becomes the active one
+      periods: devicePeriods,
     };
 
     try {
       const headers = getAuthHeaders();
+      // The API might require sending the *entire list* of schedules with one marked active,
+      // or it might accept a single schedule object to update/activate.
+      // Assuming it accepts a single schedule object for now.
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payloadToDevice),
       });
       if (!response.ok) {
-        await handleApiError(response, 'sending schedule to device');
+        await handleApiError(response, 'activating schedule on device');
         return;
       }
       const result = await response.json();
-      if (result && (result.success || (result.data && result.data.success))) {
-        toast({ title: "Schedule Sent to Device", description: `Schedule "${schedule.name}" ${result.data?.message || "updated successfully on device."}` });
-        fetchDeviceSchedule(evChargerData.uuid); 
+      // The response to POST set-schedule might not be standardized like GET.
+      // It might return the updated list, or just a success message.
+      if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
+        toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // Refresh which schedule is marked active
       } else {
-        toast({ variant: "destructive", title: "Send Not Confirmed", description: result.data?.message || result.error || "Failed to send schedule to device." });
+        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule on device." });
       }
     } catch (error) {
-      console.error('Error sending schedule to device:', error);
-      toast({ variant: "destructive", title: "Send Schedule Error", description: "An unexpected error occurred." });
+      console.error('Error activating schedule on device:', error);
+      toast({ variant: "destructive", title: "Activation Error", description: "An unexpected error occurred." });
     } finally {
       setIsLoadingDeviceSchedule(false);
     }
@@ -357,7 +369,7 @@ const EVChargerPage = () => {
       const result = await response.json() as EVChargerClearScheduleResponse;
        if (result && result.data && result.data.success) {
         toast({ title: "Device Schedules Cleared", description: result.data.message || "All schedules cleared from device." });
-        fetchDeviceSchedule(evChargerData.uuid); 
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Clear Not Confirmed", description: result.data?.message || "Failed to clear schedules." });
       }
@@ -395,6 +407,9 @@ const EVChargerPage = () => {
     if (scheduleToDelete) {
       deleteLocalSchedule(scheduleToDelete.id);
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
+      if (scheduleToDelete.name === deviceActiveScheduleName) {
+        setDeviceActiveScheduleName(null); // If the active schedule was deleted locally, clear the active indicator
+      }
     }
     setIsDeleteAlertOpen(false);
     setScheduleToDelete(null);
@@ -543,7 +558,7 @@ const EVChargerPage = () => {
             }
             setEvChargerData((prevData: any) => ({ ...prevData, current_power: currentPower }));
           }
-          fetchDeviceSchedule(chargerDetails.uuid);
+          fetchDeviceActiveScheduleInfo(chargerDetails.uuid);
 
         } else {
           if (!isSoftRefresh) setEvChargerData(null);
@@ -566,7 +581,7 @@ const EVChargerPage = () => {
         setIsLoadingEvData(false);
       }
     }
-  }, [apiKey, storedEvChargerId, getAuthHeaders, toast, fetchDeviceSchedule]);
+  }, [apiKey, storedEvChargerId, getAuthHeaders, toast, fetchDeviceActiveScheduleInfo]);
 
 
  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDate?: Date, endDate?: Date) => {
@@ -1126,13 +1141,12 @@ const EVChargerPage = () => {
 
               <TabsContent value="schedules">
                 <div className="space-y-6">
-                    {/* Local Schedules Management Section */}
                     <Card>
                         <CardHeader>
                             <div className="flex justify-between items-center">
-                                <CardTitle>My Saved Charging Schedules</CardTitle>
+                                <CardTitle>Manage Charging Schedules</CardTitle>
                                 <div className="flex items-center space-x-2">
-                                    <Button onClick={syncSchedulesFromDevice} variant="outline" size="sm" disabled={isSyncingFromDevice || !evChargerData?.uuid}>
+                                    <Button onClick={syncSchedulesFromDevice} variant="outline" size="sm" disabled={isSyncingFromDevice || !evChargerData?.uuid || isLoadingDeviceSchedule}>
                                         {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />} 
                                         Sync from Device
                                     </Button>
@@ -1142,94 +1156,94 @@ const EVChargerPage = () => {
                                 </div>
                             </div>
                             <CardDescription>
-                                Manage your list of saved charging schedules, stored locally in your browser. Click "Sync from Device" to import/update schedules from your EV charger.
+                                Create and manage a list of schedules. Click "Activate" to send a schedule to your EV charger and make it the active one.
+                                {(isLoadingLocalSchedules || isLoadingDeviceSchedule) && <span className="text-xs text-muted-foreground italic block pt-1"> Fetching schedule info...</span>}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {(isLoadingLocalSchedules || isSyncingFromDevice) && <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading/Syncing schedules...</div>}
+                            {(isLoadingLocalSchedules || isSyncingFromDevice || isLoadingDeviceSchedule) && localSchedules.length === 0 && (
+                                <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading schedules...</div>
+                            )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length === 0 && (
                                 <p className="text-muted-foreground text-center py-4">No saved schedules yet. Click "Add New Schedule" or "Sync from Device".</p>
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length > 0 && (
                                 <div className="space-y-3">
-                                    {localSchedules.map(schedule => (
-                                        <Card key={schedule.id} className="bg-muted/30">
-                                            <CardHeader className="pb-3">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <CardTitle className="text-lg">{schedule.name}</CardTitle>
-                                                        <CardDescription className="text-xs">
-                                                            {schedule.isLocallyActive ? "Enabled in list" : "Disabled in list"} - Last updated: {format(parseISO(schedule.updatedAt), "PPp")}
-                                                        </CardDescription>
+                                    {localSchedules.map(schedule => {
+                                        const isActiveOnDevice = schedule.name === deviceActiveScheduleName;
+                                        return (
+                                            <Card key={schedule.id} className={`bg-muted/30 ${isActiveOnDevice ? 'border-primary ring-1 ring-primary' : ''}`}>
+                                                <CardHeader className="pb-3">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <CardTitle className="text-lg flex items-center">
+                                                                {schedule.name}
+                                                                {isActiveOnDevice && (
+                                                                    <Badge variant="default" className="ml-2 bg-green-500 hover:bg-green-600">
+                                                                        <CheckCircle2 className="mr-1 h-3.5 w-3.5"/> Active on Device
+                                                                    </Badge>
+                                                                )}
+                                                            </CardTitle>
+                                                            <CardDescription className="text-xs">
+                                                                Last updated: {format(parseISO(schedule.updatedAt), "PPp")}
+                                                            </CardDescription>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <Button 
+                                                                variant={isActiveOnDevice ? "secondary" : "default"} 
+                                                                size="sm" 
+                                                                onClick={() => handleActivateScheduleOnDevice(schedule)} 
+                                                                disabled={isLoadingDeviceSchedule || isActiveOnDevice}
+                                                            >
+                                                                {isLoadingDeviceSchedule && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                                                {isActiveOnDevice ? <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5"/>Activated</> : <><ZapIcon className="mr-1.5 h-3.5 w-3.5" />Activate</>}
+                                                            </Button>
+                                                            <Button variant="outline" size="icon-sm" onClick={() => handleOpenScheduleDialog(schedule)}><Edit className="h-4 w-4" /></Button>
+                                                            <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteLocalSchedule(schedule)}><Trash2 className="h-4 w-4" /></Button>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center space-x-2">
-                                                          <Button variant="outline" size="sm" onClick={() => handleSendScheduleToDevice(schedule)} disabled={isLoadingDeviceSchedule}>
-                                                            <Send className="mr-1.5 h-3.5 w-3.5" /> Send to Device
-                                                        </Button>
-                                                        <Button variant="outline" size="icon-sm" onClick={() => handleOpenScheduleDialog(schedule)}><Edit className="h-4 w-4" /></Button>
-                                                        <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteLocalSchedule(schedule)}><Trash2 className="h-4 w-4" /></Button>
-                                                    </div>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent className="text-sm">
-                                                <p><Clock className="inline mr-1.5 h-4 w-4 text-muted-foreground" /> {formatScheduleRulesForDisplay(schedule.rules)}</p>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
+                                                </CardHeader>
+                                                <CardContent className="text-sm">
+                                                    <p><Clock className="inline mr-1.5 h-4 w-4 text-muted-foreground" /> {formatScheduleRulesForDisplay(schedule.rules)}</p>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </CardContent>
-                    </Card>
-
-                    {/* Device's Active Schedule Section */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex justify-between items-center">
-                                <CardTitle>Device's Active Schedule</CardTitle>
-                                <Button onClick={() => fetchDeviceSchedule(evChargerData.uuid)} variant="outline" size="sm" disabled={isLoadingDeviceSchedule || !evChargerData?.uuid}>
-                                    {isLoadingDeviceSchedule ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Eye className="mr-2 h-4 w-4"/>}
-                                    Refresh Device Schedule
+                         <CardFooter className="pt-4 border-t">
+                            <div className="flex items-center space-x-2">
+                                <Button 
+                                    onClick={() => fetchDeviceActiveScheduleInfo(evChargerData.uuid)} 
+                                    variant="outline" 
+                                    size="sm" 
+                                    disabled={isLoadingDeviceSchedule || !evChargerData?.uuid}
+                                >
+                                    {isLoadingDeviceSchedule ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                                    Refresh Active Status
+                                </Button>
+                                <Button 
+                                    onClick={handleClearDeviceSchedule} 
+                                    variant="destructive" 
+                                    size="sm" 
+                                    disabled={isLoadingDeviceSchedule || !evChargerData?.uuid || !deviceActiveScheduleName}
+                                >
+                                    <XCircle className="mr-2 h-4 w-4" /> Clear Active Device Schedule
                                 </Button>
                             </div>
-                            <CardDescription>
-                                This is the schedule currently active on your GivEnergy EV Charger.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isLoadingDeviceSchedule && <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading device schedule...</div>}
-                            {!isLoadingDeviceSchedule && activeDeviceSchedule && (
-                                <div className="space-y-2 p-3 bg-muted/50 rounded-md">
-                                    <p><strong>Status:</strong> {activeDeviceSchedule.active ? "Active" : "Inactive"}</p>
-                                    <div><strong>Rules:</strong>
-                                        {activeDeviceSchedule.rules && activeDeviceSchedule.rules.length > 0 ? (
-                                            <ul className="list-disc pl-5">
-                                                {activeDeviceSchedule.rules.map((rule, index) => (
-                                                    <li key={index}>
-                                                        {rule.days.map(d => DAY_MAP_API_TO_DISPLAY[d.toUpperCase()] || d).join(', ')}: {rule.start_time} - {rule.end_time}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : <p>No rules defined on device.</p>}
-                                    </div>
-                                    <Button onClick={handleClearDeviceSchedule} variant="destructive" size="sm" className="mt-3" disabled={isLoadingDeviceSchedule}>
-                                        <XCircle className="mr-2 h-4 w-4" /> Clear Schedule from Device
-                                    </Button>
-                                </div>
-                            )}
-                            {!isLoadingDeviceSchedule && !activeDeviceSchedule && (
-                                <p className="text-muted-foreground text-center py-4">No schedule is currently active on the device, or it could not be fetched.</p>
-                            )}
-                        </CardContent>
+                        </CardFooter>
                     </Card>
+                    
                     <Card className="mt-6">
                         <CardHeader><CardTitle className="text-base">Note on Schedule Management</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                You can create and manage a list of named schedules above ("My Saved Charging Schedules"). These are stored in your browser.
-                                To make one of these schedules active on your EV charger, click "Send to Device".
-                                The "Device's Active Schedule" section shows what is currently programmed on the charger. Use "Refresh Device Schedule" to get the latest status from the charger.
-                                Use "Clear Schedule from Device" to remove any active schedule directly from your EV charger.
-                                "Sync from Device" will import schedules from your EV charger into your local list, updating existing ones by name.
+                                Schedules listed above are saved in your browser. Click "Activate" to send a schedule to your GivEnergy EV Charger, making it the active one.
+                                The "Active on Device" badge indicates which schedule is currently running on your charger.
+                                "Sync from Device" imports or updates your local list with schedules programmed directly on the charger.
+                                "Refresh Active Status" re-checks which schedule is currently active on the device.
+                                "Clear Active Device Schedule" removes any schedule currently running on the EV charger.
                             </p>
                         </CardContent>
                     </Card>
@@ -1545,7 +1559,7 @@ const EVChargerPage = () => {
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the schedule
-                    "{scheduleToDelete?.name}" from your local list.
+                    "{scheduleToDelete?.name}" from your local list. It will not affect the schedule on the device unless you subsequently clear it or activate a different one.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

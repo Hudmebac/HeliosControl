@@ -244,49 +244,42 @@ export interface HistoricalEnergyDataPoint {
 }
 
 // EV Charger Schedule types for GivEnergy API (for setting the device's active schedule)
-export interface EVChargerAPIRule {
+export interface EVChargerAPIRule { // Used by NamedEVChargerSchedule and for display
   start_time: string; // "HH:mm"
   end_time: string;   // "HH:mm"
-  days: string[];     // e.g., ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+  days: string[];     // e.g., ["MONDAY", "TUESDAY", ...] for local storage and internal use
 }
 
-export interface EVChargerAPISchedule { // Payload for POST /commands/set-schedule and structure for activeDeviceSchedule state
-  rules: EVChargerAPIRule[];
-  active: boolean;
-}
-
-// Represents a single period within a schedule as returned by the device API
+// Represents a single period within a schedule as returned by the device API or sent to it
 export interface RawDeviceApiPeriod {
   start_time: string; // "HH:mm"
   end_time: string;   // "HH:mm"
-  limit: number;      // Amps
-  phase_count: number | null;
-  duration: string;   // e.g., "03h 00m"
-  days: number[];     // Array of numbers [0, 1, 2, 3, 4, 5, 6]
+  limit?: number;      // Amps - Optional for sending, present in GET
+  phase_count?: number | null; // Optional for sending, present in GET
+  duration?: string;   // e.g., "03h 00m" - Present in GET, not typically sent
+  days: number[];     // Array of numbers [0, 1, 2, 3, 4, 5, 6] for API interaction
 }
 
 // Represents a single schedule entry as returned by the device API's schedules array
+// or as the payload for POST /commands/set-schedule (if API takes a single schedule obj)
 export interface RawDeviceApiScheduleEntry {
-  id: number;
+  id?: number; // Present in GET, optional or omitted for POST if device assigns it
   name: string;
   is_active: boolean;
   periods: RawDeviceApiPeriod[];
 }
 
-// For GET /commands/set-schedule when it returns a list of schedules
+// For GET /commands/set-schedule when it returns a list of schedules from the device
 export interface EVChargerDeviceScheduleListResponse {
   data: {
     schedules: RawDeviceApiScheduleEntry[];
   };
 }
 
-// For GET /commands/set-schedule if it returns a single active schedule (previous assumption)
-export interface EVChargerDeviceScheduleResponse {
-  data: EVChargerAPISchedule;
-}
+// This is the payload for POSTing to /commands/set-schedule.
+// Based on the "name is required" error, it seems the API expects a named schedule object.
+export type EVChargerSetSchedulePayload = RawDeviceApiScheduleEntry;
 
-
-export type EVChargerSetSchedulePayload = EVChargerAPISchedule; // For POST /commands/set-schedule
 
 export interface EVChargerClearScheduleResponse { // For POST /commands/clear-schedules
     data: {
@@ -299,8 +292,10 @@ export interface EVChargerClearScheduleResponse { // For POST /commands/clear-sc
 export interface NamedEVChargerSchedule {
   id: string; // Unique ID for local management (e.g., UUID)
   name: string;
-  rules: EVChargerAPIRule[]; // Currently, we'll manage one rule per named schedule via UI
-  isLocallyActive: boolean; // If this schedule is "enabled" in the user's list
+  rules: EVChargerAPIRule[]; // UI manages one rule per named schedule, uses string days
+  // isLocallyActive: boolean; // This flag's meaning is changing. It's less about "enabled in list"
+                           // and more implicitly covered by whether it's the deviceActiveScheduleName.
+                           // Keeping it for now, but its UI representation will change/disappear.
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }

@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
+// Removed Switch import as isLocallyActive is no longer a direct user input here
+// import { Switch } from '@/components/ui/switch';
 import type { NamedEVChargerSchedule, EVChargerAPIRule } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,9 +27,9 @@ const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
 interface ScheduleDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (schedule: Omit<NamedEVChargerSchedule, 'createdAt' | 'updatedAt'> & { id?: string }) => void;
+  onSave: (schedule: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   existingSchedule: NamedEVChargerSchedule | null;
-  evChargerId: string | null; // Added evChargerId for context if needed, though not directly used in this version for save logic
+  evChargerId: string | null; 
 }
 
 export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose, onSave, existingSchedule, evChargerId }) => {
@@ -37,22 +38,22 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
   const [endTime, setEndTime] = useState('06:00');
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [isEveryday, setIsEveryday] = useState(false);
-  const [isLocallyActive, setIsLocallyActive] = useState(true);
+  // isLocallyActive state removed as it's now implicitly handled by device active status
+  // const [isLocallyActive, setIsLocallyActive] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (isOpen) { // Reset form when dialog opens, based on existingSchedule
+    if (isOpen) { 
       if (existingSchedule) {
         setName(existingSchedule.name);
-        setIsLocallyActive(existingSchedule.isLocallyActive);
+        // setIsLocallyActive(existingSchedule.isLocallyActive); // No longer needed
         if (existingSchedule.rules && existingSchedule.rules.length > 0) {
-          const rule = existingSchedule.rules[0]; // Assuming one rule per named schedule for now
+          const rule = existingSchedule.rules[0]; 
           setStartTime(rule.start_time);
           setEndTime(rule.end_time);
           
           const displayDays = rule.days.map(apiDay => DAY_MAP_API_TO_DISPLAY[apiDay.toUpperCase()] || apiDay).filter(Boolean);
           
-          // Check if all API equivalent days are present for "Everyday"
           const isAllApiDaysPresent = ALL_DAYS_DISPLAY_FORMAT.every(displayDay => {
             const apiDayEquivalent = DAY_MAP_DISPLAY_TO_API[displayDay];
             return rule.days.map(d => d.toUpperCase()).includes(apiDayEquivalent);
@@ -66,20 +67,18 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
             setSelectedDays(displayDays);
           }
         } else {
-          // Default for existing schedule with no rules (should ideally not happen)
           setStartTime('00:00');
           setEndTime('06:00');
           setSelectedDays([]);
           setIsEveryday(false);
         }
       } else {
-        // Reset form for new schedule
         setName('');
         setStartTime('00:00');
         setEndTime('06:00');
         setSelectedDays([]);
         setIsEveryday(false);
-        setIsLocallyActive(true);
+        // setIsLocallyActive(true); // No longer needed
       }
     }
   }, [existingSchedule, isOpen]);
@@ -89,7 +88,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     if (checked) {
       setSelectedDays(ALL_DAYS_DISPLAY_FORMAT);
     } else {
-      setSelectedDays([]); // Clear individual days if "Everyday" is unchecked
+      setSelectedDays([]); 
     }
   };
 
@@ -101,7 +100,6 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
       newSelectedDays = selectedDays.filter(d => d !== day);
     }
     setSelectedDays(newSelectedDays);
-    // Update "Everyday" checkbox if all days are selected/deselected individually
     setIsEveryday(newSelectedDays.length === ALL_DAYS_DISPLAY_FORMAT.length && ALL_DAYS_DISPLAY_FORMAT.every(d => newSelectedDays.includes(d)));
   };
 
@@ -115,9 +113,6 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
       return;
     }
     if (endTime <= startTime) {
-      // Simple validation for same-day. More complex needed for overnight.
-      // For now, GivEnergy API might handle overnight (e.g. 22:00 - 06:00) as two rules or specific format.
-      // This basic check ensures end time is after start for a single day rule.
       toast({ variant: "destructive", title: "Validation Error", description: "End time must be after start time for a single day rule." });
       return;
     }
@@ -127,30 +122,18 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     const rule: EVChargerAPIRule = {
       start_time: startTime,
       end_time: endTime,
-      days: apiDays, // API expects ["MONDAY", "TUESDAY"...]
+      days: apiDays, 
     };
     
-    const scheduleToSave: Omit<NamedEVChargerSchedule, 'createdAt' | 'updatedAt'> & { id?: string } = {
-      id: existingSchedule?.id, // Will be undefined for new schedules
+    // The isLocallyActive flag is removed from the data saved by this dialog
+    const scheduleToSave: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string } = {
+      id: existingSchedule?.id, 
       name,
-      rules: [rule], // Storing as an array of rules, even if UI supports one per named schedule
-      isLocallyActive,
-      // chargerId: evChargerId || undefined // Store chargerId if available, useful for future multi-charger support
+      rules: [rule], 
     };
-    
-    // If it's a new schedule (no existingSchedule.id), the useLocalStorageSchedules hook will assign an ID.
-    // Or we can explicitly add one here if onSave expects it for new items.
-    // For consistency with update, if we're adding, we might want to pass the ID.
-    // The hook structure suggests the hook handles ID generation for `addSchedule`.
-    if(!existingSchedule?.id) { // This is a new schedule
-        // The useLocalStorageSchedules hook expects Omit<..., 'id' | 'createdAt' | 'updatedAt'> for add
-        // and it will generate the id and timestamps.
-        // So, we don't need to pass id here for new schedules if onSave calls addSchedule.
-    }
-
 
     onSave(scheduleToSave);
-    onClose(); // Close dialog after saving
+    onClose(); 
   };
 
   if (!isOpen) return null;
@@ -159,9 +142,9 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{existingSchedule ? 'Edit Local Schedule' : 'Add New Local Schedule'}</DialogTitle>
+          <DialogTitle>{existingSchedule ? 'Edit Schedule' : 'Add New Schedule'}</DialogTitle>
           <DialogDescription>
-            {existingSchedule ? 'Modify details for this locally stored schedule.' : 'Create a new schedule and save it to your local list.'}
+            {existingSchedule ? 'Modify details for this schedule.' : 'Create a new schedule to save to your local list.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -191,7 +174,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
                             id={`schedule-day-${day}`}
                             checked={selectedDays.includes(day)}
                             onCheckedChange={(checked) => handleDayChange(day, !!checked)}
-                            disabled={isEveryday && !selectedDays.includes(day)} // Disable if "Everyday" is checked and this day wasn't part of the initial "Everyday" set (edge case, usually all are selected)
+                            disabled={isEveryday && !selectedDays.includes(day)} 
                         />
                         <Label htmlFor={`schedule-day-${day}`} className="font-normal">{day}</Label>
                     </div>
@@ -199,11 +182,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-             <Label htmlFor="is-locally-active" className="text-right col-span-3">Enabled in my list</Label>
-            {/* Tooltip or description can be added here for clarity */}
-            <Switch id="is-locally-active" checked={isLocallyActive} onCheckedChange={setIsLocallyActive} className="justify-self-start"/>
-          </div>
+          {/* Removed isLocallyActive switch from dialog as it's no longer user-configurable here */}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -213,4 +192,3 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     </Dialog>
   );
 };
-
