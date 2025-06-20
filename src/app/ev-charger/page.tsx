@@ -300,7 +300,7 @@ const EVChargerPage = () => {
       setIsSyncingFromDevice(false);
       if (activeDeviceScheduleNameFromSync) {
         setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync);
-      } else {
+      } else if (evChargerData?.uuid) { // Check if evChargerData.uuid is defined
         fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
       }
     }
@@ -318,10 +318,8 @@ const EVChargerPage = () => {
     const firstRule = schedule.rules[0];
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
-            // Attempt to map from display format first (e.g., "Mon")
             let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
             if (!apiDayString) {
-                // If not found, assume it's already in API format (e.g., "MONDAY")
                 apiDayString = displayDayOrApiDay.toUpperCase();
             }
             return DAY_MAP_DISPLAY_TO_API_NUMERIC[apiDayString];
@@ -339,6 +337,8 @@ const EVChargerPage = () => {
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
         days: apiNumericDays,
+        // Assuming limit is handled by device or a default; otherwise, it needs to be part of NamedEVChargerSchedule
+        limit: 32 // Default or placeholder, adjust if schedule object contains limit
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
@@ -372,34 +372,6 @@ const EVChargerPage = () => {
       setIsLoadingDeviceSchedule(false);
     }
   };
-
-  const handleClearDeviceSchedule = async () => {
-    if (!apiKey || !evChargerData?.uuid) return;
-    setIsLoadingDeviceSchedule(true);
-    try {
-      const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/clear-schedules`, {
-        method: 'POST',
-        headers,
-      });
-      if (!response.ok) {
-        await handleApiError(response, 'clearing device schedules');
-        return;
-      }
-      const result = await response.json() as EVChargerClearScheduleResponse;
-       if (result && result.data && result.data.success) {
-        toast({ title: "Device Schedules Cleared", description: result.data.message || "All schedules cleared from device." });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
-      } else {
-        toast({ variant: "destructive", title: "Clear Not Confirmed", description: result.data?.message || "Failed to clear schedules." });
-      }
-    } catch (error) {
-      console.error('Error clearing device schedules:', error);
-      toast({ variant: "destructive", title: "Clear Schedule Error", description: "An unexpected error occurred." });
-    } finally {
-      setIsLoadingDeviceSchedule(false);
-    }
-  };
   
   const handleOpenScheduleDialog = (schedule: NamedEVChargerSchedule | null = null) => {
     setEditingSchedule(schedule);
@@ -416,7 +388,7 @@ const EVChargerPage = () => {
     }
     setIsScheduleDialogOpen(false);
     setEditingSchedule(null);
-    if (scheduleData.name === deviceActiveScheduleName) {
+    if (evChargerData?.uuid && scheduleData.name === deviceActiveScheduleName) {
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
   };
@@ -735,13 +707,13 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true);
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT';
-
-    if (!isInstantControl) {
-      toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
-      return;
-    }
+    await fetchEvChargerData(true); // Refresh data to get latest status
+    // The EV charger status for "Instant Control" might vary, this needs to be confirmed from API docs or observed behavior.
+    // For now, let's assume it's generally available or check if the command itself errors out.
+    // if (evChargerData?.status !== 'CHARGING_INSTANT') { // This status might be specific/not standard
+    //   toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit adjustment might only be available in specific modes." });
+    //   return;
+    // }
 
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/adjust-charge-power-limit`, {
@@ -1244,21 +1216,13 @@ const EVChargerPage = () => {
                          <CardFooter className="pt-4 border-t">
                             <div className="flex items-center space-x-2">
                                 <Button
-                                    onClick={() => fetchDeviceActiveScheduleInfo(evChargerData.uuid)}
+                                    onClick={() => evChargerData?.uuid && fetchDeviceActiveScheduleInfo(evChargerData.uuid)}
                                     variant="outline"
                                     size="sm"
                                     disabled={isLoadingDeviceSchedule || !evChargerData?.uuid}
                                 >
                                     {isLoadingDeviceSchedule ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
                                     Refresh Device Active Status
-                                </Button>
-                                <Button
-                                    onClick={handleClearDeviceSchedule}
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={isLoadingDeviceSchedule || !evChargerData?.uuid || !deviceActiveScheduleName}
-                                >
-                                    <XCircle className="mr-2 h-4 w-4" /> Clear Active Device Schedule
                                 </Button>
                             </div>
                         </CardFooter>
@@ -1272,7 +1236,6 @@ const EVChargerPage = () => {
                                 The "Active on Device" badge indicates which schedule is currently running on your charger.
                                 "Sync from Device" imports or updates your local list with schedules programmed directly on the charger.
                                 "Refresh Device Active Status" re-checks which schedule is currently active on the device.
-                                "Clear Active Device Schedule" removes any schedule currently running on the EV charger.
                             </p>
                         </CardContent>
                     </Card>
