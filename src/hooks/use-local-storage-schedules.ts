@@ -28,28 +28,25 @@ export function useLocalStorageSchedules(chargerId: string | null) {
       const storedSchedules = localStorage.getItem(storageKey);
       if (storedSchedules) {
         const parsedSchedules: NamedEVChargerSchedule[] = JSON.parse(storedSchedules);
-        // Basic validation/migration if needed in future
         setSchedules(parsedSchedules.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       } else {
         setSchedules([]);
       }
     } catch (error) {
       console.error("Error loading schedules from localStorage:", error);
-      setSchedules([]); // Reset to empty on error
+      setSchedules([]); 
     } finally {
       setIsLoading(false);
     }
   }, [getStorageKey]);
 
-  // Load schedules from localStorage on mount and when chargerId changes
   useEffect(() => {
     loadSchedulesFromStorage();
-  }, [chargerId, loadSchedulesFromStorage]); // chargerId is implicitly handled by getStorageKey -> loadSchedulesFromStorage
+  }, [chargerId, loadSchedulesFromStorage]);
 
-  // Save schedules to localStorage whenever they change
   useEffect(() => {
     const storageKey = getStorageKey();
-    if (storageKey && !isLoading) { // Only save if not loading and key is present
+    if (storageKey && !isLoading) { 
       try {
         localStorage.setItem(storageKey, JSON.stringify(schedules));
       } catch (error) {
@@ -58,14 +55,39 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     }
   }, [schedules, chargerId, isLoading, getStorageKey]);
 
-  const addSchedule = useCallback((scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newSchedule: NamedEVChargerSchedule = {
-      ...scheduleData,
-      id: uuidv4(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setSchedules(prevSchedules => [newSchedule, ...prevSchedules].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  const addSchedule = useCallback((scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'>): { type: 'added' | 'updated', id: string } => {
+    let updatedScheduleId = '';
+    let operationType: 'added' | 'updated' = 'added';
+
+    setSchedules(prevSchedules => {
+      const existingScheduleIndex = prevSchedules.findIndex(s => s.name === scheduleData.name);
+      let newSchedules = [...prevSchedules];
+
+      if (existingScheduleIndex !== -1) {
+        // Update existing schedule by name
+        const existingSchedule = newSchedules[existingScheduleIndex];
+        newSchedules[existingScheduleIndex] = {
+          ...existingSchedule,
+          ...scheduleData, // Overwrite with new rules, isLocallyActive
+          updatedAt: new Date().toISOString(),
+        };
+        updatedScheduleId = existingSchedule.id;
+        operationType = 'updated';
+      } else {
+        // Add new schedule
+        const newSchedule: NamedEVChargerSchedule = {
+          ...scheduleData,
+          id: uuidv4(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        newSchedules = [newSchedule, ...newSchedules];
+        updatedScheduleId = newSchedule.id;
+        operationType = 'added';
+      }
+      return newSchedules.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+    return { type: operationType, id: updatedScheduleId };
   }, []);
 
   const updateSchedule = useCallback((scheduleId: string, updates: Partial<Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'>>) => {
@@ -95,6 +117,6 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     deleteSchedule,
     getSchedule,
     isLoading,
-    reloadSchedules: loadSchedulesFromStorage, // Expose the reload function
+    reloadSchedules: loadSchedulesFromStorage,
   };
 }
