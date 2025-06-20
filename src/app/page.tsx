@@ -78,7 +78,7 @@ export default function HomePage() {
                 </p>
               </div>
             </Link>
-            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer" className="block">
+            <a href="/aj_renewables_info" passHref className="block">
               <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
   <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
   <h3 className="text-lg font-semibold">AJ Renewables</h3>
