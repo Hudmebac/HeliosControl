@@ -8,13 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-// Removed Switch import as isLocallyActive is no longer a direct user input here
-// import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { NamedEVChargerSchedule, EVChargerAPIRule } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { v4 as uuidv4 } from 'uuid';
 
-// Day mapping constants
 const ALL_DAYS_DISPLAY_FORMAT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = {
   "Mon": "MONDAY", "Tue": "TUESDAY", "Wed": "WEDNESDAY", "Thu": "THURSDAY",
@@ -23,6 +20,9 @@ const DAY_MAP_DISPLAY_TO_API: { [key: string]: string } = {
 const DAY_MAP_API_TO_DISPLAY: { [key: string]: string } = Object.fromEntries(
   Object.entries(DAY_MAP_DISPLAY_TO_API).map(([key, value]) => [value, key])
 );
+
+const CHARGE_LIMIT_OPTIONS = [6, 8.5, 10, 12, 16, 24, 32];
+const DEFAULT_CHARGE_LIMIT = 32;
 
 interface ScheduleDialogProps {
   isOpen: boolean;
@@ -38,19 +38,18 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
   const [endTime, setEndTime] = useState('06:00');
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [isEveryday, setIsEveryday] = useState(false);
-  // isLocallyActive state removed as it's now implicitly handled by device active status
-  // const [isLocallyActive, setIsLocallyActive] = useState(true);
+  const [chargeLimit, setChargeLimit] = useState<number>(DEFAULT_CHARGE_LIMIT);
   const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen) { 
       if (existingSchedule) {
         setName(existingSchedule.name);
-        // setIsLocallyActive(existingSchedule.isLocallyActive); // No longer needed
         if (existingSchedule.rules && existingSchedule.rules.length > 0) {
           const rule = existingSchedule.rules[0]; 
           setStartTime(rule.start_time);
           setEndTime(rule.end_time);
+          setChargeLimit(rule.limit ?? DEFAULT_CHARGE_LIMIT);
           
           const displayDays = rule.days.map(apiDay => DAY_MAP_API_TO_DISPLAY[apiDay.toUpperCase()] || apiDay).filter(Boolean);
           
@@ -71,6 +70,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
           setEndTime('06:00');
           setSelectedDays([]);
           setIsEveryday(false);
+          setChargeLimit(DEFAULT_CHARGE_LIMIT);
         }
       } else {
         setName('');
@@ -78,7 +78,7 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
         setEndTime('06:00');
         setSelectedDays([]);
         setIsEveryday(false);
-        // setIsLocallyActive(true); // No longer needed
+        setChargeLimit(DEFAULT_CHARGE_LIMIT);
       }
     }
   }, [existingSchedule, isOpen]);
@@ -122,10 +122,10 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
     const rule: EVChargerAPIRule = {
       start_time: startTime,
       end_time: endTime,
-      days: apiDays, 
+      days: apiDays,
+      limit: chargeLimit,
     };
     
-    // The isLocallyActive flag is removed from the data saved by this dialog
     const scheduleToSave: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string } = {
       id: existingSchedule?.id, 
       name,
@@ -160,6 +160,19 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
             <Label htmlFor="end-time" className="text-right">End Time</Label>
             <Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="col-span-3" />
           </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="charge-limit" className="text-right">Max Current</Label>
+            <Select value={String(chargeLimit)} onValueChange={(value) => setChargeLimit(Number(value))} >
+              <SelectTrigger id="charge-limit" className="col-span-3">
+                <SelectValue placeholder="Select charge limit" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHARGE_LIMIT_OPTIONS.map(limit => (
+                  <SelectItem key={limit} value={String(limit)}>{limit}A</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           
           <div className="col-span-4 space-y-2">
             <Label>Select Days</Label>
@@ -181,8 +194,6 @@ export const ScheduleDialog: React.FC<ScheduleDialogProps> = ({ isOpen, onClose,
                 ))}
             </div>
           </div>
-
-          {/* Removed isLocallyActive switch from dialog as it's no longer user-configurable here */}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

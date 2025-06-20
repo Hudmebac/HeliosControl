@@ -248,6 +248,7 @@ export interface EVChargerAPIRule {
   start_time: string; // "HH:mm"
   end_time: string;   // "HH:mm"
   days: string[];     // e.g., ["MONDAY", "TUESDAY", ...] for internal use
+  limit?: number;     // Optional charge current limit in Amps
 }
 
 export interface RawDeviceApiPeriod {
@@ -272,7 +273,12 @@ export interface EVChargerDeviceScheduleListResponse {
   };
 }
 
-export type EVChargerSetSchedulePayload = RawDeviceApiScheduleEntry;
+// For POSTing a schedule to the device
+export interface EVChargerSetSchedulePayload {
+  name: string;
+  is_active: boolean;
+  periods: RawDeviceApiPeriod[];
+}
 
 
 export interface EVChargerClearScheduleResponse {
@@ -286,10 +292,6 @@ export interface NamedEVChargerSchedule {
   id: string; 
   name: string;
   rules: EVChargerAPIRule[];
-  // isLocallyActive removed as active status is now derived from deviceActiveScheduleName
   createdAt: string; 
   updatedAt: string; 
 }
-
-
-    
