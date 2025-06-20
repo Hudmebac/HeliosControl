@@ -6,7 +6,8 @@ import type { RealTimeData } from "@/lib/types";
 import { getRealTimeData } from "@/lib/givenergy";
 import { useToast } from "@/hooks/use-toast";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT, EVCharger } from "@/lib/event-bus";
+import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT } from "@/lib/event-bus";
+import type { EVCharger } from "@/lib/types"; // Correctly import EVCharger type
 
 const HIGH_CONSUMPTION_THRESHOLD = 2.5; // kW from grid
 
@@ -14,9 +15,9 @@ export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: bool
   const [data, setData] = useState<RealTimeData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [evChargersData, setEvChargersData] = useState<EVCharger[] | null>(null); // New state for EV chargers
-  const [evChargerMeterData, setEvChargerMeterData] = useState<any[] | null>(null); // New state for EV charger meter data
-  const [evChargersLoading, setEvChargersLoading] = useState(false); // Loading state for EV chargers
+  const [evChargersData, setEvChargersData] = useState<EVCharger[] | null>(null);
+  const [evChargerMeterData, setEvChargerMeterData] = useState<any[] | null>(null);
+  const [evChargersLoading, setEvChargersLoading] = useState(false);
   const { toast } = useToast();
   const { refreshInterval, isSettingsLoaded } = useAppSettings();
 
@@ -25,14 +26,14 @@ export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: bool
       setData(null);
       setError("API Key not provided. Please configure your API key in Settings.");
       setIsLoading(false);
-      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT); // Emit completion even if no API key
-      setEvChargersData(null); // Clear EV charger data
-      setEvChargersLoading(false); // Stop EV charger loading
-      setEvChargerMeterData(null); // Clear EV charger meter data
+      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT);
+      setEvChargersData(null);
+      setEvChargersLoading(false);
+      setEvChargerMeterData(null);
       return;
     }
 
-    setIsLoading(true); // Still set overall loading for real-time data
+    setIsLoading(true);
     setError(null);
     try {
       const newData = await getRealTimeData(apiKey);
@@ -63,8 +64,6 @@ export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: bool
       }
       console.error("Error in useGivEnergyData fetchData:", e);
       setError(errorMessage);
-      // Do NOT set data to null on error if data already exists
-      // setData(null);
        if (isManualRefresh) {
         toast({
           title: "Refresh Failed",
@@ -75,7 +74,7 @@ export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: bool
       }
     } finally {
       setIsLoading(false);
-      // Don't emit completion here, wait for EV charger data if applicable
+      // Completion event is now emitted after EV charger data fetch attempt (if applicable)
     }
   }, [apiKey, toast]);
 
@@ -83,83 +82,143 @@ export function useGivEnergyData(apiKey: string | null, fetchEvChargerData: bool
     if (!apiKey) {
       setEvChargersData(null);
       setEvChargersLoading(false);
-      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT);
+      setEvChargerMeterData(null);
+      // appEventBus.emit(DATA_FETCH_COMPLETED_EVENT); // Emit completion here if no EV charger fetch
       return;
     }
 
     setEvChargersLoading(true);
+    setEvChargerMeterData(null); // Clear previous meter data
+    let fetchedChargers: EVCharger[] = [];
+
     try {
-      const evChargerUrl = new URL("https://api.givenergy.cloud/v1/ev-charger");
+      const evChargerUrl = "/api/proxy-givenergy/ev-charger"; // Use proxy
       const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
       };
-      const response = await fetch(evChargerUrl.toString(), { headers });
+      const response = await fetch(evChargerUrl, { headers });
       if (!response.ok) {
-        throw new Error(`Error fetching EV chargers: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Error fetching EV chargers: ${response.status} ${response.statusText}. ${errorData.message || ''}`);
       }
       const result = await response.json();
-      setEvChargersData(result.data);
+      fetchedChargers = result.data || [];
+      setEvChargersData(fetchedChargers);
 
-      // If chargers are found, fetch meter data for the first one
-      if (result.data && result.data.length > 0) {
-        const firstChargerUuid = result.data[0].uuid;
-        const meterDataUrl = new URL(`https://api.givenergy.cloud/v1/ev-charger/${firstChargerUuid}/meter-data`);
+      if (fetchedChargers && fetchedChargers.length > 0 && fetchedChargers[0].uuid) {
+        const firstChargerUuid = fetchedChargers[0].uuid;
+        const meterDataProxyUrlPath = `/api/proxy-givenergy/ev-charger/${firstChargerUuid}/meter-data`; // Use proxy
+
         const now = new Date();
         const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-        const meterDataParams = {
+        const meterDataParams = new URLSearchParams({
           start_time: twentyFourHoursAgo.toISOString(),
           end_time: now.toISOString(),
-          'measurands[0]': '13', // Power.Active.Import (instantaneous power)
-          'measurands[1]': '4', // Energy.Active.Import.Register (total energy)
-          'meter_ids[0]': '0', // EV Charger meter
-          pageSize: '1', // Get only the latest data point for instantaneous readings
+          'measurands[0]': '13',
+          'measurands[1]': '4',
+          'meter_ids[0]': '0',
+          pageSize: '1',
           page: '1'
-        };
-        Object.keys(meterDataParams)
-          .forEach(key => meterDataUrl.searchParams.append(key, meterDataParams[key as keyof typeof meterDataParams]));
+        });
+        
+        const fullMeterDataUrl = `${meterDataProxyUrlPath}?${meterDataParams.toString()}`;
 
-        const meterDataResponse = await fetch(meterDataUrl.toString(), { headers });
+        const meterDataResponse = await fetch(fullMeterDataUrl, { headers });
         if (!meterDataResponse.ok) {
-          throw new Error(`Error fetching EV charger meter data: ${meterDataResponse.statusText}`);
+            const errorData = await meterDataResponse.json().catch(() => ({}));
+            console.warn(`Warning: Error fetching EV charger meter data: ${meterDataResponse.status} ${meterDataResponse.statusText}. ${errorData.message || ''}`);
+            setEvChargerMeterData([]); // Set to empty or handle as needed
+        } else {
+            const meterDataResult = await meterDataResponse.json();
+            setEvChargerMeterData(meterDataResult.data || []);
         }
-        const meterDataResult = await meterDataResponse.json();
-        // You would need to process meterDataResult and potentially add it to the RealTimeData or a new state
-        setEvChargerMeterData(meterDataResult.data); // Store meter data
+      } else {
+         setEvChargerMeterData([]); // No chargers, so no meter data
       }
     } catch (e: any) {
-      console.error("Error fetching EV chargers:", e);
+      console.error("Error fetching EV chargers or their meter data:", e);
+      setEvChargersData([]); // Set to empty array on error to indicate fetch attempt was made
+      setEvChargerMeterData([]);
+      toast({
+        title: "EV Charger Data Error",
+        description: e.message || "Could not load EV Charger information.",
+        variant: "destructive",
+      });
+    } finally {
+      setEvChargersLoading(false);
+      // appEventBus.emit(DATA_FETCH_COMPLETED_EVENT); // Emit completion after EV data attempt
     }
   }, [apiKey, toast]);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | undefined;
+
+    const performFetchCycle = async () => {
+      await fetchData(); // Fetch main data
+      if (fetchEvChargerData) {
+        await fetchEvChargers(); // Then fetch EV charger data
+      }
+      appEventBus.emit(DATA_FETCH_COMPLETED_EVENT); // Emit completion after all fetches
+    };
+    
     if (apiKey && isSettingsLoaded) { 
- fetchData();
- if (fetchEvChargerData) {
- fetchEvChargers(); // Fetch EV chargers on mount and API key change
- }
+      performFetchCycle(); // Initial fetch
       const intervalMilliseconds = refreshInterval * 1000;
-      const intervalId = setInterval(() => fetchData(false), intervalMilliseconds);
+      intervalId = setInterval(performFetchCycle, intervalMilliseconds);
       
-      const handleManualRefresh = () => fetchData(true);
+      const handleManualRefresh = () => {
+        // Clear existing interval to prevent rapid succession if manual refresh is quick
+        if (intervalId) clearInterval(intervalId);
+        performFetchCycle().finally(() => {
+          // Restart interval after manual refresh cycle completes
+          if (apiKey && isSettingsLoaded) { // Check again in case API key was cleared
+            intervalId = setInterval(performFetchCycle, refreshInterval * 1000);
+          }
+        });
+      };
       appEventBus.on(REFRESH_DASHBOARD_EVENT, handleManualRefresh);
 
       return () => {
-        clearInterval(intervalId);
+        if (intervalId) clearInterval(intervalId);
         appEventBus.off(REFRESH_DASHBOARD_EVENT, handleManualRefresh);
       };
     } else {
       setData(null);
       setIsLoading(false);
-      setEvChargersData(null); // Clear EV charger data
-      setEvChargerMeterData(null); // Clear EV charger meter data
-      setEvChargersLoading(false); // Stop EV charger loading
-      if (isSettingsLoaded) { // Ensure settings are loaded before emitting completion for no-API-key scenario
+      setEvChargersData(null);
+      setEvChargerMeterData(null);
+      setEvChargersLoading(false);
+      setError(apiKey ? null : "API Key not provided. Please configure your API key in Settings.");
+      if (isSettingsLoaded) {
         appEventBus.emit(DATA_FETCH_COMPLETED_EVENT);
       }
     }
-  }, [apiKey, fetchData, fetchEvChargers, refreshInterval, isSettingsLoaded]);
- return { data, isLoading: isLoading || (fetchEvChargerData ? evChargersLoading : false), error, evChargersData, evChargerMeterData, refetch: () => { fetchData(true); if (fetchEvChargerData) fetchEvChargers(); }, fetchEvChargers };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey, fetchEvChargerData, refreshInterval, isSettingsLoaded]); // fetchData and fetchEvChargers are memoized
+
+ return { 
+    data, 
+    isLoading: isLoading || (fetchEvChargerData ? evChargersLoading : false), 
+    error, 
+    evChargersData, 
+    evChargerMeterData, 
+    refetch: () => { 
+        // This refetch should also trigger the full cycle and restart interval
+        const handleManualRefresh = () => {
+            if (intervalId) clearInterval(intervalId);
+            performFetchCycle().finally(() => {
+                if (apiKey && isSettingsLoaded) {
+                    intervalId = setInterval(performFetchCycle, refreshInterval * 1000);
+                }
+            });
+        };
+        appEventBus.emit(REFRESH_DASHBOARD_EVENT, handleManualRefresh);
+    }, 
+    fetchEvChargers // Exposing this though it's called internally by the cycle
+  };
 }
+
+    
