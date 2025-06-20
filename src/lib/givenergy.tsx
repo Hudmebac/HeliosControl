@@ -21,9 +21,9 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  EnergyFlowRawEntry,
-  EnergyFlowApiResponse,
-  EnergyFlowTypeID,
+  EnergyFlowRawEntry, // New
+  EnergyFlowApiResponse, // New
+  EnergyFlowTypeID, // New
   ENERGY_FLOW_TYPE_DETAILS, // Import added
 } from "@/lib/types";
 import { format, parseISO } from 'date-fns';
@@ -508,10 +508,10 @@ export async function getHistoricalEnergyData(
 export async function getEnergyFlows(
   apiKey: string,
   inverterSerial: string,
-  startTime: string,
-  endTime: string,
-  grouping: number,
-  types?: EnergyFlowTypeID[] // Expects an array of string IDs like "0", "1", etc.
+  startTime: string, // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  endTime: string,   // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  grouping: number,  // API grouping ID (0-4)
+  types?: EnergyFlowTypeID[] // Uses the stringified version of type IDs
 ): Promise<EnergyFlowRawEntry[]> {
   if (!apiKey || !inverterSerial) {
     throw new Error("API Key or Inverter Serial not provided for energy flows.");
