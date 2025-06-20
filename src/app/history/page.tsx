@@ -15,10 +15,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
-import { getEnergyFlows } from "@/lib/givenergy"; // Updated function
-import type { EnergyFlowRawEntry, ProcessedEnergyFlowDataPoint, GroupingOptionConfig, EnergyFlowTypeID, ENERGY_FLOW_TYPE_DETAILS } from "@/lib/types";
-import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types"; // Import the map
-import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays } from "date-fns";
+import { getEnergyFlows } from "@/lib/givenergy.tsx"; 
+import type { EnergyFlowRawEntry, ProcessedEnergyFlowDataPoint, GroupingOptionConfig, EnergyFlowTypeID } from "@/lib/types";
+import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types";
+import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO } from "date-fns";
 import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, InfoIcon, HelpCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
@@ -36,7 +36,7 @@ const formatYearForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "yyyy") : "Select Year";
 };
 
-const MAX_DATE_RANGE_DAYS = 366; // Max days for custom daily range fetch to prevent overly large requests
+const MAX_DATE_RANGE_DAYS = 366; 
 
 const groupingOptions: GroupingOptionConfig[] = [
   { id: "half_hourly", label: "Half-Hourly", apiValue: 0, datePickerType: 'single_day_half_hourly' },
@@ -53,7 +53,7 @@ const ALL_FLOW_TYPE_IDS = Object.keys(FLOW_DETAILS_MAP) as EnergyFlowTypeID[];
 const generateMonthOptions = () => {
   const options = [];
   const today = new Date();
-  for (let i = 0; i < 36; i++) { // Generate current month and previous 35 months
+  for (let i = 0; i < 36; i++) { 
     const date = subMonths(today, i);
     options.push({
       label: format(date, "MMMM yyyy"),
@@ -80,12 +80,12 @@ const generateYearOptions = () => {
 export default function EnergyHistoryPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
-  const { theme } = useTheme(); // For chart colors
+  const { theme } = useTheme(); 
 
-  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[1].id); // Default to Daily
+  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[1].id); 
   
   const [date1, setDate1] = useState<Date | undefined>(new Date());
-  const [date2, setDate2] = useState<Date | undefined>(new Date()); // For custom range end date
+  const [date2, setDate2] = useState<Date | undefined>(new Date()); 
 
   const [selectedFlowTypeIDs, setSelectedFlowTypeIDs] = useState<EnergyFlowTypeID[]>(ALL_FLOW_TYPE_IDS);
   
@@ -112,15 +112,13 @@ export default function EnergyHistoryPage() {
   };
 
   const parseApiTimestamp = (apiTimestamp: string): Date => {
-    // API format: "YYYY-MM-DD HH:MM" or "YYYY-MM-DD"
-    // Try parsing with time first, then without if it fails
     let parsed = parse(apiTimestamp, "yyyy-MM-dd HH:mm", new Date());
     if (!isValid(parsed)) {
       parsed = parse(apiTimestamp, "yyyy-MM-dd", new Date());
     }
     if (!isValid(parsed)) {
       console.warn(`Could not parse API timestamp: ${apiTimestamp}. Using current date as fallback.`);
-      return new Date(); // Fallback, though should ideally not happen
+      return new Date(); 
     }
     return parsed;
   };
@@ -135,19 +133,19 @@ export default function EnergyHistoryPage() {
       const endDate = parseApiTimestamp(entry.end_time);
 
       switch (currentGroupingConfig.apiValue) {
-        case 0: // Half-Hourly
+        case 0: 
           timeLabel = `${format(startDate, "HH:mm")}`;
           break;
-        case 1: // Daily (includes weekly and custom daily range)
+        case 1: 
           timeLabel = format(startDate, "MMM d, yy");
           break;
-        case 2: // Monthly
+        case 2: 
           timeLabel = format(startDate, "MMM yyyy");
           break;
-        case 3: // Yearly
+        case 3: 
           timeLabel = format(startDate, "yyyy");
           break;
-        case 4: // Total
+        case 4: 
           timeLabel = `Total (${format(startDate, "MMM d")} - ${format(endDate, "MMM d, yy")})`;
           break;
         default:
@@ -172,17 +170,21 @@ export default function EnergyHistoryPage() {
 
 
   const fetchData = useCallback(async () => {
+    console.log("[HistoryPage] fetchData called. selectedFlowTypeIDs:", selectedFlowTypeIDs);
+    console.log("[HistoryPage] currentGroupingConfig:", currentGroupingConfig);
+    console.log("[HistoryPage] date1:", date1, "date2:", date2);
+    
     if (!apiKey || !inverterSerial) {
       setError("API key or inverter serial not set. Please check settings.");
       setFlowData([]);
       setIsLoadingData(false);
       return;
     }
-    if (selectedFlowTypeIDs.length === 0) {
-      toast({ title: "No Flow Types Selected", description: "Please select at least one energy flow type to display.", variant: "default"});
-      setFlowData([]); // Clear data if no types selected
-      return;
-    }
+    // If selectedFlowTypeIDs is empty, the API implies "fetch all types" by omitting the `types` parameter.
+    // The getEnergyFlows function handles omitting `types` if the passed array is empty.
+    // A toast here might be confusing if "no selection means all".
+    // However, if user expects specific types, an empty selection is an issue.
+    // For now, let's proceed: if selectedFlowTypeIDs is empty, getEnergyFlows will omit it.
 
     setIsLoadingData(true);
     setError(null);
@@ -210,11 +212,11 @@ export default function EnergyHistoryPage() {
         break;
       case 'year_yearly':
         if (!date1) { setError("Please select a year."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(startOfYear(date1), "yyyy-MM-DD");
-        apiEndDateStr = format(endOfYear(date1), "yyyy-MM-DD");
+        apiStartDateStr = format(startOfYear(date1), "yyyy-MM-dd");
+        apiEndDateStr = format(endOfYear(date1), "yyyy-MM-dd");
         break;
       case 'all_time_total':
-        apiStartDateStr = format(subYears(today, 20), "yyyy-MM-dd"); // Fetch up to 20 years for "Total"
+        apiStartDateStr = format(subYears(today, 20), "yyyy-MM-dd"); 
         apiEndDateStr = format(today, "yyyy-MM-dd");
         break;
       case 'custom_range_daily':
@@ -238,7 +240,7 @@ export default function EnergyHistoryPage() {
       const rawData = await getEnergyFlows(apiKey, inverterSerial, apiStartDateStr, apiEndDateStr, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
       const transformed = transformData(rawData);
       setFlowData(transformed);
-      if (transformed.length === 0) {
+      if (transformed.length === 0 && selectedFlowTypeIDs.length > 0) { // Only toast "no data" if specific types were requested
         toast({ title: "No Data Found", description: "No energy flow data available for the selected criteria." });
       }
     } catch (e: any) {
@@ -251,12 +253,11 @@ export default function EnergyHistoryPage() {
     }
   }, [apiKey, inverterSerial, currentGroupingConfig, date1, date2, selectedFlowTypeIDs, transformData, toast]);
 
-  // Initial fetch if API key and serial are ready
   useEffect(() => {
     if (apiKey && inverterSerial && !isLoadingApiKey) {
-      // fetchData(); // Optional: fetch on initial load or wait for user interaction
+      // fetchData(); // Fetch on initial load only if desired
     }
-  }, [apiKey, inverterSerial, isLoadingApiKey]); // Removed fetchData from deps to avoid loop
+  }, [apiKey, inverterSerial, isLoadingApiKey]);
 
   const chartData = useMemo(() => {
     return flowData.map(entry => {
@@ -273,8 +274,8 @@ export default function EnergyHistoryPage() {
         { Header: 'Start Time', accessor: 'startTimeOriginal' },
         { Header: 'End Time', accessor: 'endTimeOriginal' }
     ];
-    if (currentGroupingConfig.apiValue !== 0) { // Not half-hourly
-        timeCols.splice(1,1); // Remove end time
+    if (currentGroupingConfig.apiValue !== 0) { 
+        timeCols.splice(1,1); 
         timeCols[0].Header = "Period";
     }
     
@@ -403,7 +404,6 @@ export default function EnergyHistoryPage() {
               <Label htmlFor="grouping-select">Grouping Interval</Label>
               <Select value={selectedGroupingId} onValueChange={(value) => {
                   setSelectedGroupingId(value);
-                  // Reset dates if picker type changes to avoid invalid states
                   const newConf = groupingOptions.find(opt => opt.id === value);
                   if (newConf && newConf.datePickerType !== currentGroupingConfig.datePickerType) {
                       setDate1(new Date()); 
@@ -417,7 +417,7 @@ export default function EnergyHistoryPage() {
               </Select>
             </div>
             {renderDatePicker()}
-            <Button onClick={fetchData} disabled={isLoadingData || !apiKey || !inverterSerial || selectedFlowTypeIDs.length === 0} className="w-full md:w-auto md:self-end">
+            <Button onClick={fetchData} disabled={isLoadingData || !apiKey || !inverterSerial} className="w-full md:w-auto md:self-end">
               {isLoadingData ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch Energy Flows"}
             </Button>
           </div>
@@ -532,7 +532,7 @@ export default function EnergyHistoryPage() {
                             const typeId = col.accessor.split('.')[1] as EnergyFlowTypeID;
                             cellValue = row.values[typeId];
                         } else if (col.accessor === 'startTimeOriginal' && currentGroupingConfig.apiValue !== 0) {
-                             cellValue = row.timeLabel; // Use the formatted timeLabel for non-half-hourly period display
+                             cellValue = row.timeLabel; 
                         }
 
                         return (
@@ -550,11 +550,11 @@ export default function EnergyHistoryPage() {
           </Card>
         </>
       )}
-      {!isLoadingData && !error && flowData.length === 0 && apiKey && inverterSerial && selectedFlowTypeIDs.length > 0 && (
+      {!isLoadingData && !error && flowData.length === 0 && apiKey && inverterSerial && (
          <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">No energy flow data found for the selected criteria. Try adjusting the date range or flow types.</CardContent></Card>
       )}
        {!isLoadingData && !error && selectedFlowTypeIDs.length === 0 && apiKey && inverterSerial && (
-         <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">Please select at least one energy flow type to fetch data.</CardContent></Card>
+         <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">Select flow types and click "Fetch Energy Flows" to see data. Leaving all unchecked will attempt to fetch all types.</CardContent></Card>
       )}
 
       <Card className="mt-6">
