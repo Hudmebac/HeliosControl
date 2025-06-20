@@ -49,8 +49,8 @@ export default function HomePage() {
         <>
           <DashboardGrid apiKey={apiKey} />
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
+            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer" className="block">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
                 <Sunrise className="h-8 w-8 text-primary mb-3" /> {/* Icon for Solar Forecast */}
                 <h3 className="text-lg font-semibold">Solar Forecast</h3>
                 <p className="text-sm text-muted-foreground text-center">
@@ -58,18 +58,19 @@ export default function HomePage() {
                 </p>
               </div>
             </a>
-            <Link href="/ev-charger" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00'}}>
+            {/* EV Charger - Keep as Link */}
+            <Link href="/ev-charger" passHref className="block">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
               <Car className="h-8 w-8 text-primary mb-3" style={{ color: '#ff8c00' }} /> {/* Icon for EV Charger */}
               <h3 className="text-lg font-semibold">EV Charger</h3>
               <p className="text-sm text-muted-foreground text-center">
               Manage and monitor your EV charger.
               </p>
               </div>
-            </Link>
+                      </Link>
             {/* Energy Flow Data - Keep as Link */}
-            <Link href="/history" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
+            <Link href="/history" passHref className="block">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
                 <LineChart className="h-8 w-8 text-primary mb-3" /> {/* Icon for Energy Flow Data */}
                 <h3 className="text-lg font-semibold">Energy Flow Data</h3>
                 <p className="text-sm text-muted-foreground text-center">
@@ -77,23 +78,14 @@ export default function HomePage() {
                 </p>
               </div>
             </Link>
-            <Link href="/tariffs" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00' }}>
-                <Zap className="h-8 w-8 text-primary mb-3" /> {/* Icon for Tariffs */}
-                <h3 className="text-lg font-semibold">Electricity Tariffs</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  View and compare electricity tariffs.
+            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer" className="block">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+  <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
+  <h3 className="text-lg font-semibold">AJ Renewables</h3>
+  <p className="text-sm text-muted-foreground text-center">
+  Your Trusted Partner for Renewable Energy Solutions.
                 </p>
-              </div>
-            </Link>
-            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
- <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
-              <h3 className="text-lg font-semibold">AJ Renewables</h3>
-                <p className="text-sm text-muted-foreground text-center">
- Your Trusted Partner for Renewable Energy Solutions.
-                </p>
-              </div>
+  </div>
             </a>
 
             {/* GivEnergy Cloud - Keep as anchor with special mobile handling */}
@@ -104,14 +96,23 @@ export default function HomePage() {
               onClick={handleGivEnergyCloudClick}
               data-href-mobile={isMobile ? 'givenergy://' : undefined} // Store potential deep link URL
             >
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
                 <img src="https://heliosaj.netlify.app/_next/image?url=%2Fimages%2FGEIcon.webp&w=32&q=75" alt="GivEnergy Icon" className="h-8 w-auto mb-3" /> {/* Image for GivEnergy Cloud */}
-                <h3 className="text-lg font-semibold">GivEnergy Cloud</h3>
+                <h3 className="text-lg font-semibold">GivEnergy </h3>
                 <p className="text-sm text-muted-foreground text-center">
-                  Access the official GivEnergy Cloud dashboard.
+                  GivEnergy App / Cloud dashboard.
                 </p>
               </div>
             </a>
+            <Link href="/tariffs" passHref className="block">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+                <Zap className="h-8 w-8 text-primary mb-3" /> {/* Icon for Tariffs */}
+                <h3 className="text-lg font-semibold">Electricity Tariffs</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  View and compare electricity tariffs.
+                </p>
+              </div>
+            </Link>
 
           </div>
 
