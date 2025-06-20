@@ -24,7 +24,7 @@ import type {
   EnergyFlowRawEntry,
   EnergyFlowApiResponse,
   EnergyFlowTypeID,
-  ENERGY_FLOW_TYPE_DETAILS, // Import for checking count
+  ENERGY_FLOW_TYPE_DETAILS, // Import added
 } from "@/lib/types";
 import { format, parseISO } from 'date-fns';
 
@@ -530,18 +530,12 @@ export async function getEnergyFlows(
     grouping: grouping,
   };
 
-  if (types && types.length > 0) {
-    // If the number of selected types is less than the total number of possible flow types,
-    // it means the user has specifically filtered, so send those specific types.
-    // Otherwise (if all types are effectively selected), omit the 'types' parameter
-    // to let the API default to "all types" as per documentation ("Leave blank to fetch all types").
-    if (types.length < ALL_POSSIBLE_TYPE_IDS_COUNT) {
-      body.types = types.map(Number); // Convert string IDs to numbers for the API
-    }
-    // If types.length === ALL_POSSIBLE_TYPE_IDS_COUNT, body.types remains undefined,
-    // so it will not be included in the JSON.stringify, effectively omitting it.
+  // Only include the 'types' field if specific types are selected and not all types.
+  if (types && types.length > 0 && types.length < ALL_POSSIBLE_TYPE_IDS_COUNT) {
+    body.types = types.map(Number); // Convert string IDs to numbers for the API
   }
-  // If 'types' was initially undefined or empty, body.types also remains undefined.
+  // If 'types' is undefined, empty, or includes all types, omit it from the body
+  // to let the API default to "all types".
 
   console.log("[getEnergyFlows] Request Body Sent:", JSON.stringify(body, null, 2));
 
@@ -563,3 +557,4 @@ export async function getEnergyFlows(
   return (response && response.data && Array.isArray(response.data)) ? response.data : [];
 }
 
+    
