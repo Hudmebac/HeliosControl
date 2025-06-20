@@ -419,7 +419,7 @@ export default function EnergyHistoryPage() {
           <BarChart3 className="mr-3 h-8 w-8 text-primary" />
           Energy Flow History
         </h1>
-        <Button variant="default" asChild>
+        <Button variant="default" asChild style={{ borderColor: '#ff8c00', color: '#ff8c00' }}>
           <Link href="/"><ArrowLeft className="h-4 w-4 mr-2" />Dashboard</Link>
         </Button>
       </div>

@@ -49,15 +49,6 @@ export default function HomePage() {
         <>
           <DashboardGrid apiKey={apiKey} />
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link href="/history" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
-                <LineChart className="h-8 w-8 text-primary mb-3" /> {/* Icon for Energy Flow Data */}
-                <h3 className="text-lg font-semibold">Energy Flow Data</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  Historical energy flow and performance.
-                </p>
-              </div>
-            </Link>
             <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
               <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
                 <Sunrise className="h-8 w-8 text-primary mb-3" /> {/* Icon for Solar Forecast */}
@@ -67,6 +58,45 @@ export default function HomePage() {
                 </p>
               </div>
             </a>
+            <Link href="/ev-charger" passHref>
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00'}}>
+              <Car className="h-8 w-8 text-primary mb-3" style={{ color: '#ff8c00' }} /> {/* Icon for EV Charger */}
+              <h3 className="text-lg font-semibold">EV Charger</h3>
+              <p className="text-sm text-muted-foreground text-center">
+              Manage and monitor your EV charger.
+              </p>
+              </div>
+            </Link>
+            {/* Energy Flow Data - Keep as Link */}
+            <Link href="/history" passHref>
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
+                <LineChart className="h-8 w-8 text-primary mb-3" /> {/* Icon for Energy Flow Data */}
+                <h3 className="text-lg font-semibold">Energy Flow Data</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Historical energy flow and performance.
+                </p>
+              </div>
+            </Link>
+            <Link href="/tariffs" passHref>
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00' }}>
+                <Zap className="h-8 w-8 text-primary mb-3" /> {/* Icon for Tariffs */}
+                <h3 className="text-lg font-semibold">Electricity Tariffs</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  View and compare electricity tariffs.
+                </p>
+              </div>
+            </Link>
+            <a href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
+              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer"style={{ borderColor: '#ff8c00'}}>
+ <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
+              <h3 className="text-lg font-semibold">AJ Renewables</h3>
+                <p className="text-sm text-muted-foreground text-center">
+ Your Trusted Partner for Renewable Energy Solutions.
+                </p>
+              </div>
+            </a>
+
+            {/* GivEnergy Cloud - Keep as anchor with special mobile handling */}
             <a
               href={isMobile ? 'https://givenergy.cloud/dashboard' : 'https://givenergy.cloud/dashboard'} // Initial href (will be overridden by onClick)
               target="_blank"
@@ -82,24 +112,7 @@ export default function HomePage() {
                 </p>
               </div>
             </a>
-            <Link href="/ev-charger" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00'}}>
-              <Car className="h-8 w-8 text-primary mb-3" style={{ color: '#ff8c00' }} /> {/* Icon for EV Charger */}
-              <h3 className="text-lg font-semibold">EV Charger</h3>
-              <p className="text-sm text-muted-foreground text-center">
-              Manage and monitor your EV charger.
-              </p>
-              </div>
-            </Link>
-            <Link href="/aj_renewables_info" passHref>
-              <div className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer" style={{ borderColor: '#ff8c00'}}>
-              <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" /> {/* Image for AJ */}
-              <h3 className="text-lg font-semibold">AJ Renewables</h3>
-               <p className="text-sm text-muted-foreground text-center">
- Your Trusted Partner for Renewable Energy Solutions.
-                </p>
-              </div>
-            </Link>
+
           </div>
 
 
