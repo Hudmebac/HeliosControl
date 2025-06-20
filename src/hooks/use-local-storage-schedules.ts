@@ -28,13 +28,14 @@ export function useLocalStorageSchedules(chargerId: string | null) {
       const storedSchedules = localStorage.getItem(storageKey);
       if (storedSchedules) {
         const parsedSchedules: NamedEVChargerSchedule[] = JSON.parse(storedSchedules);
-        setSchedules(parsedSchedules.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        // Order is now preserved from localStorage, no default sort here
+        setSchedules(parsedSchedules);
       } else {
         setSchedules([]);
       }
     } catch (error) {
       console.error("Error loading schedules from localStorage:", error);
-      setSchedules([]); 
+      setSchedules([]);
     } finally {
       setIsLoading(false);
     }
@@ -46,7 +47,7 @@ export function useLocalStorageSchedules(chargerId: string | null) {
 
   useEffect(() => {
     const storageKey = getStorageKey();
-    if (storageKey && !isLoading) { 
+    if (storageKey && !isLoading) {
       try {
         localStorage.setItem(storageKey, JSON.stringify(schedules));
       } catch (error) {
@@ -64,28 +65,30 @@ export function useLocalStorageSchedules(chargerId: string | null) {
       let newSchedules = [...prevSchedules];
 
       if (existingScheduleIndex !== -1) {
-        // Update existing schedule by name
         const existingSchedule = newSchedules[existingScheduleIndex];
         newSchedules[existingScheduleIndex] = {
           ...existingSchedule,
-          ...scheduleData, // Overwrite with new rules, isLocallyActive
+          ...scheduleData,
+          rules: scheduleData.rules, // Ensure rules are always updated
+          // isLocallyActive: scheduleData.isLocallyActive, // This property is no longer directly managed here
           updatedAt: new Date().toISOString(),
         };
         updatedScheduleId = existingSchedule.id;
         operationType = 'updated';
       } else {
-        // Add new schedule
         const newSchedule: NamedEVChargerSchedule = {
           ...scheduleData,
           id: uuidv4(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+        // Add new schedules to the top of the list by default, user can reorder
         newSchedules = [newSchedule, ...newSchedules];
         updatedScheduleId = newSchedule.id;
         operationType = 'added';
       }
-      return newSchedules.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Order is preserved, no sort here
+      return newSchedules;
     });
     return { type: operationType, id: updatedScheduleId };
   }, []);
@@ -94,9 +97,10 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     setSchedules(prevSchedules =>
       prevSchedules.map(schedule =>
         schedule.id === scheduleId
-          ? { ...schedule, ...updates, updatedAt: new Date().toISOString() }
+          ? { ...schedule, ...updates, rules: updates.rules || schedule.rules, updatedAt: new Date().toISOString() }
           : schedule
-      ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      )
+      // Order is preserved, no sort here
     );
   }, []);
 
@@ -110,6 +114,42 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     return schedules.find(schedule => schedule.id === scheduleId);
   }, [schedules]);
 
+  const moveSchedule = useCallback((scheduleId: string, direction: 'up' | 'down') => {
+    setSchedules(prevSchedules => {
+      const index = prevSchedules.findIndex(s => s.id === scheduleId);
+      if (index === -1) return prevSchedules;
+
+      const newSchedules = [...prevSchedules];
+      const item = newSchedules.splice(index, 1)[0];
+
+      if (direction === 'up') {
+        if (index > 0) {
+          newSchedules.splice(index - 1, 0, item);
+        } else {
+          // Already at the top, put it back
+          newSchedules.splice(index, 0, item);
+        }
+      } else { // direction === 'down'
+        if (index < newSchedules.length) { // Note: newSchedules.length because item was already removed
+          newSchedules.splice(index + 1, 0, item);
+        } else {
+          // Already at the bottom, put it back
+          newSchedules.splice(index, 0, item);
+        }
+      }
+      return newSchedules;
+    });
+  }, []);
+
+  const moveScheduleUp = useCallback((scheduleId: string) => {
+    moveSchedule(scheduleId, 'up');
+  }, [moveSchedule]);
+
+  const moveScheduleDown = useCallback((scheduleId: string) => {
+    moveSchedule(scheduleId, 'down');
+  }, [moveSchedule]);
+
+
   return {
     schedules,
     addSchedule,
@@ -118,5 +158,7 @@ export function useLocalStorageSchedules(chargerId: string | null) {
     getSchedule,
     isLoading,
     reloadSchedules: loadSchedulesFromStorage,
+    moveScheduleUp,
+    moveScheduleDown,
   };
 }

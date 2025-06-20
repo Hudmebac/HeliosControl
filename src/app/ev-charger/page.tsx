@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye, RefreshCw, DownloadCloud, Zap as ZapIcon, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, PlugZap, CalendarDays, Power, LineChart, Settings, Loader2, Edit3, ListFilter, History, Info, Construction, FileText, Hash, Wifi, WifiOff, AlertCircle, Sun, CalendarIcon, Filter, BarChartHorizontalBig, Trash2, PlusCircle, Edit, Save, XCircle, Clock, Send, Eye, RefreshCw, DownloadCloud, Zap as ZapIcon, CheckCircle2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used directly here
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
@@ -44,17 +44,14 @@ const DAY_MAP_DISPLAY_TO_API_STRING: { [key: string]: string } = Object.fromEntr
   ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [day, ALL_DAYS_API_FORMAT[i]])
 );
 
-// Mapping numeric day from API (0=Monday, ..., 6=Sunday) to API string day
 const NUMERIC_DAY_TO_API_DAY_STRING: { [key: number]: string } = {
     0: "MONDAY", 1: "TUESDAY", 2: "WEDNESDAY", 3: "THURSDAY",
     4: "FRIDAY", 5: "SATURDAY", 6: "SUNDAY"
 };
 
-// Mapping display day string to numeric day for API POST
-const DAY_MAP_DISPLAY_TO_API_NUMERIC: { [key: string]: number } = {
-    "Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3,
-    "Fri": 4, "Sat": 5, "Sun": 6
-};
+const DAY_MAP_DISPLAY_TO_API_NUMERIC: { [key: string]: number } = Object.fromEntries(
+  ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [DAY_MAP_DISPLAY_TO_API[day], i])
+);
 
 
 const EVChargerPage = () => {
@@ -69,7 +66,9 @@ const EVChargerPage = () => {
     updateSchedule: updateLocalSchedule,
     deleteSchedule: deleteLocalSchedule,
     isLoading: isLoadingLocalSchedules,
-    reloadSchedules: reloadLocalSchedules,
+    reloadSchedules: reloadLocalSchedulesFromHook,
+    moveScheduleUp,
+    moveScheduleDown,
   } = useLocalStorageSchedules(storedEvChargerId || "unknown-charger");
 
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
@@ -104,7 +103,7 @@ const EVChargerPage = () => {
   const [sessionFilterEndDate, setSessionFilterEndDate] = useState<Date | undefined>(new Date());
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(true); 
+  const [hideNaEnergy, setHideNaEnergy] = useState<boolean>(true);
   const [uniqueSessionStatuses, setUniqueSessionStatuses] = useState<string[]>([]);
 
 
@@ -202,17 +201,19 @@ const EVChargerPage = () => {
  const fetchDeviceActiveScheduleInfo = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
     setIsLoadingDeviceSchedule(true);
-    setDeviceActiveScheduleName(null);
+    setDeviceActiveScheduleName(null); // Reset before fetching
     try {
         const headers = getAuthHeaders();
+        // This GET request fetches the list of schedules from the device
         const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers, cache: 'no-store' });
 
         if (!response.ok) {
-            if (response.status === 404) {
-                toast({ title: "No Active Schedule on Device", description: "No charging schedule is currently set on the EV charger." });
+            if (response.status === 404) { // Device might not have any schedules
+                toast({ title: "No Schedules on Device", description: "The EV charger does not have any schedules configured." });
             } else {
-                await handleApiError(response, 'fetching device schedule info');
+                await handleApiError(response, 'fetching device schedules');
             }
+            setDeviceActiveScheduleName(null);
             return;
         }
 
@@ -224,13 +225,16 @@ const EVChargerPage = () => {
                 setDeviceActiveScheduleName(activeDeviceScheduleEntry.name);
             } else {
                  toast({ title: "No Active Schedule Found", description: "The device reported schedules, but none are currently active." });
+                 setDeviceActiveScheduleName(null);
             }
         } else {
-            toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device when fetching active schedule." });
+            toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device." });
+            setDeviceActiveScheduleName(null);
         }
     } catch (error) {
         console.error('Error fetching device active schedule info:', error);
         toast({ variant: "destructive", title: "Fetch Schedule Info Error", description: "Could not load device's active schedule information." });
+        setDeviceActiveScheduleName(null);
     } finally {
         setIsLoadingDeviceSchedule(false);
     }
@@ -243,6 +247,7 @@ const EVChargerPage = () => {
       return;
     }
     setIsSyncingFromDevice(true);
+    let activeDeviceScheduleNameFromSync: string | null = null;
     try {
       const headers = getAuthHeaders();
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, { headers, cache: 'no-store' });
@@ -257,17 +262,16 @@ const EVChargerPage = () => {
       if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
         let importedCount = 0;
         let updatedCount = 0;
-        let activeDeviceScheduleNameFromSync: string | null = null;
 
         for (const deviceSchedule of scheduleListResponse.data.schedules) {
           if (deviceSchedule.periods && deviceSchedule.periods.length > 0) {
-            const firstPeriod = deviceSchedule.periods[0];
+            const firstPeriod = deviceSchedule.periods[0]; // Assuming one period per named schedule for simplicity
             const apiDays: string[] = firstPeriod.days
               .map(dayNum => NUMERIC_DAY_TO_API_DAY_STRING[dayNum])
               .filter((dayStr): dayStr is string => !!dayStr);
 
             const scheduleToSave: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> = {
-              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id}`, 
+              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id}`,
               rules: [{
                 start_time: firstPeriod.start_time,
                 end_time: firstPeriod.end_time,
@@ -275,7 +279,7 @@ const EVChargerPage = () => {
               }],
             };
             
-            const result = addLocalSchedule(scheduleToSave); 
+            const result = addLocalSchedule(scheduleToSave); // addLocalSchedule now handles add or update by name
             if (result.type === 'added') importedCount++;
             if (result.type === 'updated') updatedCount++;
 
@@ -284,11 +288,11 @@ const EVChargerPage = () => {
             }
           }
         }
-        setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync); // Update active name based on sync
+        
         toast({ title: "Sync Complete", description: `${importedCount} new schedules imported, ${updatedCount} schedules updated from device.` });
-        reloadLocalSchedules(); // Explicitly reload from local storage after sync
+        reloadLocalSchedulesFromHook(); // Refresh the local list view
       } else {
-        toast({ variant: "destructive", title: "Sync Error", description: "Unexpected schedule format from device." });
+        toast({ variant: "destructive", title: "Sync Error", description: "Unexpected schedule format from device during sync." });
       }
 
     } catch (error) {
@@ -296,6 +300,13 @@ const EVChargerPage = () => {
       toast({ variant: "destructive", title: "Sync Failed", description: "Could not sync schedules from device." });
     } finally {
       setIsSyncingFromDevice(false);
+      // After sync, explicitly fetch active schedule name again to ensure UI consistency
+      // if the sync operation itself doesn't directly provide it or if there's a possibility of mismatch.
+      if (activeDeviceScheduleNameFromSync) {
+        setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync);
+      } else {
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // Fallback to fetching if sync didn't identify active
+      }
     }
   };
 
@@ -309,24 +320,33 @@ const EVChargerPage = () => {
     setIsLoadingDeviceSchedule(true);
     
     const firstRule = schedule.rules[0];
+    // Convert display days (e.g., "Mon") to API numeric days (e.g., 0 for Monday)
+    const apiNumericDays: number[] = firstRule.days
+        .map(displayDay => DAY_MAP_DISPLAY_TO_API_NUMERIC[displayDay])
+        .filter((dayNum): dayNum is number => dayNum !== undefined && dayNum !== null);
+
+
+    if (apiNumericDays.length !== firstRule.days.length) {
+        toast({ variant: "destructive", title: "Day Mapping Error", description: "Could not convert all selected days to API format." });
+        setIsLoadingDeviceSchedule(false);
+        return;
+    }
+    
     const devicePeriods: RawDeviceApiPeriod[] = [{
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
-        days: firstRule.days.map(dayString => DAY_MAP_DISPLAY_TO_API_NUMERIC[dayString]).filter(dayNum => dayNum !== undefined),
-        // limit: 32 // Example: If limit needs to be sent, it should be part of NamedEVChargerSchedule
+        days: apiNumericDays,
+        // limit: 32 // Example: If limit needs to be sent, it should be part of NamedEVChargerSchedule or a default
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
-      name: schedule.name,
-      is_active: true, // When activating, this schedule becomes the active one
+      name: schedule.name, // Name is required by the API for POST
+      is_active: true, 
       periods: devicePeriods,
     };
 
     try {
       const headers = getAuthHeaders();
-      // The API might require sending the *entire list* of schedules with one marked active,
-      // or it might accept a single schedule object to update/activate.
-      // Assuming it accepts a single schedule object for now.
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
         method: 'POST',
         headers,
@@ -337,13 +357,11 @@ const EVChargerPage = () => {
         return;
       }
       const result = await response.json();
-      // The response to POST set-schedule might not be standardized like GET.
-      // It might return the updated list, or just a success message.
       if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
         toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // Refresh which schedule is marked active
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
       } else {
-        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule on device." });
+        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule on device. Check API response." });
       }
     } catch (error) {
       console.error('Error activating schedule on device:', error);
@@ -391,11 +409,15 @@ const EVChargerPage = () => {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
-      addLocalSchedule(scheduleData);
-      toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
+      addLocalSchedule(scheduleData); // addLocalSchedule handles new or updates by name
+      toast({title: "Local Schedule Added/Updated", description: `Schedule "${scheduleData.name}" processed in your local list.`});
     }
     setIsScheduleDialogOpen(false);
     setEditingSchedule(null);
+    // Potentially refresh device active schedule if the saved schedule was the active one and its name/rules changed
+    if (scheduleData.name === deviceActiveScheduleName) {
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid);
+    }
   };
 
   const handleDeleteLocalSchedule = (schedule: NamedEVChargerSchedule) => {
@@ -408,7 +430,7 @@ const EVChargerPage = () => {
       deleteLocalSchedule(scheduleToDelete.id);
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
       if (scheduleToDelete.name === deviceActiveScheduleName) {
-        setDeviceActiveScheduleName(null); // If the active schedule was deleted locally, clear the active indicator
+        setDeviceActiveScheduleName(null); 
       }
     }
     setIsDeleteAlertOpen(false);
@@ -591,7 +613,7 @@ const EVChargerPage = () => {
         const headers = getAuthHeaders();
         const params = new URLSearchParams();
         params.append('page', String(page));
-        params.append('pageSize', '50'); 
+        params.append('pageSize', '50');
 
         if (startDate) {
             params.append('start_time', formatISO(startDate, { representation: 'date' }));
@@ -626,14 +648,14 @@ const EVChargerPage = () => {
         }
     } catch (error) {
         console.error('Error fetching charging sessions:', error);
-        setChargingSessionsData(append ? chargingSessionsData : []); 
+        setChargingSessionsData(append ? chargingSessionsData : []);
         setUniqueSessionStatuses([]);
         setHasMoreChargingSessions(false);
         toast({ variant: "destructive", title: "Fetch Sessions Error", description: "Could not load charging sessions." });
     } finally {
         setIsLoadingChargingSessions(false);
     }
-}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]); 
+}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]);
 
 
   useEffect(() => {
@@ -653,13 +675,13 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid),
         fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
-        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate) 
+        fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate)
       ]).finally(() => {
         setIsLoadingCommandSettings(false);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evChargerData?.uuid, apiKey]); 
+  }, [evChargerData?.uuid, apiKey]);
 
 
   const handleStartCharge = async () => {
@@ -712,8 +734,8 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true); 
-    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT'; 
+    await fetchEvChargerData(true);
+    const isInstantControl = evChargerData?.status === 'CHARGING_INSTANT';
 
     if (!isInstantControl) {
       toast({ variant: "default", title: "Action Not Allowed", description: "Charge power limit can only be adjusted during an Instant Control session." });
@@ -770,7 +792,7 @@ const EVChargerPage = () => {
     event.preventDefault();
     if (!apiKey || !evChargerData?.uuid) return;
     const limitValue = parseFloat(inputSessionEnergyLimit);
-    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) { 
+    if (isNaN(limitValue) || limitValue < 0.1 || limitValue > 250) {
         toast({ variant: "destructive", title: "Invalid Input", description: "Session energy limit must be between 0.1 and 250 kWh." });
         return;
     }
@@ -803,7 +825,7 @@ const EVChargerPage = () => {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/106/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 2 : 0 }), 
+        body: JSON.stringify({ value: checked ? 2 : 0 }),
       });
       if (!response.ok) {
         await handleApiError(response, 'toggling solar charging');
@@ -841,7 +863,7 @@ const EVChargerPage = () => {
       const response = await fetch(`/api/proxy-givenergy/inverter/${inverterSerial}/settings/107/write`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: value[0] * 1000 }), 
+        body: JSON.stringify({ value: value[0] * 1000 }),
       });
       if (!response.ok) {
         await handleApiError(response, 'setting max battery discharge');
@@ -870,7 +892,7 @@ const EVChargerPage = () => {
     } catch (error) {
       toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
     }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]); 
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
 
   const handleSessionSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -879,7 +901,7 @@ const EVChargerPage = () => {
 
   const renderStatusValue = (label: string, value: any, icon?: React.ReactNode, unit?: string) => {
     if (value === null || value === undefined || value === '') {
-      return null; 
+      return null;
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -904,7 +926,7 @@ const EVChargerPage = () => {
         if (!hideNaEnergy) return true;
         let energyDisplay = "N/A";
         if (typeof session.kwh_delivered === 'number') {
-            energyDisplay = (session.kwh_delivered).toFixed(2); 
+            energyDisplay = (session.kwh_delivered).toFixed(2);
         } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
             const energyWh = session.meter_stop - session.meter_start;
             if (energyWh > 0) {
@@ -917,7 +939,7 @@ const EVChargerPage = () => {
   }, [chargingSessionsData, statusFilter, hideNaEnergy]);
 
   const chartSessionData = React.useMemo(() => {
-    return displayedSessions 
+    return displayedSessions
       .map(session => {
         let energyKWh = 0;
         if (typeof session.kwh_delivered === 'number') {
@@ -933,15 +955,15 @@ const EVChargerPage = () => {
         }
 
         return {
-          id: session.id || session.started_at, 
+          id: session.id || session.started_at,
           formattedStartTime: session.started_at ? format(parseISO(session.started_at), "MMM d, HH:mm") : 'N/A',
           energyKWh: energyKWh,
-          durationMinutes: durationMinutes > 0 ? durationMinutes : null, 
+          durationMinutes: durationMinutes > 0 ? durationMinutes : null,
           stopReason: session.stop_reason || (session.stopped_at ? 'Completed' : 'Active'),
         };
       })
-      .filter(item => item.energyKWh > 0) 
-      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(parseISO(a.id)).getTime() - new Date(parseISO(b.id)).getTime()); 
+      .filter(item => item.energyKWh > 0)
+      .sort((a,b) => (a.formattedStartTime === 'N/A' || b.formattedStartTime === 'N/A') ? 0 : new Date(parseISO(a.id)).getTime() - new Date(parseISO(b.id)).getTime());
   }, [displayedSessions]);
 
   const dailyEnergyChartData = React.useMemo(() => {
@@ -1144,10 +1166,10 @@ const EVChargerPage = () => {
                     <Card>
                         <CardHeader>
                             <div className="flex justify-between items-center">
-                                <CardTitle>Manage Charging Schedules</CardTitle>
+                                <CardTitle>Manage Schedules</CardTitle>
                                 <div className="flex items-center space-x-2">
                                     <Button onClick={syncSchedulesFromDevice} variant="outline" size="sm" disabled={isSyncingFromDevice || !evChargerData?.uuid || isLoadingDeviceSchedule}>
-                                        {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />} 
+                                        {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />}
                                         Sync from Device
                                     </Button>
                                     <Button onClick={() => handleOpenScheduleDialog()} size="sm">
@@ -1156,7 +1178,7 @@ const EVChargerPage = () => {
                                 </div>
                             </div>
                             <CardDescription>
-                                Create and manage a list of schedules. Click "Activate" to send a schedule to your EV charger and make it the active one.
+                                Create and manage a list of schedules. Click "Activate" to send a schedule to your EV charger.
                                 {(isLoadingLocalSchedules || isLoadingDeviceSchedule) && <span className="text-xs text-muted-foreground italic block pt-1"> Fetching schedule info...</span>}
                             </CardDescription>
                         </CardHeader>
@@ -1169,7 +1191,7 @@ const EVChargerPage = () => {
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length > 0 && (
                                 <div className="space-y-3">
-                                    {localSchedules.map(schedule => {
+                                    {localSchedules.map((schedule, index) => {
                                         const isActiveOnDevice = schedule.name === deviceActiveScheduleName;
                                         return (
                                             <Card key={schedule.id} className={`bg-muted/30 ${isActiveOnDevice ? 'border-primary ring-1 ring-primary' : ''}`}>
@@ -1188,11 +1210,17 @@ const EVChargerPage = () => {
                                                                 Last updated: {format(parseISO(schedule.updatedAt), "PPp")}
                                                             </CardDescription>
                                                         </div>
-                                                        <div className="flex items-center space-x-2">
-                                                            <Button 
-                                                                variant={isActiveOnDevice ? "secondary" : "default"} 
-                                                                size="sm" 
-                                                                onClick={() => handleActivateScheduleOnDevice(schedule)} 
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => moveScheduleUp(schedule.id)} disabled={index === 0} aria-label="Move schedule up">
+                                                              <ArrowUpCircle className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => moveScheduleDown(schedule.id)} disabled={index === localSchedules.length - 1} aria-label="Move schedule down">
+                                                              <ArrowDownCircle className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant={isActiveOnDevice ? "secondary" : "default"}
+                                                                size="sm"
+                                                                onClick={() => handleActivateScheduleOnDevice(schedule)}
                                                                 disabled={isLoadingDeviceSchedule || isActiveOnDevice}
                                                             >
                                                                 {isLoadingDeviceSchedule && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
@@ -1214,19 +1242,19 @@ const EVChargerPage = () => {
                         </CardContent>
                          <CardFooter className="pt-4 border-t">
                             <div className="flex items-center space-x-2">
-                                <Button 
-                                    onClick={() => fetchDeviceActiveScheduleInfo(evChargerData.uuid)} 
-                                    variant="outline" 
-                                    size="sm" 
+                                <Button
+                                    onClick={() => fetchDeviceActiveScheduleInfo(evChargerData.uuid)}
+                                    variant="outline"
+                                    size="sm"
                                     disabled={isLoadingDeviceSchedule || !evChargerData?.uuid}
                                 >
                                     {isLoadingDeviceSchedule ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
-                                    Refresh Active Status
+                                    Refresh Device Active Status
                                 </Button>
-                                <Button 
-                                    onClick={handleClearDeviceSchedule} 
-                                    variant="destructive" 
-                                    size="sm" 
+                                <Button
+                                    onClick={handleClearDeviceSchedule}
+                                    variant="destructive"
+                                    size="sm"
                                     disabled={isLoadingDeviceSchedule || !evChargerData?.uuid || !deviceActiveScheduleName}
                                 >
                                     <XCircle className="mr-2 h-4 w-4" /> Clear Active Device Schedule
@@ -1234,7 +1262,7 @@ const EVChargerPage = () => {
                             </div>
                         </CardFooter>
                     </Card>
-                    
+
                     <Card className="mt-6">
                         <CardHeader><CardTitle className="text-base">Note on Schedule Management</CardTitle></CardHeader>
                         <CardContent>
@@ -1242,7 +1270,7 @@ const EVChargerPage = () => {
                                 Schedules listed above are saved in your browser. Click "Activate" to send a schedule to your GivEnergy EV Charger, making it the active one.
                                 The "Active on Device" badge indicates which schedule is currently running on your charger.
                                 "Sync from Device" imports or updates your local list with schedules programmed directly on the charger.
-                                "Refresh Active Status" re-checks which schedule is currently active on the device.
+                                "Refresh Device Active Status" re-checks which schedule is currently active on the device.
                                 "Clear Active Device Schedule" removes any schedule currently running on the EV charger.
                             </p>
                         </CardContent>
@@ -1333,7 +1361,7 @@ const EVChargerPage = () => {
                                                 energyDisplay = session.kwh_delivered.toFixed(2);
                                             } else if (typeof session.meter_start === 'number' && typeof session.meter_stop === 'number' && session.meter_stop > session.meter_start) {
                                                 const energyWh = session.meter_stop - session.meter_start;
-                                                 if (energyWh > 0) { 
+                                                 if (energyWh > 0) {
                                                     const energyKWh = energyWh / 1000;
                                                     energyDisplay = energyKWh.toFixed(2);
                                                 }
@@ -1367,24 +1395,24 @@ const EVChargerPage = () => {
                                         <ResponsiveContainer width="100%" height="100%">
                                           <BarChart data={chartSessionData} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
                                             <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis 
-                                              dataKey="formattedStartTime" 
-                                              angle={-45} 
-                                              textAnchor="end" 
-                                              height={80} 
-                                              interval={chartSessionData.length > 15 ? 'preserveStartEnd' : 0} 
+                                            <XAxis
+                                              dataKey="formattedStartTime"
+                                              angle={-45}
+                                              textAnchor="end"
+                                              height={80}
+                                              interval={chartSessionData.length > 15 ? 'preserveStartEnd' : 0}
                                               tick={{ fontSize: 12 }}
                                             />
-                                            <YAxis 
-                                              label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft', dy: 40 }} 
+                                            <YAxis
+                                              label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft', dy: 40 }}
                                               allowDecimals={true}
                                               tick={{ fontSize: 12 }}
                                             />
-                                            <Tooltip 
+                                            <Tooltip
                                               formatter={(value: number, name: string, props: any) => {
                                                 const sessionStatus = props.payload.stopReason;
                                                 return [`${value.toFixed(2)} kWh (Status: ${sessionStatus})`, "Energy Delivered"];
-                                              }} 
+                                              }}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                             <Bar dataKey="energyKWh" name="Energy Delivered" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "hsl(var(--primary))"} radius={[4, 4, 0, 0]} />
@@ -1392,7 +1420,7 @@ const EVChargerPage = () => {
                                         </ResponsiveContainer>
                                       </div>
                                     </div>
-                                    
+
                                     {chartSessionData.some(d => d.durationMinutes !== null) && (
                                     <div>
                                       <h3 className="text-lg font-semibold mb-2 text-center">Session Duration</h3>
@@ -1400,19 +1428,19 @@ const EVChargerPage = () => {
                                         <ResponsiveContainer width="100%" height="100%">
                                           <BarChart data={chartSessionData.filter(d => d.durationMinutes !== null)} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
                                             <CartesianGrid strokeDasharray="3 3" />
-                                             <XAxis 
-                                              dataKey="formattedStartTime" 
-                                              angle={-45} 
-                                              textAnchor="end" 
-                                              height={80} 
+                                             <XAxis
+                                              dataKey="formattedStartTime"
+                                              angle={-45}
+                                              textAnchor="end"
+                                              height={80}
                                               interval={chartSessionData.filter(d => d.durationMinutes !== null).length > 15 ? 'preserveStartEnd' : 0}
                                               tick={{ fontSize: 12 }}
                                             />
-                                            <YAxis 
+                                            <YAxis
                                               label={{ value: 'Duration (minutes)', angle: -90, position: 'insideLeft', dy: 50 }}
                                               tick={{ fontSize: 12 }}
                                             />
-                                            <Tooltip 
+                                            <Tooltip
                                               formatter={(value: number, name: string, props: any) => {
                                                   const energyVal = props.payload.energyKWh;
                                                   return [`${value} min (Energy: ${energyVal.toFixed(2)} kWh)`, "Duration"];
@@ -1433,21 +1461,21 @@ const EVChargerPage = () => {
                                           <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={dailyEnergyChartData} margin={{ top: 5, right: 20, left: 10, bottom: 70 }}>
                                               <CartesianGrid strokeDasharray="3 3" />
-                                              <XAxis 
-                                                dataKey="formattedDate" 
-                                                angle={-45} 
-                                                textAnchor="end" 
-                                                height={80} 
-                                                interval={dailyEnergyChartData.length > 15 ? 'preserveStartEnd' : 0} 
+                                              <XAxis
+                                                dataKey="formattedDate"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={80}
+                                                interval={dailyEnergyChartData.length > 15 ? 'preserveStartEnd' : 0}
                                                 tick={{ fontSize: 12 }}
                                               />
-                                              <YAxis 
-                                                label={{ value: 'Total Energy (kWh)', angle: -90, position: 'insideLeft', dy: 60 }} 
+                                              <YAxis
+                                                label={{ value: 'Total Energy (kWh)', angle: -90, position: 'insideLeft', dy: 60 }}
                                                 allowDecimals={true}
                                                 tick={{ fontSize: 12 }}
                                               />
-                                              <Tooltip 
-                                                formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Total Energy"]} 
+                                              <Tooltip
+                                                formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Total Energy"]}
                                               />
                                               <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                               <Bar dataKey="totalEnergyKWh" name="Total Energy per Day" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--chart-4))" : "hsl(var(--chart-5))"} radius={[4, 4, 0, 0]} />
@@ -1507,11 +1535,11 @@ const EVChargerPage = () => {
                           <Slider
                             id="max-battery-discharge-evc"
                             min={0}
-                            max={7} 
+                            max={7}
                             step={0.1}
                             value={[settingsLegacy.maxBatteryDischargeToEvc / 1000]}
-                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))} 
-                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])} 
+                            onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, maxBatteryDischargeToEvc: value[0]*1000}))}
+                            onValueCommit={ (value) => handleSetMaxBatteryDischargeToEvc([value[0]])}
                             disabled={!inverterSerial}
                           />
                           <p className="text-sm text-muted-foreground mt-1">
@@ -1523,8 +1551,8 @@ const EVChargerPage = () => {
                             <Label htmlFor="charge-rate-limit-settings">Charge Rate Limit (Amps - Register 621)</Label>
                             <Slider
                                 id="charge-rate-limit-settings"
-                                min={6} 
-                                max={32} 
+                                min={6}
+                                max={32}
                                 step={1}
                                 value={[settingsLegacy.chargeRate]}
                                 onValueChange={(value) => setSettingsLegacy((prev: any) => ({...prev, chargeRate: value[0]}))}
