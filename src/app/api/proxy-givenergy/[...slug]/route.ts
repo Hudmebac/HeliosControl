@@ -92,7 +92,7 @@ export async function POST(
   { params }: { params: { slug: string[] } }
 ): Promise<NextResponse> {
   const slugPath = params.slug.join('/');
-  const targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}`;
+  let targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}`; // Changed to let
   const authToken = request.headers.get('Authorization');
 
   if (!authToken) {
@@ -102,19 +102,14 @@ export async function POST(
   const contentType = request.headers.get('Content-Type');
   let requestBody: any = null;
 
-  // GivEnergy POST commands usually expect 'Content-Type: application/json'.
-  // Some commands (like start-charge, stop-charge from new docs) might not send a body client-side.
-  // The proxy should still set Content-Type: application/json when forwarding to GivEnergy
-  // if that's what GivEnergy's examples imply for the POST /commands/ endpoint.
   if (contentType && contentType.includes('application/json')) {
     try {
-      // Only attempt to parse body if Content-Type is application/json and body exists
       if (request.body) {
-        const rawBodyText = await request.text(); // Read as text first to check if empty
+        const rawBodyText = await request.text();
         if (rawBodyText.trim() !== "") {
-            requestBody = JSON.parse(rawBodyText); // Then parse if not empty
+            requestBody = JSON.parse(rawBodyText);
         } else {
-            requestBody = null; // Body was empty or whitespace
+            requestBody = null;
         }
       }
     } catch (error) {
@@ -122,11 +117,25 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid JSON body provided', path: `/${slugPath}` }, { status: 400 });
     }
   } else if (request.body && (!contentType || !contentType.includes('application/json'))) {
-    // If a body is present but Content-Type is wrong/missing for POST.
-    // However, if client sends no body, this check might be too strict if GivEnergy allows bodyless POSTs with just Content-Type header.
-    // The key is what Content-Type to *send* to GivEnergy. The docs imply Content-Type: application/json for /commands POST.
     console.warn(`[PROXY POST /${slugPath}] POST request to ${targetUrl} received with body but Content-Type is not 'application/json'. Actual: ${contentType}`);
-    // For now, let's proceed but be mindful. The fetch to GivEnergy will set Content-Type: application/json.
+  }
+
+  // Special handling for /ev-charger/{uuid}/commands/set-active-schedule/{schedule_id}
+  const setActiveScheduleMatch = slugPath.match(/^ev-charger\/([a-f0-9-]+)\/commands\/set-active-schedule\/(\d+)$/);
+  if (setActiveScheduleMatch && request.method === 'POST') {
+    const chargerUuid = setActiveScheduleMatch[1];
+    const scheduleId = setActiveScheduleMatch[2];
+
+    // The actual GivEnergy endpoint for this is /ev-charger/{uuid}/command/set-active-schedule
+    // and the schedule ID is passed in the body as { "id": scheduleId }
+    const specificTargetUrl = `${GIVENERGY_API_TARGET_BASE}/ev-charger/${chargerUuid}/commands/set-active-schedule`;
+    const specificRequestBody = { id: parseInt(scheduleId, 10) };
+
+    // Update targetUrl and requestBody for the fetch request
+    targetUrl = specificTargetUrl;
+    requestBody = specificRequestBody;
+
+    console.log(`[PROXY POST /${slugPath}] Handling set-active-schedule for charger ${chargerUuid} with schedule ID ${scheduleId}`);
   }
 
 
@@ -135,8 +144,6 @@ export async function POST(
       method: 'POST',
       headers: {
         'Authorization': authToken,
-        // Always send Content-Type: application/json for POST to /commands/* endpoints as per GivEnergy docs
-        // even if the client-sent body was null (for start/stop charge).
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
@@ -155,5 +162,3 @@ export async function POST(
     return NextResponse.json({ error: 'Proxy POST request failed', details: errorMessageDetail, path: `/${slugPath}` }, { status: 500 });
   }
 }
-
-    
