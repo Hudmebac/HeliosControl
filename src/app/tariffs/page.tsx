@@ -196,7 +196,7 @@ export default function TariffsPage() {
           <Plug className="mr-3 h-8 w-8 text-primary" />
           Electricity Tariffs
         </h1>
-        <Button variant="outline" asChild style={{ borderColor: 'hsl(var(--chart-1))', color: 'hsl(var(--chart-1))' }}>
+        <Button variant="default" asChild style={{ backgroundColor: '#ff8c00', color: '#000000', borderColor: '#ff8c00' }}>
           <Link href="/"><ArrowLeft className="h-4 w-4 mr-2" />Dashboard</Link>
         </Button>
       </div>
