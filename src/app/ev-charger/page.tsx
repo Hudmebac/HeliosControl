@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
@@ -291,7 +292,7 @@ const EVChargerPage = () => {
         }
         
         toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
-        reloadLocalSchedulesFromHook();
+        reloadLocalSchedulesFromHook(); // Refresh local list display
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
@@ -322,7 +323,7 @@ const EVChargerPage = () => {
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
             let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
-            if (!apiDayString) { 
+            if (!apiDayString) { // If it's already in API format (e.g., "MONDAY")
                 apiDayString = displayDayOrApiDay.toUpperCase();
             }
             return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
@@ -364,7 +365,7 @@ const EVChargerPage = () => {
       const result = await response.json();
       if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
         toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid);
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // This will update deviceActiveScheduleName
       } else {
         toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule. Check API response." });
       }
@@ -390,24 +391,25 @@ const EVChargerPage = () => {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
-      const {id: newId} = addLocalSchedule(scheduleData); 
-      savedScheduleId = newId; 
+      const {id: newId} = addLocalSchedule(scheduleData); // addLocalSchedule now returns the new ID
+      savedScheduleId = newId; // Capture the new ID if it was an add operation
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
     
+    // If the schedule being edited was active, re-activate it (which also updates it on the device)
     if (wasActiveBeforeEdit && savedScheduleId && evChargerData?.uuid) {
         const fullScheduleForActivation: NamedEVChargerSchedule = {
             ...scheduleData,
-            id: savedScheduleId, 
-            rules: scheduleData.rules || [], 
+            id: savedScheduleId, // Use the actual ID (existing or new)
+            rules: scheduleData.rules || [], // Ensure rules are present
             createdAt: editingSchedule?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
-        // If the name now matches the active device schedule (e.g. renamed to it), refresh status.
+        // This case might be rare if a rename causes it to match, but good to refresh if so.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
     setEditingSchedule(null);
@@ -425,12 +427,12 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
       
       if (wasActive) {
-        setDeviceActiveScheduleName(null); 
+        setDeviceActiveScheduleName(null); // Clear local "active" marker
         toast({
-            variant: "default", 
+            variant: "default", // Changed from destructive
             title: "Device Schedule Note", 
             description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
-            duration: 8000 
+            duration: 8000 // Give user more time to read
         });
       }
     }
@@ -708,7 +710,10 @@ const EVChargerPage = () => {
 
   const handleAdjustChargePowerLimit = async (newLimit: number) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    await fetchEvChargerData(true); 
+    if (isNaN(newLimit)) {
+        toast({variant: "destructive", title: "Invalid Limit", description: "Selected charge power limit is not a valid number."});
+        return;
+    }
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/adjust-charge-power-limit`, {
         method: 'POST',
@@ -717,6 +722,7 @@ const EVChargerPage = () => {
       });
       if (!response.ok) {
         await handleApiError(response, 'adjusting charge power limit');
+        fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch to show actual current limit
         return;
       }
       const data = await response.json();
@@ -725,9 +731,11 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update charge power limit." });
+        fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch even on non-success to get actual
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Command Error", description: "Failed to set charge power limit." });
+      if (evChargerData?.uuid) fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch on catch
     }
   };
 
@@ -1051,19 +1059,22 @@ const EVChargerPage = () => {
                             </div>
 
                             <div>
-                              <Label htmlFor="charge-power-limit-buttons" className="mb-2 block">Charge Power Limit ({commandChargePowerLimit?.unit || "A"})</Label>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <Label className="mb-2 block">Charge Power Limit ({commandChargePowerLimit?.unit || "A"})</Label>
+                              <RadioGroup
+                                value={commandChargePowerLimit?.value ? String(commandChargePowerLimit.value) : ""}
+                                onValueChange={(value) => handleAdjustChargePowerLimit(parseFloat(value))}
+                                className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2"
+                                disabled={isLoadingCommandSettings}
+                              >
                                 {chargePowerLimitPresets.map(limit => (
-                                  <Button
-                                    key={limit}
-                                    variant={commandChargePowerLimit?.value === limit ? "default" : "outline"}
-                                    onClick={() => handleAdjustChargePowerLimit(limit)}
-                                    disabled={isLoadingCommandSettings}
-                                  >
-                                    {limit} {commandChargePowerLimit?.unit || "A"}
-                                  </Button>
+                                  <div key={limit} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={String(limit)} id={`limit-${limit}`} />
+                                    <Label htmlFor={`limit-${limit}`} className="font-normal cursor-pointer">
+                                      {limit} {commandChargePowerLimit?.unit || "A"}
+                                    </Label>
+                                  </div>
                                 ))}
-                              </div>
+                              </RadioGroup>
                               {commandChargePowerLimit && (
                                 <p className="text-xs text-muted-foreground mt-1">
                                   Current Limit: {commandChargePowerLimit.value} {commandChargePowerLimit.unit} (Min: {commandChargePowerLimit.min}, Max: {commandChargePowerLimit.max})
@@ -1166,10 +1177,10 @@ const EVChargerPage = () => {
                                                             </CardDescription>
                                                         </div>
                                                         <div className="flex items-center space-x-1.5">
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => moveScheduleUp(schedule.id)} disabled={index === 0} aria-label="Move schedule up">
+                                                            <Button variant="ghost" size="icon" onClick={() => moveScheduleUp(schedule.id)} disabled={index === 0} aria-label="Move schedule up">
                                                               <ArrowUpCircle className="h-4 w-4" />
                                                             </Button>
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => moveScheduleDown(schedule.id)} disabled={index === localSchedules.length - 1} aria-label="Move schedule down">
+                                                            <Button variant="ghost" size="icon" onClick={() => moveScheduleDown(schedule.id)} disabled={index === localSchedules.length - 1} aria-label="Move schedule down">
                                                               <ArrowDownCircle className="h-4 w-4" />
                                                             </Button>
                                                             <Button
@@ -1181,8 +1192,8 @@ const EVChargerPage = () => {
                                                                 {isLoadingDeviceSchedule && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                                                                 {isActiveOnDevice ? <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5"/>Activated</> : <><ZapIcon className="mr-1.5 h-3.5 w-3.5" />Activate</>}
                                                             </Button>
-                                                            <Button variant="outline" size="icon-sm" onClick={() => handleOpenScheduleDialog(schedule)}><Edit className="h-4 w-4" /></Button>
-                                                            <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteLocalScheduleClick(schedule)}><Trash2 className="h-4 w-4" /></Button>
+                                                            <Button variant="outline" size="icon" onClick={() => handleOpenScheduleDialog(schedule)}><Edit className="h-4 w-4" /></Button>
+                                                            <Button variant="destructive" size="icon" onClick={() => handleDeleteLocalScheduleClick(schedule)}><Trash2 className="h-4 w-4" /></Button>
                                                         </div>
                                                     </div>
                                                 </CardHeader>
