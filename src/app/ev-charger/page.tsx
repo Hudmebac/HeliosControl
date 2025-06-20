@@ -331,62 +331,149 @@ const EVChargerPage = () => {
 
   const handleActivateScheduleOnDevice = async (schedule: NamedEVChargerSchedule) => {
     if (!apiKey || !evChargerData?.uuid) return;
-    if (!schedule.rules || schedule.rules.length === 0) {
-        toast({ variant: "destructive", title: "Invalid Schedule", description: "The selected local schedule has no rules to send." });
-        return;
+ if (!schedule.rules || schedule.rules.length === 0) {
+ toast({ variant: "destructive", title: "Invalid Schedule", description: "The selected local schedule has no rules to send." });
+ return;
+ }
+
+ setIsLoadingDeviceSchedule(true);
+
+ // Step 1: Prepare payload for setting/updating the schedule data
+    let deviceScheduleIdToUpdate: number | undefined = undefined;
+    let actionType: 'added' | 'updated' = 'added';
+
+    try {
+ const headers = getAuthHeaders();
+ const deviceSchedulesResponse = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, { headers, cache: 'no-store' });
+ if (deviceSchedulesResponse.ok) {
+ const deviceScheduleList = await deviceSchedulesResponse.json() as EVChargerDeviceScheduleListResponse;
+ const existingDeviceSchedule = deviceScheduleList?.data?.schedules?.find(s => s.name === schedule.name);
+ if (existingDeviceSchedule) {
+ deviceScheduleIdToUpdate = existingDeviceSchedule.id;
+ actionType = 'updated';
+ }
+ } else {
+ console.warn(`Could not fetch device schedules before sending schedule data: Status ${deviceSchedulesResponse.status}`);
+ // Continue without device ID if fetching fails, assuming it will be added as new
+ }
+    } catch (error) {
+ console.error('Error fetching device schedules before sending schedule data:', error);
+ // Continue without device ID if fetching fails
     }
 
-    setIsLoadingDeviceSchedule(true);
+    const apiNumericDays: number[] = schedule.rules[0].days
+ .map(displayDayOrApiDay => {
+ let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
+ if (!apiDayString) {
+ apiDayString = displayDayOrApiDay.toUpperCase(); // Assume it might already be an API day string
+ }
+ return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
+ })
+ .filter((dayNum): dayNum is number => dayNum !== undefined && dayNum !== null);
 
     const firstRule = schedule.rules[0];
-    const apiNumericDays: number[] = firstRule.days
-        .map(displayDayOrApiDay => {
-            let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
-            if (!apiDayString) {
-                apiDayString = displayDayOrApiDay.toUpperCase(); // Assume it might already be an API day string
-            }
-            return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
-        })
-        .filter((dayNum): dayNum is number => dayNum !== undefined && dayNum !== null);
-
-
-    if (apiNumericDays.length !== firstRule.days.length) {
-        const problematicDays = firstRule.days.filter(d => !DAY_MAP_DISPLAY_TO_API_STRING[d] && !DAY_MAP_API_STRING_TO_NUMERIC[d.toUpperCase()]);
-        toast({ variant: "destructive", title: "Day Mapping Error", description: `Could not convert days: ${problematicDays.join(', ')} to API numeric format.` });
-        setIsLoadingDeviceSchedule(false);
-        return;
+    if (!firstRule) {
+ toast({ variant: "destructive", title: "Invalid Schedule", description: "The selected local schedule has no rules to send." });
+ setIsLoadingDeviceSchedule(false);
+ return;
     }
 
     const devicePeriods: RawDeviceApiPeriod[] = [{
-        start_time: firstRule.start_time,
-        end_time: firstRule.end_time,
-        days: apiNumericDays,
-        limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT // Use the schedule's limit or default
+ // Assuming only one rule per schedule for device compatibility
+ start_time: schedule.rules[0].start_time,
+ end_time: schedule.rules[0].end_time,
+ days: apiNumericDays,
+ limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT // Use the schedule's limit or default
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
-      name: schedule.name,
-      is_active: true,
+ name: schedule.name,
+ is_active: false, // Set is_active to false here, activation is a separate command
+      // Include the device ID if updating, omit if adding new
+      // Use type assertion as schedule_id is optional in EVChargerSetSchedulePayload
+      schedule_id: deviceScheduleIdToUpdate as number | undefined,
       periods: devicePeriods,
     };
 
+    let deviceScheduleIdForActivation: number | undefined = undefined;
+
+    // Step 2: Send the schedule data to the device (add or update)
     try {
       const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
+      const setScheduleResponse = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, {
+ method: 'POST',
+ headers,
+ body: JSON.stringify(payloadToDevice),
+      });
+      if (!setScheduleResponse.ok) {
+ await handleApiError(setScheduleResponse, `${actionType === 'updated' ? 'updating' : 'adding'} schedule data on device`);
+ setIsLoadingDeviceSchedule(false);
+ return;
+      }
+      const setResult = await setScheduleResponse.json();
+ if (!(setResult && (setResult.success || (setResult.data && (setResult.data.success || setResult.data.message))))) {
+ toast({ variant: "destructive", title: `${actionType === 'updated' ? 'Update' : 'Add'} Schedule Data Not Confirmed`, description: setResult.data?.message || setResult.error || "Failed to set schedule data. Check API response." });
+ setIsLoadingDeviceSchedule(false);
+ return;
+      }
+      toast({ title: `${actionType === 'updated' ? 'Schedule Data Updated' : 'Schedule Data Sent'}`, description: `Schedule "${schedule.name}" data sent to device. ${setResult.data?.message || ""}` });
+
+      // Step 3: Fetch updated device schedules to get the correct device ID
+      const getSchedulesResponse = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-schedule`, { headers, cache: 'no-store' });
+      if (getSchedulesResponse.ok) {
+ const deviceScheduleList = await getSchedulesResponse.json() as EVChargerDeviceScheduleListResponse;
+ const updatedDeviceSchedule = deviceScheduleList?.data?.schedules?.find(s => s.name === schedule.name);
+ if (updatedDeviceSchedule) {
+ deviceScheduleIdForActivation = updatedDeviceSchedule.id;
+ } else {
+ toast({ variant: "destructive", title: "Schedule ID Not Found", description: `Could not find schedule "${schedule.name}" on the device after sending data.` });
+ setIsLoadingDeviceSchedule(false);
+ return;
+ }
+      } else {
+ console.warn(`Could not fetch device schedules after sending data: Status ${getSchedulesResponse.status}`);
+ toast({ variant: "destructive", title: "Fetch Schedules Failed", description: "Could not fetch device schedules to get ID for activation." });
+ setIsLoadingDeviceSchedule(false);
+ return;
+      }
+
+    } catch (error) {
+      console.error(`Error ${actionType === 'updated' ? 'updating' : 'adding'} schedule data on device:`, error);
+ toast({ variant: "destructive", title: `${actionType === 'updated' ? 'Update' : 'Add'} Schedule Data Error`, description: "An unexpected error occurred while sending schedule data." });
+ setIsLoadingDeviceSchedule(false);
+ return;
+    }
+
+    // Step 4: Activate the schedule using the retrieved device ID
+    if (deviceScheduleIdForActivation === undefined) {
+ toast({ variant: "destructive", title: "Activation Failed", description: "Missing device schedule ID for activation." });
+ setIsLoadingDeviceSchedule(false);
+ return;
+    }
+
+    try {
+      const headers = getAuthHeaders();
+      const activateResponse = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-active-schedule`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(payloadToDevice),
+ body: JSON.stringify({ schedule_id: deviceScheduleIdForActivation }),
       });
-      if (!response.ok) {
-        await handleApiError(response, 'activating schedule on device');
-        return;
+      if (!activateResponse.ok) {
+ await handleApiError(activateResponse, 'activating schedule on device');
+ setIsLoadingDeviceSchedule(false);
+ return;
       }
-      const result = await response.json();
-      if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
-        toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
+      const activateResult = await activateResponse.json();
+ if (activateResult && (activateResult.success || (activateResult.data && (activateResult.data.success || activateResult.data.message)))) {
+        toast({
+ title: "Schedule Activated",
+          description: `Schedule "${schedule.name}" (ID: ${deviceScheduleIdForActivation}) is now active on the device. ${activateResult.data?.message || ""}`
+        });
+         // Consider if the API returns the newly created schedule ID, might be useful to store.
+         // If result.data has an ID, you could update your local schedule with it.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
       } else {
-        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule. Check API response." });
+        toast({ variant: "destructive", title: "Activation Not Confirmed", description: activateResult.data?.message || activateResult.error || "Failed to activate schedule. Check API response." });
       }
     } catch (error) {
       console.error('Error activating schedule on device:', error);
@@ -400,8 +487,8 @@ const EVChargerPage = () => {
     setEditingSchedule(schedule);
     setIsScheduleDialogOpen(true);
   };
-
-  const handleSaveLocalSchedule = (scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+  
+ const handleSaveLocalSchedule = async (scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
     const wasActiveBeforeEdit = editingSchedule?.name === deviceActiveScheduleName;
     let savedScheduleName = scheduleData.name;
     let savedScheduleId = scheduleData.id;
@@ -423,7 +510,7 @@ const EVChargerPage = () => {
             rules: scheduleData.rules || [], // Ensure rules is an array
             createdAt: editingSchedule?.createdAt || new Date().toISOString(), // Preserve original createdAt if editing
             updatedAt: new Date().toISOString(), // Always update timestamp
-        };
+ };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
@@ -447,7 +534,7 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
 
       if (wasActive) {
-        setDeviceActiveScheduleName(null); // Clear local active state as it's gone from the list
+        // setDeviceActiveScheduleName(null); // Keep the device's reported active name until refreshed
         toast({
             variant: "default",
             title: "Device Schedule Note",
