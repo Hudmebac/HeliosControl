@@ -1138,7 +1138,7 @@ const EVChargerPage = () => {
           ) : (
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
-                <TabsTrigger value="overview"><PlugZap className="mr-2 h-4 w-4" />Overview</TabsTrigger>
+                <TabsTrigger value="overview" className="min-w-max"><PlugZap className="mr-2 h-4 w-4" />Overview</TabsTrigger>
                 <TabsTrigger value="schedules"><CalendarDays className="mr-2 h-4 w-4" />Schedules</TabsTrigger>
                 <TabsTrigger value="analytics"><LineChart className="mr-2 h-4 w-4" />Analytics</TabsTrigger>
                 <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Settings (Legacy)</TabsTrigger>
