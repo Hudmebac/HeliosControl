@@ -243,37 +243,37 @@ export interface HistoricalEnergyDataPoint {
   gridToHome: number; // kWh
 }
 
-// EV Charger Schedule types for GivEnergy API
-// Assumes the API might take a single rule with days, or a simpler structure.
-// The UI will manage one rule.
+// EV Charger Schedule types for GivEnergy API (for setting the device's active schedule)
 export interface EVChargerAPIRule {
   start_time: string; // "HH:mm"
   end_time: string;   // "HH:mm"
   days: string[];     // e.g., ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
-                      // API might expect uppercase or specific keywords.
 }
 
-// This represents the payload for POST /commands/set-schedule
-// and the expected response from GET /commands/set-schedule
-export interface EVChargerAPISchedule {
-  rules: EVChargerAPIRule[]; // GivEnergy might only support one rule in this array for device
+export interface EVChargerAPISchedule { // Payload for POST /commands/set-schedule and response from GET
+  rules: EVChargerAPIRule[];
   active: boolean;
-  // charge_mode?: "UNTIL_SOC" | "UNTIL_TIME"; // If supported by API
-  // target_soc?: number; // If charge_mode is UNTIL_SOC
 }
 
-// Structure for what GET /commands/set-schedule might return
-export interface EVChargerDeviceScheduleResponse {
-  data: EVChargerAPISchedule; // Assuming the 'data' wrapper
+export interface EVChargerDeviceScheduleResponse { // For GET /commands/set-schedule
+  data: EVChargerAPISchedule;
 }
 
-// Structure for POST /commands/set-schedule payload
-export type EVChargerSetSchedulePayload = EVChargerAPISchedule;
+export type EVChargerSetSchedulePayload = EVChargerAPISchedule; // For POST /commands/set-schedule
 
-// Structure for POST /commands/clear-schedules response (usually simple success/fail)
-export interface EVChargerClearScheduleResponse {
+export interface EVChargerClearScheduleResponse { // For POST /commands/clear-schedules
     data: {
         success: boolean;
         message?: string;
     }
+}
+
+// Named schedule type for local storage management
+export interface NamedEVChargerSchedule {
+  id: string; // Unique ID for local management (e.g., UUID)
+  name: string;
+  rules: EVChargerAPIRule[]; // Currently, we'll manage one rule per named schedule via UI
+  isLocallyActive: boolean; // If this schedule is "enabled" in the user's list
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
 }
