@@ -268,7 +268,8 @@ export interface EnergyFlowRawEntry {
 }
 
 export interface EnergyFlowApiResponse {
-  data: EnergyFlowRawEntry[];
+  // data can be an array of entries, or potentially an empty object if no data and API responds with 200 OK
+  data: EnergyFlowRawEntry[] | Record<string, never>;
 }
 
 // Type for data processed and ready for display in charts/tables
@@ -279,7 +280,6 @@ export interface ProcessedEnergyFlowDataPoint {
   values: { // Dynamic keys based on selected flow types
     [key in EnergyFlowTypeID]?: number;
   };
-  // You can add specific, always-present calculated values if needed, e.g., totalPvProduction
 }
 
 export interface GroupingOptionConfig {
@@ -337,9 +337,9 @@ export interface EVChargerClearScheduleResponse {
 }
 
 export interface NamedEVChargerSchedule {
-  id: string; 
+  id: string;
   name: string;
   rules: EVChargerAPIRule[];
-  createdAt: string; 
-  updatedAt: string; 
+  createdAt: string;
+  updatedAt: string;
 }
