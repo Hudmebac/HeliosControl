@@ -365,7 +365,7 @@ const EVChargerPage = () => {
       const result = await response.json();
       if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
         toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // This will update deviceActiveScheduleName
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
       } else {
         toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule. Check API response." });
       }
@@ -391,25 +391,23 @@ const EVChargerPage = () => {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
-      const {id: newId} = addLocalSchedule(scheduleData); // addLocalSchedule now returns the new ID
-      savedScheduleId = newId; // Capture the new ID if it was an add operation
+      const {id: newId} = addLocalSchedule(scheduleData);
+      savedScheduleId = newId;
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
     
-    // If the schedule being edited was active, re-activate it (which also updates it on the device)
     if (wasActiveBeforeEdit && savedScheduleId && evChargerData?.uuid) {
         const fullScheduleForActivation: NamedEVChargerSchedule = {
             ...scheduleData,
-            id: savedScheduleId, // Use the actual ID (existing or new)
-            rules: scheduleData.rules || [], // Ensure rules are present
+            id: savedScheduleId, 
+            rules: scheduleData.rules || [], 
             createdAt: editingSchedule?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
-        // This case might be rare if a rename causes it to match, but good to refresh if so.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
     setEditingSchedule(null);
@@ -427,12 +425,12 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
       
       if (wasActive) {
-        setDeviceActiveScheduleName(null); // Clear local "active" marker
+        setDeviceActiveScheduleName(null); 
         toast({
-            variant: "default", // Changed from destructive
+            variant: "default", 
             title: "Device Schedule Note", 
             description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
-            duration: 8000 // Give user more time to read
+            duration: 8000 
         });
       }
     }
@@ -722,7 +720,7 @@ const EVChargerPage = () => {
       });
       if (!response.ok) {
         await handleApiError(response, 'adjusting charge power limit');
-        fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch to show actual current limit
+        fetchCurrentChargePowerLimit(evChargerData.uuid); 
         return;
       }
       const data = await response.json();
@@ -731,11 +729,11 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update charge power limit." });
-        fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch even on non-success to get actual
+        fetchCurrentChargePowerLimit(evChargerData.uuid); 
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Command Error", description: "Failed to set charge power limit." });
-      if (evChargerData?.uuid) fetchCurrentChargePowerLimit(evChargerData.uuid); // Re-fetch on catch
+      if (evChargerData?.uuid) fetchCurrentChargePowerLimit(evChargerData.uuid); 
     }
   };
 
@@ -793,18 +791,21 @@ const EVChargerPage = () => {
     if (!apiKey || !evChargerData?.uuid) return;
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, plugAndCharge: checked }));
     try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/settings/616/write`, {
+      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-plug-and-go`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ value: checked ? 1 : 0 }),
+        body: JSON.stringify({ enabled: checked }),
       });
       if (!response.ok) {
          await handleApiError(response, 'toggling plug and charge (settings)');
+         if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch to revert optimistic UI
         return;
       }
-      toast({title: "Plug & Charge Setting (Register) Updated"});
+      toast({title: "Plug & Charge Setting Updated"});
+      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch to confirm state
     } catch (error) {
       toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
+      if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); // Re-fetch on error
     }
   };
 
@@ -856,9 +857,6 @@ const EVChargerPage = () => {
       return null;
     }
     const displayValue = (typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value);
-    if (label === "Last Offline" && displayValue === 'N/A') {
-      return null;
-    }
     if (label === "Last Offline" && evChargerData?.went_offline_at === null) {
         return null; 
     }
@@ -1038,7 +1036,7 @@ const EVChargerPage = () => {
                               {renderStatusValue("Charger", evChargerData?.alias, <FileText />)}
                               {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                               {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
-                              {evChargerData?.went_offline_at && renderStatusValue("Last Offline", format(parseISO(evChargerData.went_offline_at), "PPpp"), <CalendarDays />)}
+                              {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : null, <CalendarDays />)}
                           </div>
                       </CardContent>
 
@@ -1063,7 +1061,7 @@ const EVChargerPage = () => {
                               <RadioGroup
                                 value={commandChargePowerLimit?.value ? String(commandChargePowerLimit.value) : ""}
                                 onValueChange={(value) => handleAdjustChargePowerLimit(parseFloat(value))}
-                                className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2"
+                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-2"
                                 disabled={isLoadingCommandSettings}
                               >
                                 {chargePowerLimitPresets.map(limit => (
@@ -1486,7 +1484,7 @@ const EVChargerPage = () => {
                             onCheckedChange={handleTogglePlugAndCharge}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground -mt-4 px-3">Controls whether charging starts automatically on plug-in via register 616.</p>
+                        <p className="text-xs text-muted-foreground -mt-4 px-3">Controls whether charging starts automatically on plug-in. This setting uses the 'set-plug-and-go' command which may affect register 616.</p>
 
                         <div className="p-3 bg-muted/30 rounded-md">
                           <Label htmlFor="max-battery-discharge-evc">Max Battery Power to EVC (kW)</Label>
