@@ -243,20 +243,37 @@ export interface HistoricalEnergyDataPoint {
   gridToHome: number; // kWh
 }
 
-// EV Charger Firebase Schedule Types
-export interface EVChargerScheduleRule {
-  startTime: string; // "HH:mm"
-  endTime: string;   // "HH:mm"
-  days: string[];    // e.g., ["Mon", "Tue"], or ["Everyday"]
+// EV Charger Schedule types for GivEnergy API
+// Assumes the API might take a single rule with days, or a simpler structure.
+// The UI will manage one rule.
+export interface EVChargerAPIRule {
+  start_time: string; // "HH:mm"
+  end_time: string;   // "HH:mm"
+  days: string[];     // e.g., ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+                      // API might expect uppercase or specific keywords.
 }
 
-export interface EVChargerFirebaseSchedule {
-  id?: string; // Firestore document ID
-  name: string;
-  chargerId: string; 
-  rules: EVChargerScheduleRule[]; // For simplicity, UI will manage one rule per schedule doc
+// This represents the payload for POST /commands/set-schedule
+// and the expected response from GET /commands/set-schedule
+export interface EVChargerAPISchedule {
+  rules: EVChargerAPIRule[]; // GivEnergy might only support one rule in this array for device
   active: boolean;
-  // userId?: string; // Placeholder for future multi-user support
-  createdAt?: any; // Firestore Timestamp or serverTimestamp()
-  updatedAt?: any; // Firestore Timestamp or serverTimestamp()
+  // charge_mode?: "UNTIL_SOC" | "UNTIL_TIME"; // If supported by API
+  // target_soc?: number; // If charge_mode is UNTIL_SOC
+}
+
+// Structure for what GET /commands/set-schedule might return
+export interface EVChargerDeviceScheduleResponse {
+  data: EVChargerAPISchedule; // Assuming the 'data' wrapper
+}
+
+// Structure for POST /commands/set-schedule payload
+export type EVChargerSetSchedulePayload = EVChargerAPISchedule;
+
+// Structure for POST /commands/clear-schedules response (usually simple success/fail)
+export interface EVChargerClearScheduleResponse {
+    data: {
+        success: boolean;
+        message?: string;
+    }
 }
