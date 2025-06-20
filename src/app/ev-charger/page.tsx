@@ -49,8 +49,8 @@ const NUMERIC_DAY_TO_API_DAY_STRING: { [key: number]: string } = {
     4: "FRIDAY", 5: "SATURDAY", 6: "SUNDAY"
 };
 
-const DAY_MAP_DISPLAY_TO_API_NUMERIC: { [key: string]: number } = Object.fromEntries(
-  ALL_DAYS_DISPLAY_FORMAT.map((day, i) => [DAY_MAP_DISPLAY_TO_API_STRING[day], i])
+const DAY_MAP_API_STRING_TO_NUMERIC: { [key: string]: number } = Object.fromEntries(
+  ALL_DAYS_API_FORMAT.map((day, i) => [day, i])
 );
 
 
@@ -208,9 +208,9 @@ const EVChargerPage = () => {
 
         if (!response.ok) {
             if (response.status === 404) { 
-                toast({ title: "No Schedules on Device", description: "The EV charger does not have any schedules configured." });
+                toast({ title: "No Schedules on Device", description: "The EV charger does not appear to have any schedules configured." });
             } else {
-                await handleApiError(response, 'fetching device schedules');
+                await handleApiError(response, 'fetching device active schedule');
             }
             setDeviceActiveScheduleName(null);
             return;
@@ -224,14 +224,15 @@ const EVChargerPage = () => {
                 setDeviceActiveScheduleName(activeDeviceScheduleEntry.name);
             } else {
                  setDeviceActiveScheduleName(null);
+                 // toast({ title: "No Active Schedule", description: "No schedule is currently active on the device." });
             }
         } else {
-            toast({ title: "Schedule Data Empty or Invalid", description: "Received an empty or unexpected schedule format from the device." });
+            toast({ title: "Schedule Data Format Error", description: "Received an empty or unexpected schedule format from the device." });
             setDeviceActiveScheduleName(null);
         }
     } catch (error) {
         console.error('Error fetching device active schedule info:', error);
-        toast({ variant: "destructive", title: "Fetch Schedule Info Error", description: "Could not load device's active schedule information." });
+        toast({ variant: "destructive", title: "Fetch Active Schedule Error", description: "Could not load device's active schedule information." });
         setDeviceActiveScheduleName(null);
     } finally {
         setIsLoadingDeviceSchedule(false);
@@ -269,7 +270,7 @@ const EVChargerPage = () => {
               .filter((dayStr): dayStr is string => !!dayStr);
 
             const scheduleToSave: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> = {
-              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id}`,
+              name: deviceSchedule.name || `Device Schedule ${deviceSchedule.id || 'UnknownID'}`,
               rules: [{
                 start_time: firstPeriod.start_time,
                 end_time: firstPeriod.end_time,
@@ -287,7 +288,7 @@ const EVChargerPage = () => {
           }
         }
         
-        toast({ title: "Update from Device Complete", description: `${importedCount} new schedules imported, ${updatedCount} schedules updated in your local list.` });
+        toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added to local list, ${updatedCount} existing local schedules updated.` });
         reloadLocalSchedulesFromHook(); 
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
@@ -298,6 +299,7 @@ const EVChargerPage = () => {
       toast({ variant: "destructive", title: "Update Failed", description: "Could not update schedules from device." });
     } finally {
       setIsSyncingFromDevice(false);
+      // After sync, refresh the active schedule name from the potentially updated local state or re-fetch
       if (activeDeviceScheduleNameFromSync) {
         setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync);
       } else if (evChargerData?.uuid) { 
@@ -318,17 +320,18 @@ const EVChargerPage = () => {
     const firstRule = schedule.rules[0];
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
-            let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
-            if (!apiDayString) {
+            let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay]; // Try display to API string first
+            if (!apiDayString) { // If not found, assume it's already an API string (e.g., "MONDAY")
                 apiDayString = displayDayOrApiDay.toUpperCase();
             }
-            return DAY_MAP_DISPLAY_TO_API_NUMERIC[apiDayString];
+            return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
         })
         .filter((dayNum): dayNum is number => dayNum !== undefined && dayNum !== null);
 
 
     if (apiNumericDays.length !== firstRule.days.length) {
-        toast({ variant: "destructive", title: "Day Mapping Error", description: `Could not convert all selected days (${firstRule.days.join(', ')}) to API numeric format.` });
+        const problematicDays = firstRule.days.filter(d => !DAY_MAP_DISPLAY_TO_API_STRING[d] && !DAY_MAP_API_STRING_TO_NUMERIC[d.toUpperCase()]);
+        toast({ variant: "destructive", title: "Day Mapping Error", description: `Could not convert days: ${problematicDays.join(', ')} to API numeric format.` });
         setIsLoadingDeviceSchedule(false);
         return;
     }
@@ -337,7 +340,7 @@ const EVChargerPage = () => {
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
         days: apiNumericDays,
-        limit: 32 // Default limit - this should ideally be part of the NamedEVChargerSchedule if variable
+        limit: 32 // Default limit - TODO: Make this configurable in NamedEVChargerSchedule if needed
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
@@ -358,15 +361,16 @@ const EVChargerPage = () => {
         return;
       }
       const result = await response.json();
+      // GivEnergy API POST to set-schedule might return {data: {success: true, message: "..."}} or just {success: true}
       if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
-        toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
+        toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active on the EV charger. ${result.data?.message || ""}` });
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid); // Re-fetch to confirm and update deviceActiveScheduleName
       } else {
-        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule on device. Check API response." });
+        toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule on device. Check API response details." });
       }
     } catch (error) {
       console.error('Error activating schedule on device:', error);
-      toast({ variant: "destructive", title: "Activation Error", description: "An unexpected error occurred." });
+      toast({ variant: "destructive", title: "Activation Error", description: "An unexpected error occurred while trying to activate the schedule." });
     } finally {
       setIsLoadingDeviceSchedule(false);
     }
@@ -378,16 +382,35 @@ const EVChargerPage = () => {
   };
 
   const handleSaveLocalSchedule = (scheduleData: Omit<NamedEVChargerSchedule, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    const wasActive = editingSchedule?.name === deviceActiveScheduleName;
+    let savedScheduleName = scheduleData.name;
+
     if (editingSchedule && scheduleData.id) {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
-      addLocalSchedule(scheduleData); 
-      toast({title: "Local Schedule Added/Updated", description: `Schedule "${scheduleData.name}" processed in your local list.`});
+      const {id: newId} = addLocalSchedule(scheduleData); 
+      scheduleData.id = newId; // Ensure the scheduleData object has the ID for activation if needed
+      toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
     setEditingSchedule(null);
-    if (evChargerData?.uuid && scheduleData.name === deviceActiveScheduleName) {
+
+    // If the schedule that was just edited AND saved was the active one, re-send it to the device
+    if (wasActive && scheduleData.id && evChargerData?.uuid) {
+        const fullScheduleForActivation: NamedEVChargerSchedule = {
+            ...scheduleData,
+            id: scheduleData.id, // Ensure id is present
+            rules: scheduleData.rules || [], // Ensure rules is present
+            createdAt: editingSchedule?.createdAt || new Date().toISOString(), // Preserve or set
+            updatedAt: new Date().toISOString(),
+        };
+        handleActivateScheduleOnDevice(fullScheduleForActivation);
+        toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
+    } else if (scheduleData.id && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActive) {
+        // If a *new* schedule was saved OR an *inactive* one was edited,
+        // AND its name now matches the active device schedule name (e.g., name changed to match),
+        // refresh device status to ensure UI consistency.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
   };
@@ -399,10 +422,18 @@ const EVChargerPage = () => {
 
   const confirmDeleteLocalSchedule = () => {
     if (scheduleToDelete) {
+      const wasActive = scheduleToDelete.name === deviceActiveScheduleName;
       deleteLocalSchedule(scheduleToDelete.id);
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
-      if (scheduleToDelete.name === deviceActiveScheduleName) {
+      
+      if (wasActive) {
         setDeviceActiveScheduleName(null); 
+        toast({
+            variant: "default", 
+            title: "Device Schedule Note", 
+            description: `Schedule "${scheduleToDelete.name}" was active on the device. It has been removed from your local list, but may still be running on the device until another schedule is activated or all device schedules are cleared.`,
+            duration: 8000 
+        });
       }
     }
     setIsDeleteAlertOpen(false);
@@ -1143,8 +1174,8 @@ const EVChargerPage = () => {
                                 </div>
                             </div>
                             <CardDescription>
-                                Create, edit, and manage charging schedules saved in your browser. Click "Activate" to send a schedule to your EV charger.
-                                {(isLoadingLocalSchedules || isLoadingDeviceSchedule) && <span className="text-xs text-muted-foreground italic block pt-1"> Fetching schedule info...</span>}
+                                Create, edit, and manage charging schedules. Click "Activate" to send a schedule to your EV charger.
+                                {(isLoadingLocalSchedules || isLoadingDeviceSchedule || isSyncingFromDevice) && <span className="text-xs text-muted-foreground italic block pt-1"> Fetching schedule info...</span>}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -1152,7 +1183,7 @@ const EVChargerPage = () => {
                                 <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading schedules...</div>
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length === 0 && (
-                                <p className="text-muted-foreground text-center py-4">No saved schedules yet. Click "Add New Schedule" or "Update Schedule" to fetch from device.</p>
+                                <p className="text-muted-foreground text-center py-4">No saved schedules yet. Click "Add New Schedule" or "Update Schedule" to import from device.</p>
                             )}
                             {!isLoadingLocalSchedules && !isSyncingFromDevice && localSchedules.length > 0 && (
                                 <div className="space-y-3">
@@ -1224,10 +1255,10 @@ const EVChargerPage = () => {
                         <CardHeader><CardTitle className="text-base">Note on Schedule Management</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Schedules are saved in your browser. Click "Activate" to send one to your GivEnergy EV Charger.
-                                The "Active on Device" badge shows the charger's current schedule.
-                                "Update Schedule" fetches all schedules from the device, adding new ones and updating existing local ones by name.
-                                "Refresh Device Active Status" re-checks which schedule is currently active on the device.
+                                Schedules are saved in your browser. Click "Activate" to send one to your GivEnergy EV Charger, making it the active schedule on the device.
+                                The "Active on Device" badge shows which schedule from your list matches the name of the charger's current active schedule.
+                                "Update Schedule" fetches all schedules from the device, adding new ones to your local list and updating existing local ones if their names match.
+                                "Refresh Device Active Status" re-checks which schedule is currently active on the device by name. Editing a locally active schedule will automatically attempt to update it on the device.
                             </p>
                         </CardContent>
                     </Card>
@@ -1543,12 +1574,14 @@ const EVChargerPage = () => {
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the schedule
-                    "{scheduleToDelete?.name}" from your local list. It will not affect the schedule on the device unless you subsequently clear it or activate a different one.
+                    "{scheduleToDelete?.name}" from your local list. 
+                    This action does NOT delete the schedule from the EV charger device itself. 
+                    If this schedule was active on the device, it may continue to run until another schedule is activated or all schedules are cleared from the device.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setScheduleToDelete(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDeleteLocalSchedule}>Delete</AlertDialogAction>
+                <AlertDialogAction onClick={confirmDeleteLocalSchedule}>Delete from Local List</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1558,4 +1591,5 @@ const EVChargerPage = () => {
 
 export default EVChargerPage;
 
+    
     
