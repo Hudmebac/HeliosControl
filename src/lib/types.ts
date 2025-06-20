@@ -229,7 +229,7 @@ export type RawMeterDataLatestResponse = GivEnergyAPIData<RawMeterDataLatest>;
 
 // Old HistoricalEnergyDataPoint - to be replaced or adapted for energy flows
 export interface HistoricalEnergyDataPoint {
-  date: string; // YYYY-MM-DD
+  date: Date; // Changed from string to Date
   solarGeneration: number; // kWh
   gridImport: number; // kWh
   gridExport: number; // kWh
@@ -268,9 +268,9 @@ export interface EnergyFlowRawEntry {
 }
 
 export interface EnergyFlowApiResponse {
-  // data can be an array of entries, or an empty object if no data and API responds with 200 OK
-  data: EnergyFlowRawEntry[] | Record<string, never>;
+  data: EnergyFlowRawEntry[] | { [key: string]: EnergyFlowRawEntry } | Record<string, never>;
 }
+
 
 // Type for data processed and ready for display in charts/tables
 export interface ProcessedEnergyFlowDataPoint {

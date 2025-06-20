@@ -21,11 +21,12 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  EnergyFlowRawEntry, // New
-  EnergyFlowApiResponse, // New
-  EnergyFlowTypeID, // New
+  HistoricalEnergyDataPoint,
+  EnergyFlowRawEntry, 
+  EnergyFlowApiResponse, 
+  EnergyFlowTypeID, 
 } from "@/lib/types";
-import { ENERGY_FLOW_TYPE_DETAILS } from "@/lib/types"; // Ensure this is imported as a value
+import { ENERGY_FLOW_TYPE_DETAILS } from "@/lib/types";
 import { format, parseISO } from 'date-fns';
 
 
@@ -450,68 +451,13 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   return response.data;
 }
 
-
-// This function is deprecated and replaced by getEnergyFlows.
-// Keeping it here to avoid breaking existing code, but it should be removed.
-export async function getHistoricalEnergyData(
-  apiKey: string,
-  inverterSerial: string,
-  startDate: Date,
-  endDate: Date,
-  groupingValue: number
-): Promise<any[]> { // Changed return type to any[] for broader compatibility
-    console.warn("getHistoricalEnergyData is deprecated. Use getEnergyFlows instead.");
-    const startTimeFormatted = format(startDate, "yyyy-MM-dd");
-    const endTimeFormatted = format(endDate, "yyyy-MM-dd");
-
-    try {
-        const rawFlows = await getEnergyFlows(apiKey, inverterSerial, startTimeFormatted, endTimeFormatted, groupingValue);
-        return rawFlows.map(dailyEntry => {
-            const flows = dailyEntry.data;
-            const solarToHome = flows['0'] || 0;
-            const solarToBattery = flows['1'] || 0;
-            const solarToGrid = flows['2'] || 0;
-            const gridToHome = flows['3'] || 0;
-            const gridToBattery = flows['4'] || 0;
-            const batteryToHome = flows['5'] || 0;
-            const batteryToGrid = flows['6'] || 0;
-
-            const totalSolarGeneration = solarToHome + solarToBattery + solarToGrid;
-            const totalGridImport = gridToHome + gridToBattery;
-            const totalGridExport = solarToGrid + batteryToGrid;
-            const totalBatteryCharge = solarToBattery + gridToBattery;
-            const totalBatteryDischarge = batteryToHome + batteryToGrid;
-            const totalHomeConsumption = solarToHome + gridToHome + batteryToHome;
-
-            return {
-              date: parseISO(dailyEntry.start_time.split(' ')[0]), // Return as Date object
-              solarGeneration: parseFloat(totalSolarGeneration.toFixed(2)),
-              gridImport: parseFloat(totalGridImport.toFixed(2)),
-              gridExport: parseFloat(totalGridExport.toFixed(2)),
-              batteryCharge: parseFloat(totalBatteryCharge.toFixed(2)),
-              batteryDischarge: parseFloat(totalBatteryDischarge.toFixed(2)),
-              consumption: parseFloat(totalHomeConsumption.toFixed(2)),
-              solarToHome: parseFloat(solarToHome.toFixed(2)),
-              solarToBattery: parseFloat(solarToBattery.toFixed(2)),
-              solarToGrid: parseFloat(solarToGrid.toFixed(2)),
-              batteryToHome: parseFloat(batteryToHome.toFixed(2)),
-              gridToHome: parseFloat(gridToHome.toFixed(2)),
-            };
-        }).sort((a, b) => a.date.getTime() - b.date.getTime());
-    } catch(error) {
-        console.error("Error in deprecated getHistoricalEnergyData (using getEnergyFlows):", error);
-        throw error;
-    }
-}
-
-
 export async function getEnergyFlows(
   apiKey: string,
   inverterSerial: string,
   startTime: string, // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
   endTime: string,   // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
   grouping: number,  // API grouping ID (0-4)
-  types?: EnergyFlowTypeID[] // Uses the stringified version of type IDs
+  types?: EnergyFlowTypeID[]
 ): Promise<EnergyFlowRawEntry[]> {
   if (!apiKey || !inverterSerial) {
     throw new Error("API Key or Inverter Serial not provided for energy flows.");
@@ -521,17 +467,13 @@ export async function getEnergyFlows(
     start_time: string;
     end_time: string;
     grouping: number;
-    types?: number[]; // API expects number array for types
+    types?: number[];
   } = {
     start_time: startTime,
     end_time: endTime,
     grouping: grouping,
   };
 
-  // If 'types' is provided (i.e., selectedFlowTypeIDs from the page) and is not empty,
-  // always include it in the request body, converted to numbers.
-  // If 'types' is empty or undefined (meaning user selected no types, or it wasn't passed),
-  // the 'types' field will be omitted from the body, which means "fetch all types" (as per API docs).
   if (types && types.length > 0) {
     body.types = types.map(Number);
   }
@@ -549,9 +491,19 @@ export async function getEnergyFlows(
 
   console.log("[getEnergyFlows] Raw API Response:", JSON.stringify(response, null, 2));
 
-  if (response && response.data && !Array.isArray(response.data) && Object.keys(response.data).length === 0) {
-    return [];
+  if (response && response.data) {
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    // Check if response.data is an object and not empty
+    if (typeof response.data === 'object' && Object.keys(response.data).length > 0) {
+      // Convert the object's values into an array of EnergyFlowRawEntry
+      return Object.values(response.data);
+    }
+    // If response.data is an empty object {}
+    if (typeof response.data === 'object' && Object.keys(response.data).length === 0) {
+        return [];
+    }
   }
-  return (response && response.data && Array.isArray(response.data)) ? response.data : [];
+  return []; // Default to empty array if data is missing or in an unexpected format
 }
-
