@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
-import { getEnergyFlows } from "@/lib/givenergy.tsx"; 
+import { getEnergyFlows } from "@/lib/givenergy.tsx";
 import type { EnergyFlowRawEntry, ProcessedEnergyFlowDataPoint, GroupingOptionConfig, EnergyFlowTypeID } from "@/lib/types";
 import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types";
 import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO, addDays } from "date-fns";
@@ -36,7 +36,7 @@ const formatYearForDisplay = (date: Date | undefined): string => {
   return date ? format(date, "yyyy") : "Select Year";
 };
 
-const MAX_DATE_RANGE_DAYS = 366; 
+const MAX_DATE_RANGE_DAYS = 366;
 
 const groupingOptions: GroupingOptionConfig[] = [
   { id: "half_hourly", label: "Half-Hourly", apiValue: 0, datePickerType: 'single_day_half_hourly' },
@@ -53,7 +53,7 @@ const ALL_FLOW_TYPE_IDS = Object.keys(FLOW_DETAILS_MAP) as EnergyFlowTypeID[];
 const generateMonthOptions = () => {
   const options = [];
   const today = new Date();
-  for (let i = 0; i < 36; i++) { 
+  for (let i = 0; i < 36; i++) {
     const date = subMonths(today, i);
     options.push({
       label: format(date, "MMMM yyyy"),
@@ -66,7 +66,7 @@ const generateMonthOptions = () => {
 const generateYearOptions = () => {
     const options = [];
     const currentYear = getYear(new Date());
-    for (let i = 0; i < 20; i++) { 
+    for (let i = 0; i < 20; i++) {
         const year = currentYear - i;
         options.push({
             label: String(year),
@@ -80,18 +80,20 @@ const generateYearOptions = () => {
 export default function EnergyHistoryPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
-  const { theme } = useTheme(); 
+  const { theme } = useTheme();
 
-  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[1].id); 
-  
+  const [selectedGroupingId, setSelectedGroupingId] = useState<string>(groupingOptions[1].id);
+
   const [date1, setDate1] = useState<Date | undefined>(new Date());
-  const [date2, setDate2] = useState<Date | undefined>(new Date()); 
+  const [date2, setDate2] = useState<Date | undefined>(new Date());
 
   const [selectedFlowTypeIDs, setSelectedFlowTypeIDs] = useState<EnergyFlowTypeID[]>(ALL_FLOW_TYPE_IDS);
-  
+
   const [flowData, setFlowData] = useState<ProcessedEnergyFlowDataPoint[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usedFallbackRange, setUsedFallbackRange] = useState<boolean>(false);
+
 
   const monthOptions = React.useMemo(() => generateMonthOptions(), []);
   const yearOptions = React.useMemo(() => generateYearOptions(), []);
@@ -118,14 +120,17 @@ export default function EnergyHistoryPage() {
     }
     if (!isValid(parsed)) {
       console.warn(`Could not parse API timestamp: ${apiTimestamp}. Using current date as fallback.`);
-      return new Date(); 
+      return new Date();
     }
     return parsed;
   };
-  
+
 
   const transformData = useCallback((rawData: EnergyFlowRawEntry[]): ProcessedEnergyFlowDataPoint[] => {
-    if (!rawData || rawData.length === 0) return [];
+    if (!rawData || rawData.length === 0 || (Object.keys(rawData).length === 0 && typeof rawData === 'object' && !Array.isArray(rawData))) {
+        return [];
+    }
+
 
     return rawData.map(entry => {
       let timeLabel = "";
@@ -133,25 +138,25 @@ export default function EnergyHistoryPage() {
       const endDate = parseApiTimestamp(entry.end_time);
 
       switch (currentGroupingConfig.apiValue) {
-        case 0: 
+        case 0:
           timeLabel = `${format(startDate, "HH:mm")}`;
           break;
-        case 1: 
+        case 1:
           timeLabel = format(startDate, "MMM d, yy");
           break;
-        case 2: 
+        case 2:
           timeLabel = format(startDate, "MMM yyyy");
           break;
-        case 3: 
+        case 3:
           timeLabel = format(startDate, "yyyy");
           break;
-        case 4: 
+        case 4:
           timeLabel = `Total (${format(startDate, "MMM d")} - ${format(endDate, "MMM d, yy")})`;
           break;
         default:
           timeLabel = entry.start_time;
       }
-      
+
       const processedValues: ProcessedEnergyFlowDataPoint['values'] = {};
       for (const typeId of ALL_FLOW_TYPE_IDS) {
         if (entry.data[typeId] !== undefined) {
@@ -173,7 +178,7 @@ export default function EnergyHistoryPage() {
     console.log("[HistoryPage] fetchData called. selectedFlowTypeIDs:", selectedFlowTypeIDs);
     console.log("[HistoryPage] currentGroupingConfig:", currentGroupingConfig);
     console.log("[HistoryPage] date1:", date1, "date2:", date2);
-        
+
     if (!apiKey || !inverterSerial) {
       setError("API key or inverter serial not set. Please check settings.");
       setFlowData([]);
@@ -183,40 +188,42 @@ export default function EnergyHistoryPage() {
 
     setIsLoadingData(true);
     setError(null);
+    setUsedFallbackRange(false); // Reset fallback status
 
-    let apiStartDateStr: string;
-    let apiEndDateStr: string;
+    let initialApiStartDateStr: string;
+    let initialApiEndDateStrForQuery: string;
     const today = new Date();
 
     switch (currentGroupingConfig.datePickerType) {
       case 'single_day_half_hourly':
         if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(date1, "yyyy-MM-dd");
-        apiEndDateStr = format(date1, "yyyy-MM-dd");
+        initialApiStartDateStr = format(date1, "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(date1, "yyyy-MM-dd");
         break;
       case 'single_day_daily':
         if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(date1, "yyyy-MM-dd");
-        apiEndDateStr = format(addDays(date1, 1), "yyyy-MM-dd"); // End date is the next day
+        initialApiStartDateStr = format(date1, "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(addDays(date1, 1), "yyyy-MM-dd");
         break;
       case 'week_daily':
         if (!date1) { setError("Please select a day in the target week."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(startOfWeek(date1, { weekStartsOn: 1 }), "yyyy-MM-dd");
-        apiEndDateStr = format(endOfWeek(date1, { weekStartsOn: 1 }), "yyyy-MM-dd");
+        const weekStart = startOfWeek(date1, { weekStartsOn: 1 });
+        initialApiStartDateStr = format(weekStart, "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(addDays(endOfWeek(date1, { weekStartsOn: 1 }), 1), "yyyy-MM-dd");
         break;
       case 'month_monthly':
         if (!date1) { setError("Please select a month."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(startOfMonth(date1), "yyyy-MM-dd");
-        apiEndDateStr = format(endOfMonth(date1), "yyyy-MM-dd");
+        initialApiStartDateStr = format(startOfMonth(date1), "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(endOfMonth(date1), "yyyy-MM-dd"); // For monthly/yearly, API likely inclusive
         break;
       case 'year_yearly':
         if (!date1) { setError("Please select a year."); setIsLoadingData(false); return; }
-        apiStartDateStr = format(startOfYear(date1), "yyyy-MM-dd");
-        apiEndDateStr = format(endOfYear(date1), "yyyy-MM-dd");
+        initialApiStartDateStr = format(startOfYear(date1), "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(endOfYear(date1), "yyyy-MM-dd");
         break;
       case 'all_time_total':
-        apiStartDateStr = format(subYears(today, 20), "yyyy-MM-dd"); 
-        apiEndDateStr = format(today, "yyyy-MM-dd");
+        initialApiStartDateStr = format(subYears(today, 20), "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(today, "yyyy-MM-dd");
         break;
       case 'custom_range_daily':
         if (!date1 || !date2) { setError("Please select a start and end date for the custom range."); setIsLoadingData(false); return; }
@@ -226,20 +233,46 @@ export default function EnergyHistoryPage() {
             setIsLoadingData(false);
             return;
         }
-        apiStartDateStr = format(date1, "yyyy-MM-dd");
-        apiEndDateStr = format(date2, "yyyy-MM-dd");
+        initialApiStartDateStr = format(date1, "yyyy-MM-dd");
+        initialApiEndDateStrForQuery = format(addDays(date2, 1), "yyyy-MM-dd"); // Daily query, end date is exclusive
         break;
       default:
         setError("Invalid date picker type.");
         setIsLoadingData(false);
         return;
     }
-    
+
+    let dataToSet: ProcessedEnergyFlowDataPoint[] = [];
+
     try {
-      const rawData = await getEnergyFlows(apiKey, inverterSerial, apiStartDateStr, apiEndDateStr, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
-      const transformed = transformData(rawData);
-      setFlowData(transformed);
-      if (transformed.length === 0 && selectedFlowTypeIDs.length > 0) {
+      console.log("[HistoryPage] Attempting initial fetch with start:", initialApiStartDateStr, "end:", initialApiEndDateStrForQuery, "grouping:", currentGroupingConfig.apiValue);
+      const rawData = await getEnergyFlows(apiKey!, inverterSerial!, initialApiStartDateStr, initialApiEndDateStrForQuery, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
+      let transformed = transformData(rawData);
+      dataToSet = transformed;
+
+      if (transformed.length === 0 && currentGroupingConfig.datePickerType === 'single_day_daily' && date1) {
+        console.warn("[HistoryPage] Initial fetch empty for single_day_daily. Trying fallback range (D-3 to D+3).");
+        setUsedFallbackRange(true);
+
+        const fallbackStartDate = subDays(date1, 3);
+        const fallbackEndDateInclusive = addDays(date1, 3);
+
+        const fallbackApiQueryStartDateStr = format(fallbackStartDate, "yyyy-MM-dd");
+        const fallbackApiQueryEndDateStr = format(addDays(fallbackEndDateInclusive, 1), "yyyy-MM-dd"); // Daily grouping needs end_date as next day
+
+        console.log("[HistoryPage] Attempting fallback fetch with start:", fallbackApiQueryStartDateStr, "end:", fallbackApiQueryEndDateStr, "grouping:", currentGroupingConfig.apiValue);
+        const fallbackRawData = await getEnergyFlows(apiKey!, inverterSerial!, fallbackApiQueryStartDateStr, fallbackApiQueryEndDateStr, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
+        transformed = transformData(fallbackRawData);
+        dataToSet = transformed;
+
+        if (transformed.length > 0) {
+          toast({ title: "Fallback Data Used", description: "Initial daily data was empty, showing data for a 7-day period around the selected date." });
+        }
+      }
+
+      setFlowData(dataToSet);
+
+      if (dataToSet.length === 0 && selectedFlowTypeIDs.length > 0) {
         toast({ title: "No Data Found", description: "No energy flow data available for the selected criteria." });
       }
     } catch (e: any) {
@@ -253,9 +286,10 @@ export default function EnergyHistoryPage() {
   }, [apiKey, inverterSerial, currentGroupingConfig, date1, date2, selectedFlowTypeIDs, transformData, toast]);
 
   useEffect(() => {
-    if (apiKey && inverterSerial && !isLoadingApiKey) {
-      // fetchData(); // Fetch on initial load only if desired
-    }
+    // Optional: Fetch on initial load if desired, or only on button click
+    // if (apiKey && inverterSerial && !isLoadingApiKey) {
+    // fetchData();
+    // }
   }, [apiKey, inverterSerial, isLoadingApiKey]);
 
   const chartData = useMemo(() => {
@@ -273,11 +307,11 @@ export default function EnergyHistoryPage() {
         { Header: 'Start Time', accessor: 'startTimeOriginal' },
         { Header: 'End Time', accessor: 'endTimeOriginal' }
     ];
-    if (currentGroupingConfig.apiValue !== 0) { 
-        timeCols.splice(1,1); 
+    if (currentGroupingConfig.apiValue !== 0) {
+        timeCols.splice(1,1);
         timeCols[0].Header = "Period";
     }
-    
+
     const flowCols = selectedFlowTypeIDs.map(typeId => ({
       Header: () => (
         <TooltipProvider>
@@ -374,10 +408,10 @@ export default function EnergyHistoryPage() {
         );
       case 'all_time_total':
       default:
-        return null; 
+        return null;
     }
   };
-  
+
   const allFlowTypesSelected = selectedFlowTypeIDs.length === ALL_FLOW_TYPE_IDS.length;
 
   return (
@@ -396,6 +430,7 @@ export default function EnergyHistoryPage() {
         <CardHeader>
           <CardTitle>Report Configuration</CardTitle>
           <CardDescription>Select grouping, date range, and energy flow types for the report.</CardDescription>
+          {inverterSerial && <p className="text-xs text-muted-foreground pt-1">Querying Inverter: {inverterSerial}</p>}
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
@@ -405,7 +440,7 @@ export default function EnergyHistoryPage() {
                   setSelectedGroupingId(value);
                   const newConf = groupingOptions.find(opt => opt.id === value);
                   if (newConf && newConf.datePickerType !== currentGroupingConfig.datePickerType) {
-                      setDate1(new Date()); 
+                      setDate1(new Date());
                       setDate2(new Date());
                   }
               }}>
@@ -420,7 +455,7 @@ export default function EnergyHistoryPage() {
               {isLoadingData ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fetch Energy Flows"}
             </Button>
           </div>
-          
+
           <div className="space-y-3 pt-4 border-t">
             <div className="flex justify-between items-center">
                 <Label className="text-base font-semibold">Select Energy Flow Types:</Label>
@@ -460,6 +495,16 @@ export default function EnergyHistoryPage() {
           </div>
         </CardContent>
       </Card>
+
+      {usedFallbackRange && (
+        <Alert variant="default" className="mt-4">
+          <InfoIcon className="h-4 w-4" />
+          <AlertTitle>Fallback Range Used</AlertTitle>
+          <AlertDescription>
+            No data was found for the initially selected day. Displaying data for a 7-day period around that date instead.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoadingApiKey && (
          <div className="flex flex-col items-center justify-center text-muted-foreground py-10">
@@ -531,7 +576,7 @@ export default function EnergyHistoryPage() {
                             const typeId = col.accessor.split('.')[1] as EnergyFlowTypeID;
                             cellValue = row.values[typeId];
                         } else if (col.accessor === 'startTimeOriginal' && currentGroupingConfig.apiValue !== 0) {
-                             cellValue = row.timeLabel; 
+                             cellValue = row.timeLabel;
                         }
 
                         return (
@@ -550,7 +595,7 @@ export default function EnergyHistoryPage() {
         </>
       )}
       {!isLoadingData && !error && flowData.length === 0 && apiKey && inverterSerial && (
-         <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">No energy flow data found for the selected criteria. Try adjusting the date range or flow types.</CardContent></Card>
+         <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">No energy flow data found for the selected criteria. The inverter may have been offline or not reporting during this time.</CardContent></Card>
       )}
        {!isLoadingData && !error && selectedFlowTypeIDs.length === 0 && apiKey && inverterSerial && (
          <Card className="mt-6"><CardContent className="pt-6 text-center text-muted-foreground">Select flow types and click "Fetch Energy Flows" to see data. Leaving all unchecked will attempt to fetch all types.</CardContent></Card>
@@ -568,4 +613,3 @@ export default function EnergyHistoryPage() {
     </div>
   );
 }
-
