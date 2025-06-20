@@ -54,6 +54,8 @@ const DAY_MAP_API_STRING_TO_NUMERIC: { [key: string]: number } = Object.fromEntr
 );
 
 const DEFAULT_CHARGE_LIMIT = 32; // Default Amps for schedules
+const CHARGE_LIMIT_OPTIONS = [6, 8.5, 10, 12, 16, 24, 32];
+
 
 const EVChargerPage = () => {
   const [evChargerData, setEvChargerData] = useState<any>(null);
@@ -91,7 +93,6 @@ const EVChargerPage = () => {
   const { theme } = useTheme();
 
   const [commandChargePowerLimit, setCommandChargePowerLimit] = useState<{ value: number; unit: string; min: number; max: number; } | null>(null);
-  const [commandPlugAndGoEnabled, setCommandPlugAndGoEnabled] = useState<boolean | null>(null);
   const [commandSessionEnergyLimit, setCommandSessionEnergyLimit] = useState<{ value: number | null; unit: string; min: number; max: number; } | null>(null);
   const [isLoadingCommandSettings, setIsLoadingCommandSettings] = useState(true);
   const [inputSessionEnergyLimit, setInputSessionEnergyLimit] = useState<string>("");
@@ -142,7 +143,7 @@ const EVChargerPage = () => {
     };
   }, [apiKey]);
 
-  const handleApiError = async (response: Response, operationName: string) => {
+  const handleApiError = useCallback(async (response: Response, operationName: string) => {
     let errorPayload: { error?: string; message?: string; details?: any } = {
       message: `Error ${operationName}: Request failed with status ${response.status}`,
     };
@@ -170,7 +171,7 @@ const EVChargerPage = () => {
       title: `${operationName.charAt(0).toUpperCase() + operationName.slice(1)} Failed`,
       description: String(errorPayload.message || errorPayload.error || `An unknown error occurred during ${operationName}. Status: ${response.status}`),
     });
-  };
+  }, [toast]);
 
   const fetchLegacySettings = useCallback(async (chargerUuid: string | null) => {
     if (!apiKey || !chargerUuid) return;
@@ -389,7 +390,7 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
       const {id: newId} = addLocalSchedule(scheduleData); 
-      scheduleData.id = newId; // Capture the new ID if it was added
+      scheduleData.id = newId; 
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
@@ -456,34 +457,8 @@ const EVChargerPage = () => {
       console.error('Error fetching charge power limit:', error);
       setCommandChargePowerLimit(null);
     }
-  }, [apiKey, getAuthHeaders, toast]);
+  }, [apiKey, getAuthHeaders, handleApiError]);
 
-  const fetchCurrentPlugAndGo = useCallback(async (chargerUuid: string) => {
-    if (!apiKey || !chargerUuid) return;
-    try {
-      const headers = getAuthHeaders();
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-plug-and-go`, { headers });
-      if (!response.ok) {
-        await handleApiError(response, 'fetching plug and go status');
-        setCommandPlugAndGoEnabled(null);
-        return;
-      }
-      const data = await response.json();
-      if (data && typeof data.data === 'boolean') {
-        setCommandPlugAndGoEnabled(data.data);
-      } else {
-        if (data && data.data && typeof data.data.enabled === 'boolean') {
-          setCommandPlugAndGoEnabled(data.data.enabled);
-        } else {
-          console.warn('Unexpected response structure for GET set-plug-and-go:', data);
-          setCommandPlugAndGoEnabled(null);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching plug and go status:', error);
-      setCommandPlugAndGoEnabled(null);
-    }
-  }, [apiKey, getAuthHeaders, toast]);
 
   const fetchCurrentSessionEnergyLimit = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
@@ -509,7 +484,7 @@ const EVChargerPage = () => {
       setCommandSessionEnergyLimit(null);
       setInputSessionEnergyLimit("");
     }
-  }, [apiKey, getAuthHeaders, toast]);
+  }, [apiKey, getAuthHeaders, handleApiError]);
 
   const fetchEvChargerData = useCallback(async (isSoftRefresh?: boolean) => {
     if (!apiKey) {
@@ -601,7 +576,7 @@ const EVChargerPage = () => {
         setIsLoadingEvData(false);
       }
     }
-  }, [apiKey, storedEvChargerId, getAuthHeaders, toast, fetchDeviceActiveScheduleInfo]);
+  }, [apiKey, storedEvChargerId, getAuthHeaders, toast, fetchDeviceActiveScheduleInfo, handleApiError]);
 
 
  const fetchChargingSessions = useCallback(async (page = 1, append = false, startDate?: Date, endDate?: Date) => {
@@ -653,7 +628,7 @@ const EVChargerPage = () => {
     } finally {
         setIsLoadingChargingSessions(false);
     }
-}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData]);
+}, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, chargingSessionsData, handleApiError]);
 
 
   useEffect(() => {
@@ -671,7 +646,6 @@ const EVChargerPage = () => {
       Promise.all([
         fetchLegacySettings(evChargerData.uuid),
         fetchCurrentChargePowerLimit(evChargerData.uuid),
-        fetchCurrentPlugAndGo(evChargerData.uuid),
         fetchCurrentSessionEnergyLimit(evChargerData.uuid),
         fetchChargingSessions(1, false, sessionFilterStartDate, sessionFilterEndDate)
       ]).finally(() => {
@@ -755,29 +729,6 @@ const EVChargerPage = () => {
     }
   };
 
-  const handleCommandSetPlugAndGo = async (enabled: boolean) => {
-    if (!apiKey || !evChargerData?.uuid) return;
-    try {
-      const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-plug-and-go`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ enabled: enabled }),
-      });
-      if (!response.ok) {
-        await handleApiError(response, 'setting plug and go');
-        return;
-      }
-      const data = await response.json();
-      if (data?.data?.success) {
-        toast({ title: "Plug and Go Updated", description: data.data.message || "Command accepted." });
-        fetchCurrentPlugAndGo(evChargerData.uuid);
-      } else {
-        toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update plug and go." });
-      }
-    } catch (error) {
-      toast({ variant: "destructive", title: "Command Error", description: "Failed to set plug and go." });
-    }
-  };
 
   const handleSetSessionEnergyLimit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -883,7 +834,7 @@ const EVChargerPage = () => {
     } catch (error) {
       toast({ variant: "destructive", title: "Charge Rate Error", description: "An unexpected error occurred." });
     }
-  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast]);
+  }, [apiKey, evChargerData?.uuid, getAuthHeaders, toast, handleApiError]);
 
   const handleSessionSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1102,15 +1053,6 @@ const EVChargerPage = () => {
                                   Current Limit: {commandChargePowerLimit.value} {commandChargePowerLimit.unit} (Min: {commandChargePowerLimit.min}, Max: {commandChargePowerLimit.max})
                                 </p>
                               )}
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                id="plug-and-go-mode"
-                                checked={commandPlugAndGoEnabled ?? false}
-                                onCheckedChange={handleCommandSetPlugAndGo}
-                              />
-                              <Label htmlFor="plug-and-go-mode">Plug and Go Mode ({commandPlugAndGoEnabled ? "Enabled" : "Disabled"})</Label>
                             </div>
 
                             <form onSubmit={handleSetSessionEnergyLimit} className="space-y-2">
