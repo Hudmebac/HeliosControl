@@ -67,7 +67,7 @@ const EVChargerPage = () => {
     updateSchedule: updateLocalSchedule,
     deleteSchedule: deleteLocalSchedule,
     isLoading: isLoadingLocalSchedules,
-    reloadSchedules: reloadLocalSchedulesFromHook, // Renamed to avoid conflict
+    reloadSchedules: reloadLocalSchedulesFromHook,
     moveScheduleUp,
     moveScheduleDown,
   } = useLocalStorageSchedules(storedEvChargerId || "unknown-charger");
@@ -389,7 +389,7 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
       const {id: newId} = addLocalSchedule(scheduleData); 
-      scheduleData.id = newId;
+      scheduleData.id = newId; // Capture the new ID if it was added
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
@@ -426,7 +426,7 @@ const EVChargerPage = () => {
         toast({
             variant: "default", 
             title: "Device Schedule Note", 
-            description: `Schedule "${scheduleToDelete.name}" was active on the device. It has been removed from your local list. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
+            description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
             duration: 8000 
         });
       }
@@ -894,12 +894,16 @@ const EVChargerPage = () => {
     if (value === null || value === undefined || value === '') {
       return null;
     }
+    const displayValue = (typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value);
+    if (label === "Last Offline" && displayValue === 'N/A') {
+      return null;
+    }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
         {icon && <span className="mr-2 text-muted-foreground">{icon}</span>}
         <span className="text-sm text-muted-foreground mr-2">{label}:</span>
         <span className="text-sm font-medium text-foreground">
-          {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+          {displayValue}
           {unit && <span className="ml-1 text-xs text-muted-foreground">{unit}</span>}
         </span>
       </div>
@@ -1060,7 +1064,7 @@ const EVChargerPage = () => {
                               {renderStatusValue("Charger", evChargerData?.alias, <FileText />)}
                               {renderStatusValue("Online", evChargerData?.online ? 'Yes' : 'No', evChargerData?.online ? <Wifi color="green"/> : <WifiOff color="red"/> )}
                               {renderStatusValue("Current Power", evChargerData?.current_power, <Power/>, "W")}
-                              {renderStatusValue("Last Offline", evChargerData?.went_offline_at ? format(parseISO(evChargerData.went_offline_at), "PPpp") : 'N/A', <CalendarDays />)}
+                              {evChargerData?.went_offline_at && renderStatusValue("Last Offline", format(parseISO(evChargerData.went_offline_at), "PPpp"), <CalendarDays />)}
                           </div>
                       </CardContent>
 
@@ -1587,3 +1591,4 @@ const EVChargerPage = () => {
 };
 
 export default EVChargerPage;
+
