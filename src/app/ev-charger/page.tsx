@@ -1118,7 +1118,7 @@ const EVChargerPage = () => {
                                 <div className="space-y-2 p-3 bg-muted/50 rounded-md">
                                     <p><strong>Status:</strong> {activeDeviceSchedule.active ? "Active" : "Inactive"}</p>
                                     <div><strong>Rules:</strong>
-                                        {activeDeviceSchedule.rules.length > 0 ? (
+                                        {activeDeviceSchedule.rules && activeDeviceSchedule.rules.length > 0 ? (
                                             <ul className="list-disc pl-5">
                                                 {activeDeviceSchedule.rules.map((rule, index) => (
                                                     <li key={index}>
