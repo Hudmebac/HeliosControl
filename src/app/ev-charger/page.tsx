@@ -1,4 +1,3 @@
-
 'use client';
 import * as React from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -132,7 +131,7 @@ const EVChargerPage = () => {
       Finishing: 'text-red-600',
   };
 
-  const chargePowerLimitPresets = [6, 8.5, 10, 12, 16, 24, 32];
+  const chargePowerLimitPresets = CHARGE_LIMIT_OPTIONS;
 
 
   const getAuthHeaders = useCallback(() => {
@@ -178,9 +177,28 @@ const EVChargerPage = () => {
     if (!apiKey || !chargerUuid) return;
     try {
       const headers = getAuthHeaders();
-      const plugAndChargeResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/616`, { headers }); // Assumes read for 616 is GET
-      const plugAndChargeData = await plugAndChargeResponse.json();
-      const plugAndChargeEnabled = plugAndChargeData?.data?.value === 1; // Or however the API indicates enabled
+      // Fetch Plug & Charge state using the command endpoint's GET method to see its current config
+      const plugAndGoStatusResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-plug-and-go`, { headers });
+      let plugAndGoEnabled = false;
+      if (plugAndGoStatusResponse.ok) {
+        const plugAndGoStatusData = await plugAndGoStatusResponse.json();
+        // The GET /commands/set-plug-and-go might return data like: { "data": { "enabled": true/false, "message": "..." } }
+        // Or it could return something simpler. Adjust parsing as needed based on actual API response.
+        // For now, let's assume a few possibilities:
+        if (plugAndGoStatusData && plugAndGoStatusData.data) {
+            if (typeof plugAndGoStatusData.data.enabled === 'boolean') {
+                plugAndGoEnabled = plugAndGoStatusData.data.enabled;
+            } else if (typeof plugAndGoStatusData.data === 'boolean') { // If data itself is the boolean
+                plugAndGoEnabled = plugAndGoStatusData.data;
+            }
+        } else if (typeof plugAndGoStatusData.enabled === 'boolean') { // If enabled is at top level
+            plugAndGoEnabled = plugAndGoStatusData.enabled;
+        }
+      } else {
+        console.warn(`Could not fetch current Plug & Go status for ${chargerUuid}. Status: ${plugAndGoStatusResponse.status}`);
+        // Don't change plugAndGoEnabled, let it retain its previous value or default
+      }
+
 
       const chargeRateResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/read/621`, { headers });
       const chargeRateData = await chargeRateResponse.json();
@@ -192,7 +210,7 @@ const EVChargerPage = () => {
 
       setSettingsLegacy((prevSettings: any) => ({
         ...prevSettings,
-        plugAndCharge: plugAndChargeEnabled,
+        plugAndCharge: plugAndGoEnabled, // Updated from command status
         chargeRate: chargeRateLimit || prevSettings.chargeRate,
         maxBatteryDischargeToEvc: maxBatteryDischargeToEvcSetting,
       }));
@@ -325,7 +343,7 @@ const EVChargerPage = () => {
         .map(displayDayOrApiDay => {
             let apiDayString = DAY_MAP_DISPLAY_TO_API_STRING[displayDayOrApiDay];
             if (!apiDayString) {
-                apiDayString = displayDayOrApiDay.toUpperCase();
+                apiDayString = displayDayOrApiDay.toUpperCase(); // Assume it might already be an API day string
             }
             return DAY_MAP_API_STRING_TO_NUMERIC[apiDayString];
         })
@@ -343,7 +361,7 @@ const EVChargerPage = () => {
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
         days: apiNumericDays,
-        limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT
+        limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT // Use the schedule's limit or default
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
@@ -392,26 +410,29 @@ const EVChargerPage = () => {
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
-      const {id: newId} = addLocalSchedule(scheduleData);
-      savedScheduleId = newId;
+      const {id: newId} = addLocalSchedule(scheduleData); // addLocalSchedule now returns {type, id}
+      savedScheduleId = newId; // Capture the ID of the newly added or updated schedule
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
 
     if (wasActiveBeforeEdit && savedScheduleId && evChargerData?.uuid) {
         const fullScheduleForActivation: NamedEVChargerSchedule = {
-            ...scheduleData,
+            ...scheduleData, // Contains name and rules
             id: savedScheduleId,
-            rules: scheduleData.rules || [],
-            createdAt: editingSchedule?.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            rules: scheduleData.rules || [], // Ensure rules is an array
+            createdAt: editingSchedule?.createdAt || new Date().toISOString(), // Preserve original createdAt if editing
+            updatedAt: new Date().toISOString(), // Always update timestamp
         };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
+        // If the edited/added schedule's name now matches the active device schedule name
+        // (e.g., user renamed a schedule to match the active one, or added a new one that is now active)
+        // Re-fetch to ensure UI consistency, though activation would have done this if it was a direct "Activate" click.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
-    setEditingSchedule(null);
+    setEditingSchedule(null); // Clear editing state
   };
 
   const handleDeleteLocalScheduleClick = (schedule: NamedEVChargerSchedule) => {
@@ -426,12 +447,12 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
 
       if (wasActive) {
-        setDeviceActiveScheduleName(null);
+        setDeviceActiveScheduleName(null); // Clear local active state as it's gone from the list
         toast({
             variant: "default",
             title: "Device Schedule Note",
             description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated.`,
-            duration: 8000
+            duration: 8000 // Longer duration for this important note
         });
       }
     }
@@ -790,27 +811,34 @@ const EVChargerPage = () => {
 
   const handleTogglePlugAndCharge = async (checked: boolean) => {
     if (!apiKey || !evChargerData?.uuid) return;
+    // Optimistically update UI for responsiveness
     setSettingsLegacy((prevSettings: any) => ({ ...prevSettings, plugAndCharge: checked }));
+
     try {
       const response = await fetch(`/api/proxy-givenergy/ev-charger/${evChargerData.uuid}/commands/set-plug-and-go`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ enabled: checked }),
       });
+
       if (!response.ok) {
-         await handleApiError(response, 'toggling plug and charge (settings)');
-         if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
-        return;
+         await handleApiError(response, 'toggling plug and charge');
+         // Revert optimistic update if API call failed
+         if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid); 
+         return;
       }
       const data = await response.json();
       if (data?.data?.success) {
-        toast({title: "Plug & Charge Setting Updated", description: data.data.message});
+        toast({title: "Plug & Charge Setting Updated", description: data.data.message || "Command accepted."});
       } else {
-         toast({title: "Plug & Charge Setting Update Sent", description: data.data.message || "Command sent, API confirmation pending."});
+         toast({title: "Plug & Charge Update Sent", description: data?.data?.message || "Command sent, success confirmation pending or not returned by API."});
       }
+      // Re-fetch to confirm actual state from device after command
       if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
+
     } catch (error) {
-      toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred." });
+      toast({ variant: "destructive", title: "Plug & Charge Error", description: "An unexpected error occurred while toggling Plug & Charge." });
+      // Revert optimistic update on unexpected error
       if (evChargerData.uuid) fetchLegacySettings(evChargerData.uuid);
     }
   };
@@ -863,7 +891,7 @@ const EVChargerPage = () => {
       return null;
     }
     const displayValue = (typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value);
-    if (label === "Last Offline" && evChargerData?.went_offline_at === null) {
+    if (label === "Last Offline" && (evChargerData?.went_offline_at === null || evChargerData?.went_offline_at === undefined)) {
         return null;
     }
     return (
@@ -1244,7 +1272,7 @@ const EVChargerPage = () => {
               <TabsContent value="analytics">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History & Analysis</CardTitle>
+                        <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Charging Session History &amp; Analysis</CardTitle>
                         <CardDescription>Review past charging sessions and visualize energy usage. Filter by date and status.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1483,7 +1511,7 @@ const EVChargerPage = () => {
 
                         <div className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
                           <Label htmlFor="plug-and-charge-mode" className="flex items-center">
-                            <PlugZap className="mr-2 h-4 w-4" /> Plug & Charge (Register 616)
+                            <PlugZap className="mr-2 h-4 w-4" /> Plug &amp; Charge
                           </Label>
                           <Switch
                             id="plug-and-charge-mode"
@@ -1511,7 +1539,7 @@ const EVChargerPage = () => {
                         </div>
 
                         <div className="p-3 bg-muted/30 rounded-md">
-                            <Label htmlFor="charge-rate-limit-settings">Charge Rate Limit (Amps - Register 621)</Label>
+                            <Label htmlFor="charge-rate-limit-settings">Charge Rate Limit (Amps)</Label>
                             <Slider
                                 id="charge-rate-limit-settings"
                                 min={6}
