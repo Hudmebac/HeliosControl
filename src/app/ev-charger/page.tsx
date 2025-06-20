@@ -51,10 +51,11 @@ const NUMERIC_DAY_TO_API_DAY_STRING: { [key: number]: string } = {
 };
 
 const DAY_MAP_API_STRING_TO_NUMERIC: { [key: string]: number } = Object.fromEntries(
-  ALL_DAYS_API_FORMAT.map((day, i) => [day, i])
+  ALL_DAYS_API_FORMAT.map((day, i) => [DAY_MAP_DISPLAY_TO_API_STRING[day], i])
 );
 
-const DEFAULT_CHARGE_LIMIT = 32; 
+
+const DEFAULT_CHARGE_LIMIT = 32;
 const CHARGE_LIMIT_OPTIONS = [6, 8.5, 10, 12, 16, 24, 32];
 
 
@@ -79,7 +80,7 @@ const EVChargerPage = () => {
   const [editingSchedule, setEditingSchedule] = useState<NamedEVChargerSchedule | null>(null);
   const [scheduleToDelete, setScheduleToDelete] = useState<NamedEVChargerSchedule | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
-  
+
   const [deviceActiveScheduleName, setDeviceActiveScheduleName] = useState<string | null>(null);
   const [isLoadingDeviceSchedule, setIsLoadingDeviceSchedule] = useState(false);
   const [isSyncingFromDevice, setIsSyncingFromDevice] = useState(false);
@@ -204,13 +205,13 @@ const EVChargerPage = () => {
  const fetchDeviceActiveScheduleInfo = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
     setIsLoadingDeviceSchedule(true);
-    setDeviceActiveScheduleName(null); 
+    setDeviceActiveScheduleName(null);
     try {
         const headers = getAuthHeaders();
         const response = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}/commands/set-schedule`, { headers, cache: 'no-store' });
 
         if (!response.ok) {
-            if (response.status === 404) { 
+            if (response.status === 404) {
                 toast({ title: "No Schedules on Device", description: "The EV charger does not appear to have any schedules configured." });
             } else {
                 await handleApiError(response, 'fetching device active schedule');
@@ -220,7 +221,7 @@ const EVChargerPage = () => {
         }
 
         const scheduleListResponse = await response.json() as EVChargerDeviceScheduleListResponse;
-        
+
         if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
             const activeDeviceScheduleEntry = scheduleListResponse.data.schedules.find(s => s.is_active);
             if (activeDeviceScheduleEntry) {
@@ -259,14 +260,14 @@ const EVChargerPage = () => {
       }
 
       const scheduleListResponse = await response.json() as EVChargerDeviceScheduleListResponse;
-      
+
       if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
         let importedCount = 0;
         let updatedCount = 0;
 
         for (const deviceSchedule of scheduleListResponse.data.schedules) {
           if (deviceSchedule.periods && deviceSchedule.periods.length > 0) {
-            const firstPeriod = deviceSchedule.periods[0]; 
+            const firstPeriod = deviceSchedule.periods[0];
             const apiDays: string[] = firstPeriod.days
               .map(dayNum => NUMERIC_DAY_TO_API_DAY_STRING[dayNum])
               .filter((dayStr): dayStr is string => !!dayStr);
@@ -280,8 +281,8 @@ const EVChargerPage = () => {
                 limit: firstPeriod.limit ?? DEFAULT_CHARGE_LIMIT,
               }],
             };
-            
-            const result = addLocalSchedule(scheduleToSave); 
+
+            const result = addLocalSchedule(scheduleToSave);
             if (result.type === 'added') importedCount++;
             if (result.type === 'updated') updatedCount++;
 
@@ -290,7 +291,7 @@ const EVChargerPage = () => {
             }
           }
         }
-        
+
         toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
         reloadLocalSchedulesFromHook(); // Refresh local list display
       } else {
@@ -304,8 +305,8 @@ const EVChargerPage = () => {
       setIsSyncingFromDevice(false);
       if (activeDeviceScheduleNameFromSync) {
         setDeviceActiveScheduleName(activeDeviceScheduleNameFromSync);
-      } else if (evChargerData?.uuid) { 
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
+      } else if (evChargerData?.uuid) {
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid);
       }
     }
   };
@@ -318,7 +319,7 @@ const EVChargerPage = () => {
     }
 
     setIsLoadingDeviceSchedule(true);
-    
+
     const firstRule = schedule.rules[0];
     const apiNumericDays: number[] = firstRule.days
         .map(displayDayOrApiDay => {
@@ -337,17 +338,17 @@ const EVChargerPage = () => {
         setIsLoadingDeviceSchedule(false);
         return;
     }
-    
+
     const devicePeriods: RawDeviceApiPeriod[] = [{
         start_time: firstRule.start_time,
         end_time: firstRule.end_time,
         days: apiNumericDays,
-        limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT 
+        limit: firstRule.limit ?? DEFAULT_CHARGE_LIMIT
     }];
 
     const payloadToDevice: EVChargerSetSchedulePayload = {
-      name: schedule.name, 
-      is_active: true, 
+      name: schedule.name,
+      is_active: true,
       periods: devicePeriods,
     };
 
@@ -365,7 +366,7 @@ const EVChargerPage = () => {
       const result = await response.json();
       if (result && (result.success || (result.data && (result.data.success || result.data.message)))) {
         toast({ title: "Schedule Activated on Device", description: `Schedule "${schedule.name}" is now active. ${result.data?.message || ""}` });
-        fetchDeviceActiveScheduleInfo(evChargerData.uuid); 
+        fetchDeviceActiveScheduleInfo(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Activation Not Confirmed", description: result.data?.message || result.error || "Failed to activate schedule. Check API response." });
       }
@@ -376,7 +377,7 @@ const EVChargerPage = () => {
       setIsLoadingDeviceSchedule(false);
     }
   };
-  
+
   const handleOpenScheduleDialog = (schedule: NamedEVChargerSchedule | null = null) => {
     setEditingSchedule(schedule);
     setIsScheduleDialogOpen(true);
@@ -396,18 +397,21 @@ const EVChargerPage = () => {
       toast({title: "Local Schedule Added", description: `Schedule "${scheduleData.name}" added to your local list.`});
     }
     setIsScheduleDialogOpen(false);
-    
+
     if (wasActiveBeforeEdit && savedScheduleId && evChargerData?.uuid) {
         const fullScheduleForActivation: NamedEVChargerSchedule = {
             ...scheduleData,
-            id: savedScheduleId, 
-            rules: scheduleData.rules || [], 
+            id: savedScheduleId,
+            rules: scheduleData.rules || [],
             createdAt: editingSchedule?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
         handleActivateScheduleOnDevice(fullScheduleForActivation);
         toast({ title: "Device Update Sent", description: `Changes to active schedule "${savedScheduleName}" sent to EV Charger.`});
     } else if (savedScheduleId && scheduleData.name === deviceActiveScheduleName && evChargerData?.uuid && !wasActiveBeforeEdit) {
+        // This case handles if a new schedule is added with the same name as the active device schedule
+        // or if a schedule not previously active is edited to match the active device schedule name.
+        // Re-fetch to ensure the active status indicator is correct.
         fetchDeviceActiveScheduleInfo(evChargerData.uuid);
     }
     setEditingSchedule(null);
@@ -423,21 +427,21 @@ const EVChargerPage = () => {
       const wasActive = scheduleToDelete.name === deviceActiveScheduleName;
       deleteLocalSchedule(scheduleToDelete.id);
       toast({title: "Local Schedule Deleted", description: `Schedule "${scheduleToDelete.name}" removed from your list.`});
-      
+
       if (wasActive) {
-        setDeviceActiveScheduleName(null); 
+        setDeviceActiveScheduleName(null);
         toast({
-            variant: "default", 
-            title: "Device Schedule Note", 
+            variant: "default",
+            title: "Device Schedule Note",
             description: `Schedule "${scheduleToDelete.name}" was deleted locally. It may still be active on the device until another schedule is activated or all schedules are cleared from the device.`,
-            duration: 8000 
+            duration: 8000
         });
       }
     }
     setIsDeleteAlertOpen(false);
     setScheduleToDelete(null);
   };
-  
+
 
   const fetchCurrentChargePowerLimit = useCallback(async (chargerUuid: string) => {
     if (!apiKey || !chargerUuid) return;
@@ -516,7 +520,7 @@ const EVChargerPage = () => {
       }
 
       if (chargerUuid) {
-        setEvChargerData((prev: any) => ({ ...prev, uuid: chargerUuid })); 
+        setEvChargerData((prev: any) => ({ ...prev, uuid: chargerUuid }));
 
         const specificChargerResponse = await fetch(`/api/proxy-givenergy/ev-charger/${chargerUuid}`, { headers });
         if (!specificChargerResponse.ok) {
@@ -720,7 +724,7 @@ const EVChargerPage = () => {
       });
       if (!response.ok) {
         await handleApiError(response, 'adjusting charge power limit');
-        fetchCurrentChargePowerLimit(evChargerData.uuid); 
+        fetchCurrentChargePowerLimit(evChargerData.uuid);
         return;
       }
       const data = await response.json();
@@ -729,11 +733,11 @@ const EVChargerPage = () => {
         fetchCurrentChargePowerLimit(evChargerData.uuid);
       } else {
         toast({ variant: "destructive", title: "Update Not Confirmed", description: data?.data?.message || "Failed to update charge power limit." });
-        fetchCurrentChargePowerLimit(evChargerData.uuid); 
+        fetchCurrentChargePowerLimit(evChargerData.uuid);
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Command Error", description: "Failed to set charge power limit." });
-      if (evChargerData?.uuid) fetchCurrentChargePowerLimit(evChargerData.uuid); 
+      if (evChargerData?.uuid) fetchCurrentChargePowerLimit(evChargerData.uuid);
     }
   };
 
@@ -858,7 +862,7 @@ const EVChargerPage = () => {
     }
     const displayValue = (typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value);
     if (label === "Last Offline" && evChargerData?.went_offline_at === null) {
-        return null; 
+        return null;
     }
     return (
       <div className="flex items-center py-2 border-b border-border/50 last:border-b-0">
@@ -970,16 +974,18 @@ const EVChargerPage = () => {
         return `${days}: ${rule.start_time} - ${rule.end_time}${limitString}`;
     }).join('; ');
   };
-  
+
   const canStartCharging = useMemo(() => {
     if (!evChargerData?.online || !evChargerData?.status) return false;
-    return ['Available', 'Preparing', 'SuspendedEVSE', 'SuspendedEV'].includes(evChargerData.status);
-  }, [evChargerData]);
+    const startableStatuses = ['Available', 'Preparing', 'SuspendedEVSE', 'SuspendedEV'];
+    return startableStatuses.includes(evChargerData.status);
+  }, [evChargerData?.online, evChargerData?.status]);
 
   const canStopCharging = useMemo(() => {
     if (!evChargerData?.online || !evChargerData?.status) return false;
     return evChargerData.status === 'Charging';
-  }, [evChargerData]);
+  }, [evChargerData?.online, evChargerData?.status]);
+
 
   return (
     <>
@@ -1472,7 +1478,7 @@ const EVChargerPage = () => {
                             disabled={!inverterSerial}
                           />
                         </div>
-                         <p className="text-xs text-muted-foreground -mt-4 px-3">Enables/disables charging from excess solar (Setting 106). Needs inverter serial.</p>
+                         <p className="text-xs text-muted-foreground -mt-4 px-3">When Enabled, your EV will automatically charge while plugged in, provided solar generation is exceeds 1.4kW.</p>
 
                         <div className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
                           <Label htmlFor="plug-and-charge-mode" className="flex items-center">
@@ -1543,8 +1549,8 @@ const EVChargerPage = () => {
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the schedule
-                    "{scheduleToDelete?.name}" from your local list. 
-                    This action does NOT delete the schedule from the EV charger device itself. 
+                    "{scheduleToDelete?.name}" from your local list.
+                    This action does NOT delete the schedule from the EV charger device itself.
                     If this schedule was active on the device, it may continue to run until another schedule is activated or all schedules are cleared from the device.
                 </AlertDialogDescription>
             </AlertDialogHeader>
