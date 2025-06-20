@@ -21,9 +21,9 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
-  EnergyFlowRawEntry,
-  EnergyFlowApiResponse,
-  EnergyFlowTypeID,
+  EnergyFlowRawEntry, // New
+  EnergyFlowApiResponse, // New
+  EnergyFlowTypeID, // New
 } from "@/lib/types";
 import { ENERGY_FLOW_TYPE_DETAILS } from "@/lib/types"; // Ensure this is imported as a value
 import { format, parseISO } from 'date-fns';
@@ -517,8 +517,6 @@ export async function getEnergyFlows(
     throw new Error("API Key or Inverter Serial not provided for energy flows.");
   }
 
-  const ALL_POSSIBLE_TYPE_IDS_COUNT = Object.keys(ENERGY_FLOW_TYPE_DETAILS).length;
-
   const body: {
     start_time: string;
     end_time: string;
@@ -530,10 +528,13 @@ export async function getEnergyFlows(
     grouping: grouping,
   };
 
-  if (types && types.length > 0 && types.length < ALL_POSSIBLE_TYPE_IDS_COUNT) {
+  // If 'types' is provided (i.e., selectedFlowTypeIDs from the page) and is not empty,
+  // always include it in the request body, converted to numbers.
+  // If 'types' is empty or undefined (meaning user selected no types, or it wasn't passed),
+  // the 'types' field will be omitted from the body, which means "fetch all types" (as per API docs).
+  if (types && types.length > 0) {
     body.types = types.map(Number);
   }
-
 
   console.log("[getEnergyFlows] Request Body Sent:", JSON.stringify(body, null, 2));
 
@@ -553,3 +554,4 @@ export async function getEnergyFlows(
   }
   return (response && response.data && Array.isArray(response.data)) ? response.data : [];
 }
+
