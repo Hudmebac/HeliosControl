@@ -21,6 +21,9 @@ import type {
   RawMeterDataLatestResponse,
   RawMeterDataLatest,
   DailyEnergyTotals,
+  EnergyFlowRawEntry, // Added for getEnergyFlows
+  EnergyFlowApiResponse, // Added for getEnergyFlows
+  EnergyFlowTypeID, // Added for getEnergyFlows
 } from "@/lib/types";
 
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
@@ -455,3 +458,44 @@ export async function getAccountDetails(apiKey: string): Promise<AccountData> {
   const response = await _fetchGivEnergyAPI<RawAccountResponse>(apiKey, "/account");
   return response.data;
 }
+
+export async function getEnergyFlows(
+  apiKey: string,
+  inverterSerial: string,
+  startTime: string, // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  endTime: string,   // Expected format "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
+  grouping: number,  // API grouping ID (0-4)
+  types?: EnergyFlowTypeID[] // Uses the stringified version of type IDs
+): Promise<EnergyFlowRawEntry[]> {
+  if (!apiKey || !inverterSerial) {
+    throw new Error("API Key or Inverter Serial not provided for energy flows.");
+  }
+
+  const body: {
+    start_time: string;
+    end_time: string;
+    grouping: number;
+    types?: string[]; // API expects string array for types
+  } = {
+    start_time: startTime,
+    end_time: endTime,
+    grouping: grouping,
+  };
+
+  if (types && types.length > 0) {
+    body.types = types.map(String); // Convert EnergyFlowTypeID to string array as API expects strings for type IDs
+  }
+
+  const response = await _fetchGivEnergyAPI<EnergyFlowApiResponse>(
+    apiKey,
+    `/inverter/${inverterSerial}/energy-flows`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
+  // Ensure data field exists and is an array before returning
+  return (response && Array.isArray(response.data)) ? response.data : [];
+}
+
+    
