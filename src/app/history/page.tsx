@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getEnergyFlows } from "@/lib/givenergy.tsx"; 
 import type { EnergyFlowRawEntry, ProcessedEnergyFlowDataPoint, GroupingOptionConfig, EnergyFlowTypeID } from "@/lib/types";
 import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types";
-import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO } from "date-fns";
+import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO, addDays } from "date-fns";
 import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, InfoIcon, HelpCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
@@ -173,18 +173,13 @@ export default function EnergyHistoryPage() {
     console.log("[HistoryPage] fetchData called. selectedFlowTypeIDs:", selectedFlowTypeIDs);
     console.log("[HistoryPage] currentGroupingConfig:", currentGroupingConfig);
     console.log("[HistoryPage] date1:", date1, "date2:", date2);
-    
+        
     if (!apiKey || !inverterSerial) {
       setError("API key or inverter serial not set. Please check settings.");
       setFlowData([]);
       setIsLoadingData(false);
       return;
     }
-    // If selectedFlowTypeIDs is empty, the API implies "fetch all types" by omitting the `types` parameter.
-    // The getEnergyFlows function handles omitting `types` if the passed array is empty.
-    // A toast here might be confusing if "no selection means all".
-    // However, if user expects specific types, an empty selection is an issue.
-    // For now, let's proceed: if selectedFlowTypeIDs is empty, getEnergyFlows will omit it.
 
     setIsLoadingData(true);
     setError(null);
@@ -195,10 +190,14 @@ export default function EnergyHistoryPage() {
 
     switch (currentGroupingConfig.datePickerType) {
       case 'single_day_half_hourly':
-      case 'single_day_daily':
         if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
         apiStartDateStr = format(date1, "yyyy-MM-dd");
         apiEndDateStr = format(date1, "yyyy-MM-dd");
+        break;
+      case 'single_day_daily':
+        if (!date1) { setError("Please select a day."); setIsLoadingData(false); return; }
+        apiStartDateStr = format(date1, "yyyy-MM-dd");
+        apiEndDateStr = format(addDays(date1, 1), "yyyy-MM-dd"); // End date is the next day
         break;
       case 'week_daily':
         if (!date1) { setError("Please select a day in the target week."); setIsLoadingData(false); return; }
@@ -240,7 +239,7 @@ export default function EnergyHistoryPage() {
       const rawData = await getEnergyFlows(apiKey, inverterSerial, apiStartDateStr, apiEndDateStr, currentGroupingConfig.apiValue, selectedFlowTypeIDs);
       const transformed = transformData(rawData);
       setFlowData(transformed);
-      if (transformed.length === 0 && selectedFlowTypeIDs.length > 0) { // Only toast "no data" if specific types were requested
+      if (transformed.length === 0 && selectedFlowTypeIDs.length > 0) {
         toast({ title: "No Data Found", description: "No energy flow data available for the selected criteria." });
       }
     } catch (e: any) {
@@ -569,3 +568,4 @@ export default function EnergyHistoryPage() {
     </div>
   );
 }
+
