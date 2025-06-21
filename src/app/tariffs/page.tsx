@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Plug, CalendarIcon, Loader2, PlusCircle, Trash2, Info, AlertTriangle, AlertCircle } from "lucide-react";
 // --- Data Structures ---
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 interface TariffRate {
   id: string;
   startTime: string; // HH:mm
@@ -97,6 +98,7 @@ const formatDateForDisplay = (date: Date | undefined): string => {
 export default function TariffsPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
+ const [isCalendarOpen, setIsCalendarOpen] = useState(false); // State to control calendar popover
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [importRates, setImportRates] = useState<TariffRate[]>([
@@ -280,10 +282,14 @@ export default function TariffsPage() {
     }
   }, [apiKey, inverterSerial, selectedDate, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
 
-  // Recalculate when the selected date changes
   useEffect(() => {
     handleCalculateCosts();
   }, [selectedDate, handleCalculateCosts]); // Added handleCalculateCosts to dependencies
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false); // Close calendar on date selection
+ };
 
 
   const renderResults = () => {
@@ -338,13 +344,32 @@ export default function TariffsPage() {
         </Button>
       </div>
 
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertTitle>How it Works</AlertTitle>
-        <AlertDescription>
-          This tool fetches your half-hourly energy import and export data for a selected day. It then applies your specified tariff rates to calculate your daily cost. All rates should be entered in pence per kWh (e.g., 28.5).
-        </AlertDescription>
-      </Alert>
+      {/* How it Works Tooltip */}
+      <TooltipProvider>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Info className="h-5 w-5 text-muted-foreground hover:text-foreground cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm">
+ This tool fetches your half-hourly energy import and export data for a selected day. It then applies your specified tariff rates to calculate your daily cost. All rates should be entered in pence per kWh (e.g., 28.5).
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+
+      {/* Select Date - Moved to top */}
+      <div className="space-y-2">
+ <Label htmlFor="calc-date">Select Date</Label>
+ <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}> {/* Controlled popover */}
+ <PopoverTrigger asChild>
+ <Button id="calc-date" variant="outline" className="w-full justify-start text-left font-normal">
+ <CalendarIcon className="mr-2 h-4 w-4" />
+ {formatDateForDisplay(selectedDate)}
+ </Button>
+ </PopoverTrigger>
+ <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={handleDateSelect} initialFocus /></PopoverContent> {/* Use handleDateSelect */}
+ </Popover>
+      </div>
 
       {(!apiKey || !inverterSerial) && !isLoadingApiKey && (
          <Alert variant="destructive">
@@ -355,24 +380,37 @@ export default function TariffsPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <div className="space-y-6">
+          {/* Results Section - Moved to top */}
+ {error && (
+ <Alert variant="destructive">
+ <AlertCircle className="h-4 w-4" />
+ <AlertTitle>Error</AlertTitle>
+ <AlertDescription>{error}</AlertDescription>
+ </Alert>
+ )}
+ {isLoading && (
+ <Card className="flex items-center justify-center min-h-[200px]">
+ <div className="text-center">
+ <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+ <p className="mt-2 text-muted-foreground">Fetching data and calculating costs...</p>
+ </div>
+ </Card>
+ )}
+ {!isLoading && calculationResult && renderResults()}
+ {!isLoading && !calculationResult && !error && (
+ <Card className="flex items-center justify-center min-h-[200px]">
+ <p className="text-muted-foreground">Results will be displayed here.</p>
+ </Card>
+ )}
+ </div>
+
+        <Card> {/* Calculation Setup Card */}
           <CardHeader>
             <CardTitle>Calculation Setup</CardTitle>
             <CardDescription>Select a date, Use Default or load a preset or enter your tariff details manually.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="calc-date">Select Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button id="calc-date" variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formatDateForDisplay(selectedDate)}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} initialFocus /></PopoverContent>
-              </Popover>
-            </div>
 
             {/* <div className="space-y-4 pt-4 border-t">
               <Label>Load Tariff Preset</Label>
@@ -478,29 +516,6 @@ export default function TariffsPage() {
           </CardFooter>
         </Card>
 
-        <div className="space-y-6">
-            {error && (
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
-                </Alert>
-            )}
-            {isLoading && (
-                 <Card className="flex items-center justify-center min-h-[200px]">
-                    <div className="text-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-                        <p className="mt-2 text-muted-foreground">Fetching data and calculating costs...</p>
-                    </div>
-                 </Card>
-            )}
-            {!isLoading && calculationResult && renderResults()}
-            {!isLoading && !calculationResult && !error && (
-                <Card className="flex items-center justify-center min-h-[200px]">
-                    <p className="text-muted-foreground">Results will be displayed here.</p>
-                </Card>
-            )}
-        </div>
       </div>
     </div>
   );
