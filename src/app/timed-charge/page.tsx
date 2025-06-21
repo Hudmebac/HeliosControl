@@ -153,11 +153,11 @@ export default function BatterySchedulingPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor={`${type}-start-${slotNum}`}>Start Time</Label>
-            <Input id={`${type}-start-${slotNum}`} type="time" value={String(settings[startId])} onChange={(e) => handleSettingChange(startId, e.target.value)} />
+            <Input id={`${type}-start-${slotNum}`} type="time" value={String(settings[startId] || '00:00')} onChange={(e) => handleSettingChange(startId, e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`${type}-end-${slotNum}`}>End Time</Label>
-            <Input id={`${type}-end-${slotNum}`} type="time" value={String(settings[endId])} onChange={(e) => handleSettingChange(endId, e.target.value)} />
+            <Input id={`${type}-end-${slotNum}`} type="time" value={String(settings[endId] || '00:00')} onChange={(e) => handleSettingChange(endId, e.target.value)} />
           </div>
         </div>
         <div className="space-y-1.5 pt-2">
@@ -255,5 +255,3 @@ export default function BatterySchedulingPage() {
     </div>
   );
 }
-
-    

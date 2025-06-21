@@ -344,42 +344,23 @@ function getEVChargerCardDetails(
     let valueColor = "text-muted-foreground";
     let icon = <PlugZap className="h-6 w-6" />;
 
-    // Use the numeric value in Watts (if available) for color logic
     let powerInWatts = 0;
     if (typeof evData.value === 'number') {
         powerInWatts = evData.unit === 'kW' ? evData.value * 1000 : evData.value;
     }
 
+    const statusString = (evData.status || "").toLowerCase();
 
-    if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) { 
+    if (powerInWatts > POWER_FLOW_THRESHOLD_WATTS) {
         valueColor = "text-green-500";
         icon = <Bolt className="h-6 w-6 text-green-500" />;
-    } else if (React.isValidElement(evData.status)) {
-        // Attempt to infer status from the ReactNode's class or content if needed
-        const statusString = (evData.status.props.children as string)?.toLowerCase();
-        if (statusString && statusString.includes('fault')) {
-            valueColor = "text-red-600";
-            icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
-        } else { 
-             valueColor = "text-blue-500"; // Default for non-charging, non-faulted
-             icon = <PlugZap className="h-6 w-6 text-blue-500" />;
-        }
-    }
-    // If evData.value was "N/A", powerInWatts is 0, so it might fall into blue if status is not fault
-    else if (evData.value === "N/A" && React.isValidElement(evData.status)) {
-        const statusString = (evData.status.props.children as string)?.toLowerCase();
-        if (statusString && statusString.includes('fault')) {
-            valueColor = "text-red-600";
-            icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
-        } else {
-            valueColor = "text-blue-500";
-            icon = <PlugZap className="h-6 w-6 text-blue-500" />;
-        }
-    }
-     else { // Default if status is not a React element (e.g. raw string) or value is not "N/A" but power is low
+    } else if (statusString.includes('fault')) {
+        valueColor = "text-red-600";
+        icon = <AlertTriangle className="h-6 w-6 text-red-600" />;
+    } else {
         valueColor = "text-blue-500";
         icon = <PlugZap className="h-6 w-6 text-blue-500" />;
-    }    
+    }
 
     const evChargerStatusMap: { [key: string]: string } = {
         Available: 'The EV charger is not plugged in to a vehicle',
@@ -391,7 +372,7 @@ function getEVChargerCardDetails(
         Reserved: 'The EV charger has been reserved for a future charging session',
         Unavailable: 'The EV charger cannot start new charging sessions',
         Faulted: 'The EV charger is reporting an error',
-        Unknown: 'Unknown Status', // Added a fallback for unexpected values
+        Unknown: 'Unknown Status',
     };
 
     const evChargerStatusColorMap: { [key: string]: string } = {
@@ -404,24 +385,15 @@ function getEVChargerCardDetails(
         Reserved: 'text-blue-500',
         Unavailable: 'text-red-600',
         Faulted: 'text-red-600',
-        Unknown: 'text-red-600', // Fallback color
+        Unknown: 'text-red-600',
     };
     
     const descriptionElements: React.ReactNode[] = [];
-    let statusText: string | React.ReactNode = 'Unknown Status';
-    let mappedDescription = 'Unknown Status';
-    
-    if (evData.rawStatus) {
-      statusText = evData.rawStatus;
-      mappedDescription = evChargerStatusMap[evData.rawStatus as keyof typeof evChargerStatusMap] || evData.rawStatus;
-    } else if (React.isValidElement(evData.status)) {
-      // Attempt to infer status from the ReactNode's children as a fallback
-      statusText = (evData.status.props.children as string) || 'Unknown Status';
-      mappedDescription = evChargerStatusMap[statusText as keyof typeof evChargerStatusMap] || statusText;
-    }
+    const statusText: string = evData.status || 'Unknown Status';
+    const mappedDescription = evData.rawStatus ? (evChargerStatusMap[evData.rawStatus as keyof typeof evChargerStatusMap] || evData.rawStatus) : "No description available";
 
     descriptionElements.push(
-      <p key="status" className={cn(evChargerStatusColorMap[evData.rawStatus as keyof typeof evChargerStatusColorMap] || 'text-muted-foreground')}>
+      <p key="status" className={cn(evData.rawStatus ? (evChargerStatusColorMap[evData.rawStatus as keyof typeof evChargerStatusColorMap] || 'text-muted-foreground') : 'text-muted-foreground')}>
         {`${statusText} (${mappedDescription})`}
       </p>
     );

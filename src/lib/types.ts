@@ -4,8 +4,7 @@ export interface Metric {
   unit: string;
 }
 
-export type EVChargerInternalStatus = // This is now a ReactNode
-  | React.ReactNode;
+export type EVChargerInternalStatus = string;
 
 
 export interface BatteryStatus extends Metric {
