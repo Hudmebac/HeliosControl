@@ -359,5 +359,3 @@ export interface NamedBatterySchedule {
   createdAt: string;
   updatedAt: string;
 }
-
-    

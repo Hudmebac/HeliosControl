@@ -91,5 +91,3 @@ export function useLocalStorageBatterySchedules(inverterSerial: string | null) {
     reloadSchedules: loadSchedulesFromStorage,
   };
 }
-
-    

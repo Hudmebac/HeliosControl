@@ -151,16 +151,24 @@ export default function BatterySchedulingPage() {
     try {
         const settingValues: Record<string, any> = {};
         for (const id of Object.values(SETTING_IDS)) {
-            const res = await _fetchGivEnergyAPI<{ data: { value: string | number } }>(apiKey, `/inverter/${inverterSerial}/settings/${id}/read`, { suppressErrorForStatus: [404] });
-            settingValues[id] = res.data.value;
+            try {
+                const res = await _fetchGivEnergyAPI<{ data: { value: string | number } }>(apiKey, `/inverter/${inverterSerial}/settings/${id}/read`, { suppressErrorForStatus: [404] });
+                if (res && res.data && res.data.value !== undefined) {
+                    settingValues[id] = res.data.value;
+                } else {
+                    console.warn(`Setting ${id} not found on this inverter or returned no data. It will be ignored.`);
+                }
+            } catch (e: any) {
+                console.error(`Failed to fetch setting ${id}:`, e.message);
+            }
         }
 
         const deviceSettings: BatteryScheduleSettings = {
             enableAcCharge: settingValues[SETTING_IDS.ENABLE_AC_CHARGE] === 1 || settingValues[SETTING_IDS.ENABLE_AC_CHARGE] === true,
-            chargeSlot1: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_START]), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_END]), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC]) },
-            chargeSlot2: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_START]), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_END]), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC_2]) },
-            dischargeSlot1: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_START]), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_END]), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC]) },
-            dischargeSlot2: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_START]), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_END]), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC_2]) },
+            chargeSlot1: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_START] || "00:00"), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC] || 100) },
+            chargeSlot2: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_START] || "00:00"), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC_2] || 100) },
+            dischargeSlot1: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_START] || "00:00"), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC] || 4) },
+            dischargeSlot2: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_START] || "00:00"), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC_2] || 4) },
         };
         setCurrentDeviceSettings(deviceSettings);
         return deviceSettings;
@@ -382,5 +390,3 @@ export default function BatterySchedulingPage() {
     </>
   );
 }
-
-    
