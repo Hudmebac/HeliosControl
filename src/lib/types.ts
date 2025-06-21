@@ -342,3 +342,22 @@ export interface NamedEVChargerSchedule {
   createdAt: string;
   updatedAt: string;
 }
+
+// For battery scheduling
+export interface BatteryScheduleSettings {
+  enableAcCharge: boolean;
+  chargeSlot1: { start: string; end:string; soc: number };
+  chargeSlot2: { start: string; end:string; soc: number };
+  dischargeSlot1: { start: string; end:string; soc: number };
+  dischargeSlot2: { start: string; end:string; soc: number };
+}
+
+export interface NamedBatterySchedule {
+  id: string;
+  name: string;
+  settings: BatteryScheduleSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+    
