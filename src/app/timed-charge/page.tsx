@@ -165,7 +165,7 @@ export default function InverterPresetsPage() {
     if (!apiKey || !inverterSerial) return null;
     setIsLoadingDeviceState(true);
     try {
-        const response = await _fetchGivEnergyAPI<{ data: RawPresetResponse['data']['value'] }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
+        const response = await _fetchGivEnergyAPI<{ data: PresetSettings }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
         const settings = response.data;
         
         if (typeof settings?.enabled !== 'boolean' || !Array.isArray(settings?.slots)) {
@@ -186,12 +186,12 @@ export default function InverterPresetsPage() {
     }
   }, [apiKey, inverterSerial, toast]);
   
-  const areSettingsEqual = (s1?: PresetSettings | null, s2?: PresetSettings | null): boolean => {
+  const areSettingsEqual = useCallback((s1?: PresetSettings | null, s2?: PresetSettings | null): boolean => {
       if (!s1 || !s2) return false;
       
       const normalize = (s: PresetSettings) => {
+          // Filter out empty/unused slots before comparison
           const activeSlots = (s.slots || [])
-              // Filter out empty/unused slots before comparison
               .filter(slot => slot.start_time !== '00:00' || slot.end_time !== '00:00')
               .map(slot => ({
                   start_time: slot.start_time,
@@ -207,7 +207,7 @@ export default function InverterPresetsPage() {
       };
       
       return JSON.stringify(normalize(s1)) === JSON.stringify(normalize(s2));
-  };
+  }, []);
 
   useEffect(() => {
     if (!isApiKeyLoading && apiKey && inverterSerial) {
@@ -218,13 +218,13 @@ export default function InverterPresetsPage() {
 
   useEffect(() => {
     const deviceSettings = currentDeviceValues[activeTab];
-    if (deviceSettings && presets.length > 0) {
+    if (deviceSettings && deviceSettings.enabled && presets.length > 0) {
         const found = presets.find(p => p.presetId === activeTab && areSettingsEqual(p.settings, deviceSettings));
         setActivePresetId(found?.id || null);
     } else {
         setActivePresetId(null);
     }
-  }, [currentDeviceValues, presets, activeTab]);
+  }, [currentDeviceValues, presets, activeTab, areSettingsEqual]);
 
   const handleActivatePreset = async (preset: NamedPreset) => {
     if (!apiKey || !inverterSerial) return;
