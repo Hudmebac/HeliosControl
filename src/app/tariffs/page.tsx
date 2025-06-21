@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import Link from "next/link";
-import { useState, useCallback, useMemo } from "react"; // Added useMemo
+import { useState, useCallback, useMemo, useEffect } from "react"; // Added useMemo, useEffect
 import { v4 as uuidv4 } from 'uuid';
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
@@ -12,16 +12,16 @@ import type { EnergyFlowRawEntry } from '@/lib/types';
 import { format, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // Removed CardFooter
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"; // Added Select imports
-import { ArrowLeft, Plug, CalendarIcon, Loader2, PlusCircle, Trash2, Info, AlertTriangle } from "lucide-react";
-
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Plug, CalendarIcon, Loader2, PlusCircle, Trash2, Info, AlertTriangle, AlertCircle } from "lucide-react";
 // --- Data Structures ---
 interface TariffRate {
   id: string;
@@ -107,13 +107,36 @@ export default function TariffsPage() {
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
-  // State for presets
+  // State for presets and selected tariff
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedTariffName, setSelectedTariffName] = useState<string>("");
 
   const availableProviders = useMemo(() => [...new Set(TARIFF_PRESETS.map(t => t.provider))], []);
   const availableTariffs = useMemo(() => TARIFF_PRESETS.filter(t => t.provider === selectedProvider), [selectedProvider]);
+
+  const DEFAULT_TARIFF_STORAGE_KEY = "defaultTariff";
+
+  // Load default tariff from local storage on mount
+  useEffect(() => {
+    const storedTariff = localStorage.getItem(DEFAULT_TARIFF_STORAGE_KEY);
+    if (storedTariff) {
+      const defaultTariff = JSON.parse(storedTariff);
+      const tariff = TARIFF_PRESETS.find(t => t.provider === defaultTariff?.provider && t.name === defaultTariff?.name);
+      if (tariff) {
+        setSelectedProvider(defaultTariff!.provider);
+        setSelectedTariffName(defaultTariff!.name);
+        const newRates = tariff.rates.map(r => ({
+          id: uuidv4(),
+          startTime: r.start,
+          endTime: r.end,
+          rate: String(r.rate),
+        }));
+        setImportRates(newRates);
+      }
+     }
+  }, []); // Empty dependency array means this effect runs only once on mount
 
   const handleProviderChange = (provider: string) => {
     setSelectedProvider(provider);
@@ -174,6 +197,11 @@ export default function TariffsPage() {
     setIsLoading(true);
     setError(null);
     setCalculationResult(null);
+
+    // Save default tariff if checkbox is checked
+    if (saveAsDefault && selectedProvider && selectedTariffName) {
+      localStorage.setItem(DEFAULT_TARIFF_STORAGE_KEY, JSON.stringify({ provider: selectedProvider, name: selectedTariffName }));
+    }
 
     try {
       const apiStartDate = format(selectedDate, "yyyy-MM-dd");
@@ -248,9 +276,9 @@ export default function TariffsPage() {
       setError(e.message || "Failed to fetch or calculate cost data.");
       toast({ variant: "destructive", title: "Calculation Error", description: e.message });
     } finally {
-      setIsLoading(false);
+      setIsLoading(false);      
     }
-  }, [apiKey, inverterSerial, selectedDate, importRates, exportRate, toast]);
+  }, [apiKey, inverterSerial, selectedDate, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
 
 
   const renderResults = () => {
@@ -341,7 +369,7 @@ export default function TariffsPage() {
               </Popover>
             </div>
 
-            <div className="space-y-4 pt-4 border-t">
+            {/* <div className="space-y-4 pt-4 border-t">
               <Label>Load Tariff Preset</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select onValueChange={handleProviderChange} value={selectedProvider}>
@@ -364,6 +392,45 @@ export default function TariffsPage() {
                         ))}
                     </SelectContent>
                 </Select>
+              </div>
+            </div> */}
+
+            <div className="space-y-4 pt-4 border-t">
+              <Label>Your Tariff</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select onValueChange={handleProviderChange} value={selectedProvider}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableProviders.map(provider => (
+                            <SelectItem key={provider} value={provider}>{provider}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Tariff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableTariffs.map(tariff => (
+                            <SelectItem key={tariff.name} value={tariff.name}>{tariff.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox
+                  id="save-as-default"
+                  checked={saveAsDefault}
+                  onCheckedChange={(checked) => setSaveAsDefault(Boolean(checked))}
+                />
+                <label
+                  htmlFor="save-as-default"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Save as default tariff for this page
+                </label>
               </div>
             </div>
             
