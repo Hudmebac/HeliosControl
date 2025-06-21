@@ -33,7 +33,7 @@ import { format, parseISO } from 'date-fns';
 const PROXY_API_BASE_URL = "/api/proxy-givenergy";
 const GIVENERGY_API_V1_BASE_URL_FOR_STRIPPING = 'https://api.givenergy.cloud/v1';
 
-async function _fetchGivEnergyAPI<T>(
+export async function _fetchGivEnergyAPI<T>(
   apiKey: string,
   endpoint: string,
   options?: RequestInit & { suppressErrorForStatus?: number[] }
