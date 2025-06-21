@@ -269,8 +269,6 @@ const EVChargerPage = () => {
       return;
     }
     setIsSyncingFromDevice(true);
- console.log('Starting schedule sync from device...');
-
     let activeDeviceScheduleNameFromSync: string | null = null;
     try {
       const headers = getAuthHeaders();
@@ -282,9 +280,9 @@ const EVChargerPage = () => {
       }
 
       const scheduleListResponse = await response.json() as EVChargerDeviceScheduleListResponse;
- console.log('Fetched schedule data from device:', scheduleListResponse);
 
       if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
+        let importedCount = 0;
         let updatedCount = 0;
 
         for (const deviceSchedule of scheduleListResponse.data.schedules) {
@@ -304,7 +302,9 @@ const EVChargerPage = () => {
               }],
             };
 
- addLocalSchedule(scheduleToSave); // Hook handles added/updated logic and state updates
+            const result = addLocalSchedule(scheduleToSave);
+            if (result.type === 'added') importedCount++;
+            if (result.type === 'updated') updatedCount++;
 
             if (deviceSchedule.is_active) {
               activeDeviceScheduleNameFromSync = scheduleToSave.name;
@@ -312,6 +312,8 @@ const EVChargerPage = () => {
           }
         }
 
+        toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
+        reloadLocalSchedulesFromHook();
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
