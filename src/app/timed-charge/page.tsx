@@ -165,12 +165,11 @@ export default function InverterPresetsPage() {
     if (!apiKey || !inverterSerial) return null;
     setIsLoadingDeviceState(true);
     try {
-        const response = await _fetchGivEnergyAPI<{ data: PresetSettings }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
+        const response = await _fetchGivEnergyAPI<{ data: RawPresetResponse['data']['value'] }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
         const settings = response.data;
         
         if (typeof settings?.enabled !== 'boolean' || !Array.isArray(settings?.slots)) {
             console.warn("Received unexpected preset data structure from API for preset:", presetId, settings);
-            // It might be a validation response. For now, treat as no valid settings found.
             setCurrentDeviceValues(prev => ({ ...prev, [presetId]: null }));
             return null;
         }
@@ -225,7 +224,7 @@ export default function InverterPresetsPage() {
     } else {
         setActivePresetId(null);
     }
-  }, [currentDeviceValues, presets, activeTab, areSettingsEqual]);
+  }, [currentDeviceValues, presets, activeTab]);
 
   const handleActivatePreset = async (preset: NamedPreset) => {
     if (!apiKey || !inverterSerial) return;
@@ -361,7 +360,7 @@ export default function InverterPresetsPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Inverter Preset Manager</h1>
-          <Button variant="outline" asChild><Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link></Button>
+          <Button variant="default" asChild><Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link></Button>
         </div>
 
         <Alert>
