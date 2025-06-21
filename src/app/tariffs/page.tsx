@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from 'react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, getYear, subYears, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, parseISO } from 'date-fns';
 import Link from "next/link";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
@@ -97,14 +97,6 @@ const formatDateForDisplay = (date: Date | undefined): string => {
  return date ? format(date, "PPP") : "Pick a date";
 };
 
-const formatMonthForDisplay = (date: Date | undefined): string => {
-  return date ? format(date, "MMMM yyyy") : "Select Month";
-};
-
-const formatYearForDisplay = (date: Date | undefined): string => {
-  return date ? format(date, "yyyy") : "Select Year";
-};
-
 export default function TariffsPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
@@ -112,8 +104,6 @@ export default function TariffsPage() {
   // State for date selections
   const [dailyDate, setDailyDate] = useState<Date | undefined>(new Date());
   const [weeklyDate, setWeeklyDate] = useState<Date | undefined>(new Date());
-  const [monthlyDate, setMonthlyDate] = useState<Date | undefined>(new Date());
-  const [yearlyDate, setYearlyDate] = useState<Date | undefined>(new Date());
 
   // State for popover visibility
   const [isDailyCalendarOpen, setIsDailyCalendarOpen] = useState(false);
@@ -135,24 +125,6 @@ export default function TariffsPage() {
 
   const availableProviders = useMemo(() => [...new Set(TARIFF_PRESETS.map(t => t.provider))], []);
   const availableTariffs = useMemo(() => TARIFF_PRESETS.filter(t => t.provider === selectedProvider), [selectedProvider]);
-  const monthOptions = useMemo(() => {
-    const options = [];
-    const today = new Date();
-    for (let i = 0; i < 36; i++) {
-      const date = subMonths(today, i);
-      options.push({ label: format(date, "MMMM yyyy"), value: startOfMonth(date).toISOString() });
-    }
-    return options;
-  }, []);
-  const yearOptions = useMemo(() => {
-    const options = [];
-    const currentYear = getYear(new Date());
-    for (let i = 0; i < 20; i++) {
-        const year = currentYear - i;
-        options.push({ label: String(year), value: startOfYear(new Date(year, 0, 1)).toISOString() });
-    }
-    return options;
-  }, []);
 
   const DEFAULT_TARIFF_STORAGE_KEY = "defaultTariff";
 
@@ -324,7 +296,7 @@ export default function TariffsPage() {
   };
 
   const renderCalculationUI = (
-    periodType: 'day' | 'week' | 'month' | 'year'
+    periodType: 'day' | 'week'
   ) => {
     const handleCalculate = () => {
         let startDate, endDate, label;
@@ -340,18 +312,6 @@ export default function TariffsPage() {
                 endDate = endOfWeek(weeklyDate, { weekStartsOn: 1 });
                 label = `Week of ${format(startDate, "MMM d, yyyy")}`;
                 break;
-            case 'month':
-                if (!monthlyDate) return;
-                startDate = startOfMonth(monthlyDate);
-                endDate = endOfMonth(monthlyDate);
-                label = format(monthlyDate, "MMMM yyyy");
-                break;
-            case 'year':
-                if (!yearlyDate) return;
-                startDate = startOfYear(yearlyDate);
-                endDate = endOfYear(yearlyDate);
-                label = format(yearlyDate, "yyyy");
-                break;
         }
         calculateCosts(startDate, endDate, label);
     };
@@ -366,8 +326,6 @@ export default function TariffsPage() {
           <div className="space-y-2">
             {periodType === 'day' && <Label>Select Date</Label>}
             {periodType === 'week' && <Label>Select any day in the week</Label>}
-            {periodType === 'month' && <Label>Select Month</Label>}
-            {periodType === 'year' && <Label>Select Year</Label>}
             
             {(periodType === 'day' || periodType === 'week') && (
               <Popover open={periodType === 'day' ? isDailyCalendarOpen : isWeeklyCalendarOpen} onOpenChange={periodType === 'day' ? setIsDailyCalendarOpen : setIsWeeklyCalendarOpen}>
@@ -378,18 +336,6 @@ export default function TariffsPage() {
                   <Calendar mode="single" selected={periodType === 'day' ? dailyDate : weeklyDate} onSelect={date => { (periodType === 'day' ? setDailyDate : setWeeklyDate)(date); (periodType === 'day' ? setIsDailyCalendarOpen : setIsWeeklyCalendarOpen)(false); }} initialFocus />
                 </PopoverContent>
               </Popover>
-            )}
-            {periodType === 'month' && (
-              <Select value={monthlyDate ? startOfMonth(monthlyDate).toISOString() : ""} onValueChange={(iso) => setMonthlyDate(iso ? parseISO(iso) : undefined)}>
-                <SelectTrigger><SelectValue placeholder="Select Month" /></SelectTrigger>
-                <SelectContent>{monthOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
-            )}
-            {periodType === 'year' && (
-              <Select value={yearlyDate ? startOfYear(yearlyDate).toISOString() : ""} onValueChange={(iso) => setYearlyDate(iso ? parseISO(iso) : undefined)}>
-                <SelectTrigger><SelectValue placeholder="Select Year" /></SelectTrigger>
-                <SelectContent>{yearOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
             )}
           </div>
         </CardContent>
@@ -416,18 +362,14 @@ export default function TariffsPage() {
       </div>
 
       <Tabs defaultValue="day" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="day">Daily</TabsTrigger>
           <TabsTrigger value="week">Weekly</TabsTrigger>
-          <TabsTrigger value="month">Monthly</TabsTrigger>
-          <TabsTrigger value="year">Yearly</TabsTrigger>
           <TabsTrigger value="setup">Tariff Setup</TabsTrigger>
         </TabsList>
         
         <TabsContent value="day" className="space-y-6 mt-4">{renderCalculationUI('day')}</TabsContent>
         <TabsContent value="week" className="space-y-6 mt-4">{renderCalculationUI('week')}</TabsContent>
-        <TabsContent value="month" className="space-y-6 mt-4">{renderCalculationUI('month')}</TabsContent>
-        <TabsContent value="year" className="space-y-6 mt-4">{renderCalculationUI('year')}</TabsContent>
 
         <TabsContent value="setup" className="space-y-6 mt-4">
           <Card>
