@@ -300,7 +300,7 @@ export default function TariffsPage() {
             <TableBody>
               <TableRow><TableCell>Total Import</TableCell><TableCell className="text-right">{totalImportKWh.toFixed(2)} kWh</TableCell></TableRow>
               <TableRow><TableCell>Total Export</TableCell><TableCell className="text-right">{totalExportKWh.toFixed(2)} kWh</TableCell></TableRow>
-              <TableRow><TableCell>Effective Import Rate</TableCell><TableCell className="text-right">{effectiveImportRate ? effectiveImportRate.toFixed(2) : 'N/A'} p/kWh</TableCell></TableRow>
+              <TableRow><TableCell>Calculated Matched Import Rate</TableCell><TableCell className="text-right">{effectiveImportRate ? effectiveImportRate.toFixed(2) : 'N/A'} p/kWh</TableCell></TableRow>
               <TableRow><TableCell>Effective Export Rate</TableCell><TableCell className="text-right">{effectiveExportRate.toFixed(2)} p/kWh</TableCell></TableRow>
               <TableRow><TableCell>Import Cost</TableCell><TableCell className="text-right">£{importCost.toFixed(2)}</TableCell></TableRow>
               <TableRow><TableCell>Export Revenue</TableCell><TableCell className="text-right">£{exportRevenue.toFixed(2)}</TableCell></TableRow>
