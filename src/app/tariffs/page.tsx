@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from 'react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, parseISO } from 'date-fns';
 import Link from "next/link";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
@@ -104,6 +104,7 @@ export default function TariffsPage() {
   // State for date selections
   const [dailyDate, setDailyDate] = useState<Date | undefined>(new Date());
   const [weeklyDate, setWeeklyDate] = useState<Date | undefined>(new Date());
+  const [activeTab, setActiveTab] = useState('day');
 
   // State for popover visibility
   const [isDailyCalendarOpen, setIsDailyCalendarOpen] = useState(false);
@@ -267,6 +268,22 @@ export default function TariffsPage() {
     }
   }, [apiKey, inverterSerial, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
 
+  // Effect to trigger calculation when date changes
+  useEffect(() => {
+    if (activeTab === 'day' && dailyDate) {
+        const startDate = dailyDate;
+        const endDate = dailyDate;
+        const label = format(dailyDate, "PPP");
+        calculateCosts(startDate, endDate, label);
+    } else if (activeTab === 'week' && weeklyDate) {
+        const startDate = startOfWeek(weeklyDate, { weekStartsOn: 1 });
+        const endDate = endOfWeek(weeklyDate, { weekStartsOn: 1 });
+        const label = `Week of ${format(startDate, "MMM d, yyyy")}`;
+        calculateCosts(startDate, endDate, label);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyDate, weeklyDate, activeTab, calculateCosts]);
+
   const renderResults = () => {
     if (!calculationResult) return null;
     const { period, totalImportKWh, totalExportKWh, effectiveImportRate, effectiveExportRate, importCost, exportRevenue, netCost } = calculationResult;
@@ -298,29 +315,11 @@ export default function TariffsPage() {
   const renderCalculationUI = (
     periodType: 'day' | 'week'
   ) => {
-    const handleCalculate = () => {
-        let startDate, endDate, label;
-        switch(periodType) {
-            case 'day':
-                if (!dailyDate) return;
-                startDate = endDate = dailyDate;
-                label = format(dailyDate, "PPP");
-                break;
-            case 'week':
-                if (!weeklyDate) return;
-                startDate = startOfWeek(weeklyDate, { weekStartsOn: 1 });
-                endDate = endOfWeek(weeklyDate, { weekStartsOn: 1 });
-                label = `Week of ${format(startDate, "MMM d, yyyy")}`;
-                break;
-        }
-        calculateCosts(startDate, endDate, label);
-    };
-
     return (
       <Card>
         <CardHeader>
           <CardTitle>{periodType.charAt(0).toUpperCase() + periodType.slice(1)} Cost Calculation</CardTitle>
-          <CardDescription>Select a {periodType} to calculate energy costs.</CardDescription>
+          <CardDescription>Select a {periodType} to see the energy costs.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
@@ -339,12 +338,6 @@ export default function TariffsPage() {
             )}
           </div>
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleCalculate} disabled={isLoading || !apiKey || !inverterSerial} className="w-full">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Calculate {periodType.charAt(0).toUpperCase() + periodType.slice(1)} Cost
-          </Button>
-        </CardFooter>
       </Card>
     );
   };
@@ -361,7 +354,7 @@ export default function TariffsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="day" className="w-full">
+      <Tabs defaultValue="day" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="day">Daily</TabsTrigger>
           <TabsTrigger value="week">Weekly</TabsTrigger>
@@ -436,7 +429,7 @@ export default function TariffsPage() {
           )}
           {!isLoading && calculationResult && renderResults()}
           {!isLoading && !calculationResult && !error && (
-             <Card className="flex items-center justify-center min-h-[200px]"><p className="text-muted-foreground">Results will be displayed here.</p></Card>
+             <Card className="flex items-center justify-center min-h-[200px]"><p className="text-muted-foreground">Select a date to see results.</p></Card>
           )}
       </div>
     </div>
