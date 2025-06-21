@@ -46,8 +46,7 @@ export async function _fetchGivEnergyAPI<T>(
 
   const correctedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const fetchUrl = `${PROXY_API_BASE_URL}${correctedEndpoint}`;
-  const suppressErrorForStatus = options?.suppressErrorForStatus || [];
-
+  
   try {
     const response = await fetch(fetchUrl, {
       ...options,
@@ -56,73 +55,31 @@ export async function _fetchGivEnergyAPI<T>(
     });
 
     if (!response.ok) {
-      if (suppressErrorForStatus.includes(response.status)) {
-        // For suppressed errors like 404, return an empty object.
-        // The calling function can check for the presence of `res.data` to see if it was successful.
+      // Gracefully handle suppressed statuses first
+      if (options?.suppressErrorForStatus?.includes(response.status)) {
         return {} as T;
       }
       
+      // If not suppressed, proceed with error handling
       let errorBody: any = {};
       try {
         errorBody = await response.json();
       } catch (e) {
-        // Non-JSON error response or empty body, errorBody remains {}
+        // Non-JSON error response or empty body
       }
 
-      let detailMessage = errorBody?.error || errorBody?.message;
-      if (typeof detailMessage === 'object' && detailMessage !== null) {
-        try {
-          detailMessage = JSON.stringify(detailMessage);
-        } catch (e) {
-          detailMessage = "Invalid error detail object";
-        }
-      } else if (detailMessage === null || detailMessage === undefined) {
-        detailMessage = "";
-      }
+      const detailMessage = errorBody?.error || errorBody?.message || "No additional details from API.";
+      const errorMessage = `API Request Error: ${response.status} ${response.statusText}. Detail: ${detailMessage}`;
       
-      const errorMessage = `API Request Error: ${response.status} ${response.statusText}${detailMessage ? ` - Detail: ${String(detailMessage)}` : ''}`;
-
-      if (!suppressErrorForStatus.includes(response.status)) {
-        console.error(`GivEnergy API error for ${fetchUrl}: ${response.status} ${response.statusText}`, errorBody);
-      }
       throw new Error(errorMessage);
     }
+    
     return response.json() as Promise<T>;
-  } catch (error: unknown) {
-    let originalMessage = "Unknown error during fetch operation";
-    let statusCodeFromError: number | null = null;
 
-    if (error instanceof Error) {
-      originalMessage = error.message;
-      const match = originalMessage.match(/^API Request Error: (\d+)/);
-      if (match && match[1]) {
-        statusCodeFromError = parseInt(match[1], 10);
-      }
-    } else if (typeof error === 'string') {
-      originalMessage = error;
-    } else if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as {message: any}).message === 'string') {
-      originalMessage = (error as {message: string}).message;
-    }
-
-    if (statusCodeFromError && suppressErrorForStatus.includes(statusCodeFromError)) {
-        // Suppressed error, do not log the generic "API Request Failed via Proxy"
-    } else if (error instanceof TypeError &&
-        (originalMessage.toLowerCase().includes('failed to fetch') ||
-         originalMessage.toLowerCase().includes('networkerror') ||
-         originalMessage.toLowerCase().includes('load failed'))) {
-      const detailedMessage = `Network error: Could not connect to the application's API proxy (${PROXY_API_BASE_URL}). Please check your internet connection and ensure the application server is running. (Original error: ${originalMessage})`;
-      console.error("Network error detail from _fetchGivEnergyAPI (proxy call):", detailedMessage);
-    } else if (originalMessage.startsWith('API Request Error:') ||
-               originalMessage.toLowerCase().includes('network error:') ||
-               originalMessage.startsWith('API Request Failed via Proxy:') ||
-               originalMessage.startsWith('GivEnergy API error for') ||
-               originalMessage.startsWith('GivEnergy API error:')) {
-        // Error is already specific or a known type, rely on earlier logs or specific handling
-    } else {
-      // For truly unexpected errors not caught by the above, log the generic proxy error.
-      const errorMessage = `API Request Failed via Proxy: ${originalMessage}`;
-      console.error("Throwing generic API request error from _fetchGivEnergyAPI (proxy call):", errorMessage);
-    }
+  } catch (error) {
+    // This catch block handles network errors (e.g., failed to fetch) or errors thrown above.
+    console.error(`_fetchGivEnergyAPI failed for endpoint ${endpoint}:`, error);
+    // Re-throw the error to be handled by the component that made the call.
     throw error;
   }
 }
