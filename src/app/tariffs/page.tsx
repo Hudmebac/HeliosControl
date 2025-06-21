@@ -2,28 +2,30 @@
 "use client";
 
 import * as React from 'react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, getYear, subYears, parseISO } from 'date-fns';
 import Link from "next/link";
-import { useState, useCallback, useMemo, useEffect } from "react"; // Added useMemo, useEffect
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
 import { getEnergyFlows } from "@/lib/givenergy";
 import type { EnergyFlowRawEntry } from '@/lib/types';
-import { format, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // Removed CardFooter
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Plug, CalendarIcon, Loader2, PlusCircle, Trash2, Info, AlertTriangle, AlertCircle } from "lucide-react";
-// --- Data Structures ---
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+// --- Data Structures ---
 interface TariffRate {
   id: string;
   startTime: string; // HH:mm
@@ -40,6 +42,7 @@ interface CalculationResult {
   netCost: number;
   effectiveImportRate: number;
   effectiveExportRate: number;
+  period: string;
 }
 
 const TARIFF_PRESETS = [
@@ -94,29 +97,62 @@ const formatDateForDisplay = (date: Date | undefined): string => {
  return date ? format(date, "PPP") : "Pick a date";
 };
 
+const formatMonthForDisplay = (date: Date | undefined): string => {
+  return date ? format(date, "MMMM yyyy") : "Select Month";
+};
+
+const formatYearForDisplay = (date: Date | undefined): string => {
+  return date ? format(date, "yyyy") : "Select Year";
+};
 
 export default function TariffsPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
   const { toast } = useToast();
- const [isCalendarOpen, setIsCalendarOpen] = useState(false); // State to control calendar popover
+  
+  // State for date selections
+  const [dailyDate, setDailyDate] = useState<Date | undefined>(new Date());
+  const [weeklyDate, setWeeklyDate] = useState<Date | undefined>(new Date());
+  const [monthlyDate, setMonthlyDate] = useState<Date | undefined>(new Date());
+  const [yearlyDate, setYearlyDate] = useState<Date | undefined>(new Date());
 
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  // State for popover visibility
+  const [isDailyCalendarOpen, setIsDailyCalendarOpen] = useState(false);
+  const [isWeeklyCalendarOpen, setIsWeeklyCalendarOpen] = useState(false);
+
+  // State for tariff setup and calculation results
   const [importRates, setImportRates] = useState<TariffRate[]>([
     { id: uuidv4(), startTime: '00:00', endTime: '23:59', rate: '28.0' },
   ]);
   const [exportRate, setExportRate] = useState<string>('15.0');
-  
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveAsDefault, setSaveAsDefault] = useState(false);
 
-  // State for presets and selected tariff
+  // State for presets
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedTariffName, setSelectedTariffName] = useState<string>("");
 
   const availableProviders = useMemo(() => [...new Set(TARIFF_PRESETS.map(t => t.provider))], []);
   const availableTariffs = useMemo(() => TARIFF_PRESETS.filter(t => t.provider === selectedProvider), [selectedProvider]);
+  const monthOptions = useMemo(() => {
+    const options = [];
+    const today = new Date();
+    for (let i = 0; i < 36; i++) {
+      const date = subMonths(today, i);
+      options.push({ label: format(date, "MMMM yyyy"), value: startOfMonth(date).toISOString() });
+    }
+    return options;
+  }, []);
+  const yearOptions = useMemo(() => {
+    const options = [];
+    const currentYear = getYear(new Date());
+    for (let i = 0; i < 20; i++) {
+        const year = currentYear - i;
+        options.push({ label: String(year), value: startOfYear(new Date(year, 0, 1)).toISOString() });
+    }
+    return options;
+  }, []);
 
   const DEFAULT_TARIFF_STORAGE_KEY = "defaultTariff";
 
@@ -124,25 +160,26 @@ export default function TariffsPage() {
   useEffect(() => {
     const storedTariff = localStorage.getItem(DEFAULT_TARIFF_STORAGE_KEY);
     if (storedTariff) {
-      const defaultTariff = JSON.parse(storedTariff);
-      const tariff = TARIFF_PRESETS.find(t => t.provider === defaultTariff?.provider && t.name === defaultTariff?.name);
-      if (tariff) {
-        setSelectedProvider(defaultTariff!.provider);
-        setSelectedTariffName(defaultTariff!.name);
-        const newRates = tariff.rates.map(r => ({
-          id: uuidv4(),
-          startTime: r.start,
-          endTime: r.end,
-          rate: String(r.rate),
-        }));
-        setImportRates(newRates);
+      try {
+        const defaultTariff = JSON.parse(storedTariff);
+        const tariff = TARIFF_PRESETS.find(t => t.provider === defaultTariff?.provider && t.name === defaultTariff?.name);
+        if (tariff) {
+          setSelectedProvider(defaultTariff.provider);
+          setSelectedTariffName(defaultTariff.name);
+          const newRates = tariff.rates.map(r => ({ id: uuidv4(), startTime: r.start, endTime: r.end, rate: String(r.rate) }));
+          setImportRates(newRates);
+        }
+      } catch (e) {
+        console.error("Error parsing default tariff from storage", e);
+        localStorage.removeItem(DEFAULT_TARIFF_STORAGE_KEY);
       }
-     }
-  }, []); // Empty dependency array means this effect runs only once on mount
+    }
+  }, []);
 
+  // --- Tariff Setup Handlers ---
   const handleProviderChange = (provider: string) => {
     setSelectedProvider(provider);
-    setSelectedTariffName(""); // Reset tariff when provider changes
+    setSelectedTariffName("");
     setImportRates([{ id: uuidv4(), startTime: '00:00', endTime: '23:59', rate: '28.0' }]);
   };
 
@@ -150,17 +187,10 @@ export default function TariffsPage() {
     setSelectedTariffName(tariffName);
     const tariff = TARIFF_PRESETS.find(t => t.provider === selectedProvider && t.name === tariffName);
     if (tariff) {
-        const newRates = tariff.rates.map(r => ({
-            id: uuidv4(),
-            startTime: r.start,
-            endTime: r.end,
-            rate: String(r.rate),
-            label: r.label,
-        }));
+        const newRates = tariff.rates.map(r => ({ id: uuidv4(), startTime: r.start, endTime: r.end, rate: String(r.rate), label: r.label }));
         setImportRates(newRates);
     }
   };
-
 
   const handleImportRateChange = (id: string, field: keyof Omit<TariffRate, 'id'>, value: string) => {
     setImportRates(prev => prev.map(rate => rate.id === id ? { ...rate, [field]: value } : rate));
@@ -174,21 +204,14 @@ export default function TariffsPage() {
     if (importRates.length > 1) {
       setImportRates(prev => prev.filter(rate => rate.id !== id));
     } else {
-      toast({
-        variant: "destructive",
-        title: "Cannot Remove",
-        description: "You must have at least one import rate period.",
-      });
+      toast({ variant: "destructive", title: "Cannot Remove", description: "You must have at least one import rate period." });
     }
   };
 
-  const handleCalculateCosts = useCallback(async () => {
+  // --- Main Calculation Logic ---
+  const calculateCosts = useCallback(async (startDate: Date, endDate: Date, periodLabel: string) => {
     if (!apiKey || !inverterSerial) {
       setError("API key or inverter serial not set. Please check settings.");
-      return;
-    }
-    if (!selectedDate) {
-      setError("Please select a date to calculate costs for.");
       return;
     }
     if (importRates.some(r => !r.rate || isNaN(parseFloat(r.rate))) || !exportRate || isNaN(parseFloat(exportRate))) {
@@ -200,55 +223,42 @@ export default function TariffsPage() {
     setError(null);
     setCalculationResult(null);
 
-    // Save default tariff if checkbox is checked
     if (saveAsDefault && selectedProvider && selectedTariffName) {
-      localStorage.setItem(DEFAULT_TARIFF_STORAGE_KEY, JSON.stringify({ provider: selectedProvider, name: selectedTariffName }));
+        localStorage.setItem(DEFAULT_TARIFF_STORAGE_KEY, JSON.stringify({ provider: selectedProvider, name: selectedTariffName }));
+        toast({ title: "Default Tariff Saved", description: `${selectedProvider} - ${selectedTariffName} is now your default.` });
     }
 
     try {
-      const apiStartDate = format(selectedDate, "yyyy-MM-dd");
-      const apiEndDate = format(addDays(selectedDate, 1), "yyyy-MM-dd");
+      const apiStartDate = format(startDate, "yyyy-MM-dd");
+      const apiEndDate = format(addDays(endDate, 1), "yyyy-MM-dd"); // API end date is exclusive
 
-      const flowData = await getEnergyFlows(
-        apiKey,
-        inverterSerial,
-        apiStartDate,
-        apiEndDate,
-        0,
-        ['2', '3', '4', '6']
-      );
+      const flowData = await getEnergyFlows(apiKey, inverterSerial, apiStartDate, apiEndDate, 0, ['2', '3', '4', '6']);
 
       if (flowData.length === 0) {
-        toast({ title: "No Data", description: "No energy flow data was found for the selected date." });
-        setIsLoading(false);
+        toast({ title: "No Data", description: "No energy flow data was found for the selected date range." });
+        setCalculationResult(null);
         return;
       }
       
-      let totalImportKWh = 0;
-      let totalExportKWh = 0;
-      let totalImportCost = 0;
+      const sortedImportRates = [...importRates].sort((a, b) => parseInt(a.startTime.replace(':', ''), 10) - parseInt(b.startTime.replace(':', ''), 10));
+      let totalImportKWh = 0, totalExportKWh = 0, totalImportCost = 0, totalExportRevenue = 0;
 
       flowData.forEach(entry => {
         const entryTime = parse(entry.start_time, 'yyyy-MM-dd HH:mm', new Date());
-
         const importKWh = (entry.data['3'] || 0) + (entry.data['4'] || 0);
         const exportKWh = (entry.data['2'] || 0) + (entry.data['6'] || 0);
         totalImportKWh += importKWh;
         totalExportKWh += exportKWh;
         
         let matchedRatePence = 0;
-        for (const ratePeriod of importRates) {
+        for (const ratePeriod of sortedImportRates) {
             const [startH, startM] = ratePeriod.startTime.split(':').map(Number);
             const [endH, endM] = ratePeriod.endTime.split(':').map(Number);
-
             const periodStart = setSeconds(setMinutes(setHours(entryTime, startH), startM), 0);
             let periodEnd = setSeconds(setMinutes(setHours(entryTime, endH), endM), 59);
 
-            if (periodEnd < periodStart) {
-                const endOfDay = setSeconds(setMinutes(setHours(entryTime, 23), 59), 59);
-                const startOfDay = setSeconds(setMinutes(setHours(entryTime, 0), 0), 0);
-                if (isWithinInterval(entryTime, { start: periodStart, end: endOfDay }) || 
-                    isWithinInterval(entryTime, { start: startOfDay, end: periodEnd })) {
+            if (periodEnd < periodStart) { // Overnight period
+                if (isWithinInterval(entryTime, { start: periodStart, end: setHours(entryTime, 23) }) || isWithinInterval(entryTime, { start: setHours(entryTime, 0), end: periodEnd })) {
                      matchedRatePence = parseFloat(ratePeriod.rate);
                      break;
                 }
@@ -261,10 +271,10 @@ export default function TariffsPage() {
         }
         totalImportCost += importKWh * (matchedRatePence / 100);
       });
-
-      const totalExportRevenue = totalExportKWh * (parseFloat(exportRate) / 100);
-
-      setCalculationResult({
+      
+      totalExportRevenue = totalExportKWh * (parseFloat(exportRate) / 100);
+      
+      const result: CalculationResult = {
         totalImportKWh,
         totalExportKWh,
         importCost: totalImportCost,
@@ -272,62 +282,123 @@ export default function TariffsPage() {
         netCost: totalImportCost - totalExportRevenue,
         effectiveImportRate: totalImportKWh > 0 ? (totalImportCost / totalImportKWh) * 100 : 0,
         effectiveExportRate: parseFloat(exportRate),
-      });
+        period: periodLabel,
+      };
+      
+      setCalculationResult(result);
 
     } catch (e: any) {
+      console.error("Error fetching or calculating daily cost:", e);
       setError(e.message || "Failed to fetch or calculate cost data.");
-      toast({ variant: "destructive", title: "Calculation Error", description: e.message });
     } finally {
-      setIsLoading(false);      
+      setIsLoading(false);
     }
-  }, [apiKey, inverterSerial, selectedDate, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
-
-  useEffect(() => {
-    handleCalculateCosts();
-  }, [selectedDate, handleCalculateCosts]); // Added handleCalculateCosts to dependencies
-
-  const handleDateSelect = (date: Date | undefined) => {
-    setSelectedDate(date);
-    setIsCalendarOpen(false); // Close calendar on date selection
- };
-
+  }, [apiKey, inverterSerial, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
 
   const renderResults = () => {
     if (!calculationResult) return null;
-
-    const resultsData = [
-      { metric: "Total Import", value: `${calculationResult.totalImportKWh.toFixed(2)} kWh` },
-      { metric: "Total Export", value: `${calculationResult.totalExportKWh.toFixed(2)} kWh` },
-      { metric: "Effective Import Rate", value: `${calculationResult.effectiveImportRate.toFixed(2)} p/kWh` },
-      { metric: "Effective Export Rate", value: `${calculationResult.effectiveExportRate.toFixed(2)} p/kWh` },
-      { metric: "Import Cost", value: `£${calculationResult.importCost.toFixed(2)}` },
-      { metric: "Export Revenue", value: `£${calculationResult.exportRevenue.toFixed(2)}` },
-    ];
-    const netCost = calculationResult.netCost;
+    const { period, totalImportKWh, totalExportKWh, effectiveImportRate, effectiveExportRate, importCost, exportRevenue, netCost } = calculationResult;
     const netCostDisplay = netCost >= 0 ? `£${netCost.toFixed(2)}` : `-£${Math.abs(netCost).toFixed(2)}`;
 
     return (
       <Card>
         <CardHeader>
           <CardTitle>Cost Calculation Results</CardTitle>
-          <CardDescription>Breakdown for {format(selectedDate!, "PPP")}.</CardDescription>
+          <CardDescription>Breakdown for {period}.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableBody>
-              {resultsData.map(item => (
-                <TableRow key={item.metric}>
-                  <TableCell className="font-medium">{item.metric}</TableCell>
-                  <TableCell className="text-right">{item.value}</TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="bg-muted/50 font-bold">
-                <TableCell>Net Cost / Revenue</TableCell>
-                <TableCell className="text-right">{netCostDisplay}</TableCell>
-              </TableRow>
+              <TableRow><TableCell>Total Import</TableCell><TableCell className="text-right">{totalImportKWh.toFixed(2)} kWh</TableCell></TableRow>
+              <TableRow><TableCell>Total Export</TableCell><TableCell className="text-right">{totalExportKWh.toFixed(2)} kWh</TableCell></TableRow>
+              <TableRow><TableCell>Effective Import Rate</TableCell><TableCell className="text-right">{effectiveImportRate ? effectiveImportRate.toFixed(2) : 'N/A'} p/kWh</TableCell></TableRow>
+              <TableRow><TableCell>Effective Export Rate</TableCell><TableCell className="text-right">{effectiveExportRate.toFixed(2)} p/kWh</TableCell></TableRow>
+              <TableRow><TableCell>Import Cost</TableCell><TableCell className="text-right">£{importCost.toFixed(2)}</TableCell></TableRow>
+              <TableRow><TableCell>Export Revenue</TableCell><TableCell className="text-right">£{exportRevenue.toFixed(2)}</TableCell></TableRow>
+              <TableRow className="bg-muted/50 font-bold"><TableCell>Net Cost / Revenue</TableCell><TableCell className="text-right">{netCostDisplay}</TableCell></TableRow>
             </TableBody>
           </Table>
         </CardContent>
+      </Card>
+    );
+  };
+
+  const renderCalculationUI = (
+    periodType: 'day' | 'week' | 'month' | 'year'
+  ) => {
+    const handleCalculate = () => {
+        let startDate, endDate, label;
+        switch(periodType) {
+            case 'day':
+                if (!dailyDate) return;
+                startDate = endDate = dailyDate;
+                label = format(dailyDate, "PPP");
+                break;
+            case 'week':
+                if (!weeklyDate) return;
+                startDate = startOfWeek(weeklyDate, { weekStartsOn: 1 });
+                endDate = endOfWeek(weeklyDate, { weekStartsOn: 1 });
+                label = `Week of ${format(startDate, "MMM d, yyyy")}`;
+                break;
+            case 'month':
+                if (!monthlyDate) return;
+                startDate = startOfMonth(monthlyDate);
+                endDate = endOfMonth(monthlyDate);
+                label = format(monthlyDate, "MMMM yyyy");
+                break;
+            case 'year':
+                if (!yearlyDate) return;
+                startDate = startOfYear(yearlyDate);
+                endDate = endOfYear(yearlyDate);
+                label = format(yearlyDate, "yyyy");
+                break;
+        }
+        calculateCosts(startDate, endDate, label);
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{periodType.charAt(0).toUpperCase() + periodType.slice(1)} Cost Calculation</CardTitle>
+          <CardDescription>Select a {periodType} to calculate energy costs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {periodType === 'day' && <Label>Select Date</Label>}
+            {periodType === 'week' && <Label>Select any day in the week</Label>}
+            {periodType === 'month' && <Label>Select Month</Label>}
+            {periodType === 'year' && <Label>Select Year</Label>}
+            
+            {(periodType === 'day' || periodType === 'week') && (
+              <Popover open={periodType === 'day' ? isDailyCalendarOpen : isWeeklyCalendarOpen} onOpenChange={periodType === 'day' ? setIsDailyCalendarOpen : setIsWeeklyCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{formatDateForDisplay(periodType === 'day' ? dailyDate : weeklyDate)}</Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={periodType === 'day' ? dailyDate : weeklyDate} onSelect={date => { (periodType === 'day' ? setDailyDate : setWeeklyDate)(date); (periodType === 'day' ? setIsDailyCalendarOpen : setIsWeeklyCalendarOpen)(false); }} initialFocus />
+                </PopoverContent>
+              </Popover>
+            )}
+            {periodType === 'month' && (
+              <Select value={monthlyDate ? startOfMonth(monthlyDate).toISOString() : ""} onValueChange={(iso) => setMonthlyDate(iso ? parseISO(iso) : undefined)}>
+                <SelectTrigger><SelectValue placeholder="Select Month" /></SelectTrigger>
+                <SelectContent>{monthOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            {periodType === 'year' && (
+              <Select value={yearlyDate ? startOfYear(yearlyDate).toISOString() : ""} onValueChange={(iso) => setYearlyDate(iso ? parseISO(iso) : undefined)}>
+                <SelectTrigger><SelectValue placeholder="Select Year" /></SelectTrigger>
+                <SelectContent>{yearOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleCalculate} disabled={isLoading || !apiKey || !inverterSerial} className="w-full">
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Calculate {periodType.charAt(0).toUpperCase() + periodType.slice(1)} Cost
+          </Button>
+        </CardFooter>
       </Card>
     );
   };
@@ -344,178 +415,87 @@ export default function TariffsPage() {
         </Button>
       </div>
 
-      {/* How it Works Tooltip */}
-      <TooltipProvider>
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <Info className="h-5 w-5 text-muted-foreground hover:text-foreground cursor-help" />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-sm">
- This tool fetches your half-hourly energy import and export data for a selected day. It then applies your specified tariff rates to calculate your daily cost. All rates should be entered in pence per kWh (e.g., 28.5).
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tabs defaultValue="day" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+          <TabsTrigger value="day">Daily</TabsTrigger>
+          <TabsTrigger value="week">Weekly</TabsTrigger>
+          <TabsTrigger value="month">Monthly</TabsTrigger>
+          <TabsTrigger value="year">Yearly</TabsTrigger>
+          <TabsTrigger value="setup">Tariff Setup</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="day" className="space-y-6 mt-4">{renderCalculationUI('day')}</TabsContent>
+        <TabsContent value="week" className="space-y-6 mt-4">{renderCalculationUI('week')}</TabsContent>
+        <TabsContent value="month" className="space-y-6 mt-4">{renderCalculationUI('month')}</TabsContent>
+        <TabsContent value="year" className="space-y-6 mt-4">{renderCalculationUI('year')}</TabsContent>
 
-
-      {/* Select Date - Moved to top */}
-      <div className="space-y-2">
- <Label htmlFor="calc-date">Select Date</Label>
- <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}> {/* Controlled popover */}
- <PopoverTrigger asChild>
- <Button id="calc-date" variant="outline" className="w-full justify-start text-left font-normal">
- <CalendarIcon className="mr-2 h-4 w-4" />
- {formatDateForDisplay(selectedDate)}
- </Button>
- </PopoverTrigger>
- <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={handleDateSelect} initialFocus /></PopoverContent> {/* Use handleDateSelect */}
- </Popover>
-      </div>
-
-      {(!apiKey || !inverterSerial) && !isLoadingApiKey && (
-         <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>API Key or Inverter Not Found</AlertTitle>
-            <AlertDescription>Please set your GivEnergy API key and ensure your inverter is detected in the main application settings to use this feature.</AlertDescription>
-         </Alert>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          {/* Results Section - Moved to top */}
- {error && (
- <Alert variant="destructive">
- <AlertCircle className="h-4 w-4" />
- <AlertTitle>Error</AlertTitle>
- <AlertDescription>{error}</AlertDescription>
- </Alert>
- )}
- {isLoading && (
- <Card className="flex items-center justify-center min-h-[200px]">
- <div className="text-center">
- <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
- <p className="mt-2 text-muted-foreground">Fetching data and calculating costs...</p>
- </div>
- </Card>
- )}
- {!isLoading && calculationResult && renderResults()}
- {!isLoading && !calculationResult && !error && (
- <Card className="flex items-center justify-center min-h-[200px]">
- <p className="text-muted-foreground">Results will be displayed here.</p>
- </Card>
- )}
- </div>
-
-        <Card> {/* Calculation Setup Card */}
-          <CardHeader>
-            <CardTitle>Calculation Setup</CardTitle>
-            <CardDescription>Select a date, Use Default or load a preset or enter your tariff details manually.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-
-            {/* <div className="space-y-4 pt-4 border-t">
-              <Label>Load Tariff Preset</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select onValueChange={handleProviderChange} value={selectedProvider}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableProviders.map(provider => (
-                            <SelectItem key={provider} value={provider}>{provider}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                 <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Tariff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableTariffs.map(tariff => (
-                            <SelectItem key={tariff.name} value={tariff.name}>{tariff.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              </div>
-            </div> */}
-
-            <div className="space-y-4 pt-4 border-t">
-              <Label>Your Tariff</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select onValueChange={handleProviderChange} value={selectedProvider}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableProviders.map(provider => (
-                            <SelectItem key={provider} value={provider}>{provider}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                 <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Tariff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableTariffs.map(tariff => (
-                            <SelectItem key={tariff.name} value={tariff.name}>{tariff.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox
-                  id="save-as-default"
-                  checked={saveAsDefault}
-                  onCheckedChange={(checked) => setSaveAsDefault(Boolean(checked))}
-                />
-                <label
-                  htmlFor="save-as-default"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Save as default tariff for this page
-                </label>
-              </div>
-            </div>
-            
-            <div className="space-y-4 pt-4 border-t">
-              <div className="flex justify-between items-center">
-                <Label>Import Tariff (p/kWh)</Label>
-              </div>
-              {importRates.map((rate, index) => (
-                <div key={rate.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center p-2 border rounded-md">
-                    <div className="space-y-1">
-                        <Label htmlFor={`start-time-${rate.id}`} className="text-xs">Start</Label>
-                        <Input id={`start-time-${rate.id}`} type="time" value={rate.startTime} onChange={(e) => handleImportRateChange(rate.id, 'startTime', e.target.value)} />
-                    </div>
-                     <div className="space-y-1">
-                        <Label htmlFor={`end-time-${rate.id}`} className="text-xs">End</Label>
-                        <Input id={`end-time-${rate.id}`} type="time" value={rate.endTime} onChange={(e) => handleImportRateChange(rate.id, 'endTime', e.target.value)} />
-                    </div>
-                     <div className="space-y-1">
-                        <Label htmlFor={`rate-${rate.id}`} className="text-xs">Rate (p)</Label>
-                        <Input id={`rate-${rate.id}`} type="number" placeholder="e.g. 28.5" value={rate.rate} onChange={(e) => handleImportRateChange(rate.id, 'rate', e.target.value)} />
-                    </div>
-                    <Button variant="ghost" size="icon" className="self-end" onClick={() => removeImportRate(rate.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+        <TabsContent value="setup" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Calculation Setup</CardTitle>
+              <CardDescription>
+                <TooltipProvider>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild><Info className="inline-block h-4 w-4 mr-2 text-muted-foreground hover:text-foreground cursor-help" /></TooltipTrigger>
+                    <TooltipContent className="max-w-sm">This tool fetches your half-hourly energy import/export data and applies your specified tariff rates to calculate your costs. All rates should be in pence per kWh (e.g., 28.5).</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                 Load a preset or enter your tariff details manually.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4 pt-4 border-t">
+                <Label>Load a Tariff Preset</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Select onValueChange={handleProviderChange} value={selectedProvider}>
+                    <SelectTrigger><SelectValue placeholder="Select Provider" /></SelectTrigger>
+                    <SelectContent>{availableProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
+                    <SelectTrigger><SelectValue placeholder="Select Tariff" /></SelectTrigger>
+                    <SelectContent>{availableTariffs.map(t => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
-              ))}
-              <Button variant="outline" size="sm" onClick={addImportRate}><PlusCircle className="mr-2 h-4 w-4" /> Add Rate Period</Button>
-            </div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox id="save-as-default" checked={saveAsDefault} onCheckedChange={(c) => setSaveAsDefault(Boolean(c))} />
+                  <Label htmlFor="save-as-default" className="font-normal">Save as default tariff for this page</Label>
+                </div>
+              </div>
+              
+              <div className="space-y-4 pt-4 border-t">
+                <Label>Import Tariff (p/kWh)</Label>
+                {importRates.map((rate) => (
+                  <div key={rate.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center p-2 border rounded-md">
+                    <div className="space-y-1"><Label htmlFor={`start-${rate.id}`} className="text-xs">Start</Label><Input id={`start-${rate.id}`} type="time" value={rate.startTime} onChange={(e) => handleImportRateChange(rate.id, 'startTime', e.target.value)} /></div>
+                    <div className="space-y-1"><Label htmlFor={`end-${rate.id}`} className="text-xs">End</Label><Input id={`end-${rate.id}`} type="time" value={rate.endTime} onChange={(e) => handleImportRateChange(rate.id, 'endTime', e.target.value)} /></div>
+                    <div className="space-y-1"><Label htmlFor={`rate-${rate.id}`} className="text-xs">Rate (p)</Label><Input id={`rate-${rate.id}`} type="number" placeholder="e.g. 28.5" value={rate.rate} onChange={(e) => handleImportRateChange(rate.id, 'rate', e.target.value)} /></div>
+                    <Button variant="ghost" size="icon" className="self-end" onClick={() => removeImportRate(rate.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={addImportRate}><PlusCircle className="mr-2 h-4 w-4" /> Add Rate Period</Button>
+              </div>
 
-            <div className="space-y-2 pt-4 border-t">
-              <Label htmlFor="export-rate">Export Tariff (p/kWh)</Label>
-              <Input id="export-rate" type="number" placeholder="e.g., 15.0" value={exportRate} onChange={(e) => setExportRate(e.target.value)} />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={handleCalculateCosts} disabled={isLoading || !apiKey || !inverterSerial} className="w-full">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Calculate Daily Cost
-            </Button>
-          </CardFooter>
-        </Card>
-
+              <div className="space-y-2 pt-4 border-t">
+                <Label htmlFor="export-rate">Export Tariff (p/kWh)</Label>
+                <Input id="export-rate" type="number" placeholder="e.g., 15.0" value={exportRate} onChange={(e) => setExportRate(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      
+      <div className="mt-6 space-y-6">
+          {(!apiKey || !inverterSerial) && !isLoadingApiKey && (
+             <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>API Key or Inverter Not Found</AlertTitle><AlertDescription>Please set your GivEnergy API key and ensure your inverter is detected in the main application settings.</AlertDescription></Alert>
+          )}
+          {error && (<Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
+          {isLoading && (
+             <Card className="flex items-center justify-center min-h-[200px]"><div className="text-center"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /><p className="mt-2 text-muted-foreground">Fetching data and calculating costs...</p></div></Card>
+          )}
+          {!isLoading && calculationResult && renderResults()}
+          {!isLoading && !calculationResult && !error && (
+             <Card className="flex items-center justify-center min-h-[200px]"><p className="text-muted-foreground">Results will be displayed here.</p></Card>
+          )}
       </div>
     </div>
   );
