@@ -35,35 +35,34 @@ export const themes = {
 };
 
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>("system");
+  const [theme, setTheme] = useState<Theme>("system");
   const [mounted, setMounted] = useState(false);
- 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove("light", "dark", "hc-light", "hc-dark");
 
+  useEffect(() => {
+    setMounted(true);
+    // Read initial theme from local storage
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+    if (storedTheme) {
+ setTheme(storedTheme);
+    }
+  }, []); // Run only once on mount
+
+  useEffect(() => {
     let effectiveTheme = theme;
     if (theme === "system") {
       effectiveTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
+
+    const root = window.document.documentElement;
+    root.classList.remove("light", "dark", "hc-light", "hc-dark");
     
-    root.classList.add(effectiveTheme);
+ root.classList.add(effectiveTheme);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]); // Apply theme whenever the theme state changes
 
   useEffect(() => {
     // Set mounted to true once the component is mounted on the client side
-    setMounted(true);
-    // Read initial theme from local storage
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (storedTheme) {
-      setThemeState(storedTheme);
-    }
-  }, [theme, mounted]);
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-  };
+  }, []); // Add dependency array
 
   return { theme, setTheme, mounted };
 }
