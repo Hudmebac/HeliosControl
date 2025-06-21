@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -165,8 +165,15 @@ export default function InverterPresetsPage() {
     if (!apiKey || !inverterSerial) return null;
     setIsLoadingDeviceState(true);
     try {
-        const response = await _fetchGivEnergyAPI<RawPresetResponse>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
-        const settings = response.data.value;
+        // The API returns the settings object directly in the 'data' field.
+        const response = await _fetchGivEnergyAPI<{ data: PresetSettings }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
+        const settings = response.data; // Correctly get the settings object.
+        
+        // A quick validation to ensure we have the expected structure
+        if (typeof settings?.enabled !== 'boolean' || !Array.isArray(settings?.slots)) {
+            throw new Error("Received unexpected preset data structure from API.");
+        }
+        
         setCurrentDeviceValues(prev => ({ ...prev, [presetId]: settings }));
         return settings;
     } catch (error) {
