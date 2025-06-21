@@ -70,27 +70,38 @@ export default function BatterySchedulingPage() {
     }
     setIsLoading(true);
     setError(null);
+    
+    // Create a mutable copy of settings to update
+    const newSettings: SettingsData = { ...initialSettings };
+    let fetchErrorOccurred = false;
+
     try {
-      const settingKeys = Object.values(SETTING_IDS);
-      const promises = settingKeys.map(id =>
-        _fetchGivEnergyAPI<{ data: { value: string | number } }>(apiKey, `/inverter/${inverterSerial}/settings/${id}/read`)
-      );
-      const results = await Promise.all(promises);
-
-      const newSettings: SettingsData = {};
-      results.forEach((res, index) => {
-        const settingId = settingKeys[index];
-        if (settingId === SETTING_IDS.ENABLE_AC_CHARGE) {
-          newSettings[settingId] = res.data.value === 1 || res.data.value === true;
-        } else {
-          newSettings[settingId] = res.data.value;
+      for (const id of Object.values(SETTING_IDS)) {
+        try {
+          const res = await _fetchGivEnergyAPI<{ data: { value: string | number } }>(
+            apiKey,
+            `/inverter/${inverterSerial}/settings/${id}/read`
+          );
+          if (id === SETTING_IDS.ENABLE_AC_CHARGE) {
+            newSettings[id] = res.data.value === 1 || res.data.value === true;
+          } else {
+            newSettings[id] = res.data.value;
+          }
+        } catch (err: any) {
+          if (err instanceof Error && err.message.includes('404')) {
+            console.warn(`Setting ID ${id} not found. Using default value.`);
+            // The default is already in newSettings, so we just log and continue
+          } else {
+            console.error(`Failed to fetch setting ${id}:`, err);
+            fetchErrorOccurred = true;
+            // The default is already in newSettings, just flag error
+          }
         }
-      });
+      }
       setSettings(newSettings);
-
-    } catch (err: any) {
-      console.error("Error fetching settings:", err);
-      setError(err.message || 'An error occurred while fetching settings.');
+      if (fetchErrorOccurred) {
+        setError("Some settings failed to load. The displayed values may not be accurate.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -113,25 +124,41 @@ export default function BatterySchedulingPage() {
     }
     setIsSaving(true);
     setError(null);
-    try {
-      const settingKeys = Object.keys(settings);
-      const promises = settingKeys.map(id => {
-        let value = settings[id];
-        if (id === SETTING_IDS.ENABLE_AC_CHARGE) {
-          value = value ? 1 : 0;
-        }
-        return _fetchGivEnergyAPI(apiKey, `/inverter/${inverterSerial}/settings/${id}/write`, {
-          method: 'POST',
-          body: JSON.stringify({ value }),
-        });
-      });
+    let saveErrorOccurred = false;
 
-      await Promise.all(promises);
-      toast({ title: "Success", description: "Battery schedule settings saved successfully." });
-      fetchSettings(); // Re-fetch to confirm settings
+    try {
+        for (const id of Object.keys(settings)) {
+            try {
+                let value = settings[id];
+                if (id === SETTING_IDS.ENABLE_AC_CHARGE) {
+                    value = value ? 1 : 0;
+                }
+                await _fetchGivEnergyAPI(apiKey, `/inverter/${inverterSerial}/settings/${id}/write`, {
+                    method: 'POST',
+                    body: JSON.stringify({ value }),
+                });
+            } catch (err: any) {
+                if (err instanceof Error && err.message.includes('404')) {
+                    console.warn(`Could not write to setting ID ${id} (not found). Skipping.`);
+                    // Silently skip settings that don't exist on the inverter
+                } else {
+                    console.error(`Error saving setting ${id}:`, err);
+                    saveErrorOccurred = true; // Flag that some other error occurred
+                }
+            }
+        }
+
+        if (saveErrorOccurred) {
+            toast({ variant: "destructive", title: "Partial Success", description: "Some settings failed to save." });
+        } else {
+            toast({ title: "Success", description: "Battery schedule settings saved successfully." });
+        }
+        
+        fetchSettings(); // Re-fetch to confirm settings are what we expect
 
     } catch (err: any) {
-      console.error("Error saving settings:", err);
+      // This outer catch is for setup errors before the loop.
+      console.error("A critical error occurred while saving settings:", err);
       setError(err.message || 'An error occurred while saving settings.');
       toast({ variant: "destructive", title: "Save Failed", description: err.message || 'Could not save settings.' });
     } finally {
