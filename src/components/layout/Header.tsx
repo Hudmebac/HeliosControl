@@ -93,16 +93,7 @@ export function Header() {
             Helios Control
           </Link>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="icon" asChild aria-label="Link to Solar">
-            <Link href="https://heliosaj.netlify.app/" target="_blank" rel="noopener noreferrer">
-              <Sun className="h-5 w-5" />
-            </Link>
-          </Button>
-        </div>
-
-
-        <div className="flex flex-1 items-center justify-end space-x-2 md:space-x-4">
+        <div className="flex flex-1 items-center justify-end space-x-2">
           {apiKey && isSettingsLoaded && (
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <Timer className="h-4 w-4" />
