@@ -1259,7 +1259,7 @@ const EVChargerPage = () => {
                                 <CardTitle>Manage Schedules</CardTitle>
                                 <div className="flex items-center space-x-2">
                                     <Button onClick={syncSchedulesFromDevice} variant="outline" size="sm" disabled={isSyncingFromDevice || !evChargerData?.uuid || isLoadingDeviceSchedule}>
-                                        {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />} Update From Device
+                                        {isSyncingFromDevice ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <DownloadCloud className="mr-2 h-4 w-4" />} Update
                                     </Button>
                                     {/* Add "Retrieve Device Events" button here */}
                                     <Button
@@ -1268,10 +1268,10 @@ const EVChargerPage = () => {
  size="sm"
                                         disabled={!evChargerData?.uuid || isLoadingDeviceEvents} // Disable if no charger is found or loading
                                     >
- <HandCoins className="mr-2 h-4 w-4" /> Retrieve Device Events {/* Button label */}
+ <HandCoins className="mr-2 h-4 w-4" /> Publish {/* Button label */}
  </Button>
                                     <Button onClick={() => handleOpenScheduleDialog()} size="sm">
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Add New Schedule
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Add New
                                     </Button>
                                 </div>
                             </div>
@@ -1356,11 +1356,11 @@ const EVChargerPage = () => {
                         <CardHeader><CardTitle className="text-base">Note on Schedule Management</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Schedules are saved in your browser. Click "Activate" to send one to your GivEnergy EV Charger, making it the active schedule on the device.
+                                Schedules are saved in your browser. Click "Activate" to send to your GivEnergy EV Charger, making it the active schedule on the device.
                                 The "Active on Device" badge shows which schedule from your list matches the name of the charger's current active schedule.
-                                "Update Schedule" fetches all schedules from the device, adding new ones to your local list and updating existing local ones if their names match.
+                                "Update" fetches all schedules from the device, adding new ones to your local list and updating existing local ones if their names match.
                                 "Refresh Device Active Status" re-checks which schedule is currently active on the device by name. Editing a locally active schedule will automatically attempt to update it on the device.
-                                Deleting a schedule from this list removes it locally but does not delete it from the EV charger's memory.
+                                Deleting a schedule from this list removes it locally but does not delete it from the EV charger's memory."Publish" is a Push of Schedules to Device.
                             </p>
                         </CardContent>
                     </Card>
