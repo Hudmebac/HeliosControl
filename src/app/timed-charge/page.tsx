@@ -165,13 +165,14 @@ export default function InverterPresetsPage() {
     if (!apiKey || !inverterSerial) return null;
     setIsLoadingDeviceState(true);
     try {
-        // The API returns the settings object directly in the 'data' field.
         const response = await _fetchGivEnergyAPI<{ data: PresetSettings }>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
-        const settings = response.data; // Correctly get the settings object.
+        const settings = response.data;
         
-        // A quick validation to ensure we have the expected structure
         if (typeof settings?.enabled !== 'boolean' || !Array.isArray(settings?.slots)) {
-            throw new Error("Received unexpected preset data structure from API.");
+            console.warn("Received unexpected preset data structure from API for preset:", presetId, settings);
+            // It might be a validation response. For now, treat as no valid settings found.
+            setCurrentDeviceValues(prev => ({ ...prev, [presetId]: null }));
+            return null;
         }
         
         setCurrentDeviceValues(prev => ({ ...prev, [presetId]: settings }));
@@ -188,14 +189,24 @@ export default function InverterPresetsPage() {
   
   const areSettingsEqual = (s1?: PresetSettings | null, s2?: PresetSettings | null): boolean => {
       if (!s1 || !s2) return false;
-      const normalize = (s: PresetSettings) => ({
-          enabled: !!s.enabled,
-          slots: (s.slots || []).map(slot => ({
-              start_time: slot.start_time,
-              end_time: slot.end_time,
-              percent_limit: Number(slot.percent_limit)
-          })).sort((a, b) => a.start_time.localeCompare(b.start_time)) // Sort slots for consistent comparison
-      });
+      
+      const normalize = (s: PresetSettings) => {
+          const activeSlots = (s.slots || [])
+              // Filter out empty/unused slots before comparison
+              .filter(slot => slot.start_time !== '00:00' || slot.end_time !== '00:00')
+              .map(slot => ({
+                  start_time: slot.start_time,
+                  end_time: slot.end_time,
+                  percent_limit: Number(slot.percent_limit)
+              }))
+              .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.end_time.localeCompare(b.end_time));
+
+          return {
+              enabled: !!s.enabled,
+              slots: activeSlots
+          };
+      };
+      
       return JSON.stringify(normalize(s1)) === JSON.stringify(normalize(s2));
   };
 
@@ -204,7 +215,7 @@ export default function InverterPresetsPage() {
         fetchCurrentDevicePreset(activeTab);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isApiKeyLoading, apiKey, inverterSerial, activeTab]); // Re-fetch when tab changes
+  }, [isApiKeyLoading, apiKey, inverterSerial, activeTab]);
 
   useEffect(() => {
     const deviceSettings = currentDeviceValues[activeTab];
@@ -214,7 +225,7 @@ export default function InverterPresetsPage() {
     } else {
         setActivePresetId(null);
     }
-  }, [currentDeviceValues, presets, activeTab]);
+  }, [currentDeviceValues, presets, activeTab, areSettingsEqual]);
 
   const handleActivatePreset = async (preset: NamedPreset) => {
     if (!apiKey || !inverterSerial) return;
@@ -274,9 +285,10 @@ export default function InverterPresetsPage() {
 
   const formatPresetSummary = (settings: PresetSettings): string => {
     if (!settings.enabled) return "Mode is disabled.";
-    if (!settings.slots || settings.slots.length === 0) return "Mode is enabled but has no time slots defined.";
+    const activeSlots = settings.slots?.filter(slot => slot.start_time !== '00:00' || slot.end_time !== '00:00');
+    if (!activeSlots || activeSlots.length === 0) return "Mode is enabled but has no time slots defined.";
     
-    return settings.slots.map(slot => 
+    return activeSlots.map(slot => 
         `${slot.start_time}-${slot.end_time} to ${slot.percent_limit}%`
     ).join(' | ');
   };
@@ -315,7 +327,7 @@ export default function InverterPresetsPage() {
                                     <CardHeader className="pb-3">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <CardTitle className="text-lg flex items-center">{preset.name} {isActive && <Badge variant="default" className="ml-2 bg-green-500">Active</Badge>}</CardTitle>
+                                                <CardTitle className="text-lg flex items-center">{preset.name} {isActive && <Badge variant="default" className="ml-2 bg-green-500">Active on Device</Badge>}</CardTitle>
                                                 <CardDescription className="text-xs">Last updated: {new Date(preset.updatedAt).toLocaleString()}</CardDescription>
                                             </div>
                                             <div className="flex items-center space-x-1.5">
