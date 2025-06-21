@@ -13,56 +13,13 @@ import {
 } from "@/components/ui/sheet";
 import { SettingsSheetContent } from "@/components/settings/SettingsSheetContent";
 import { appEventBus, REFRESH_DASHBOARD_EVENT, DATA_FETCH_COMPLETED_EVENT } from "@/lib/event-bus";
-import { useApiKey } from "@/hooks/use-api-key"; 
+import { useApiKey } from "@/hooks/use-api-key";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useState, useEffect } from "react";
-
-
 export function Header() {
   const { apiKey } = useApiKey();
   const { refreshInterval, isSettingsLoaded } = useAppSettings();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
-  const [countdown, setCountdown] = useState(refreshInterval);
-
-  // Effect to reset countdown when refreshInterval from settings changes
-  useEffect(() => {
-    if (isSettingsLoaded) {
-      setCountdown(refreshInterval);
-    }
-  }, [refreshInterval, isSettingsLoaded]);
-
-  // Effect for the countdown timer logic
-  useEffect(() => {
-    if (!apiKey || !isSettingsLoaded) {
-      return;
-    }
-
-    if (countdown <= 0) {
-      // This simulates the auto-refresh cycle for the timer display
-      // The actual data fetch is handled by useGivEnergyData
-      setCountdown(refreshInterval); 
-      return;
-    }
-
-    const timerId = setTimeout(() => {
-      setCountdown(prevCountdown => prevCountdown - 1);
-    }, 1000);
-
-    return () => clearTimeout(timerId);
-  }, [countdown, apiKey, isSettingsLoaded, refreshInterval]);
-
-  // Effect to listen for actual data fetch completions to reset timer
-  useEffect(() => {
-    const handleDataFetchCompleted = () => {
-      if (isSettingsLoaded) {
-        setCountdown(refreshInterval);
-      }
-    };
-    appEventBus.on(DATA_FETCH_COMPLETED_EVENT, handleDataFetchCompleted);
-    return () => {
-      appEventBus.off(DATA_FETCH_COMPLETED_EVENT, handleDataFetchCompleted);
-    };
-  }, [refreshInterval, isSettingsLoaded]);
   
   const handleRefresh = () => {
     if (!apiKey || isManualRefreshing) return;
@@ -86,7 +43,7 @@ export function Header() {
         <div className="mr-4 flex items-center">
           <AppLogo className="h-6 w-6 mr-2 text-primary" />
           <Link 
-            href="/"
+ href="/"
             className="text-lg font-semibold font-headline"
             aria-label="Go to dashboard"
           >
@@ -94,12 +51,6 @@ export function Header() {
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
-          {apiKey && isSettingsLoaded && (
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <Timer className="h-4 w-4" />
-              <span>Next: {countdown}s</span>
-            </div>
-          )}
           {apiKey && (
             <Button
               variant="ghost"
@@ -115,6 +66,7 @@ export function Header() {
               )}
             </Button>
           )}
+
           <ThemeSwitcher />
           <Sheet>
             <SheetTrigger asChild>
