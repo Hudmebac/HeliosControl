@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import Link from "next/link";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react"; // Added useMemo
 import { v4 as uuidv4 } from 'uuid';
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
@@ -19,13 +19,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"; // Added Select imports
 import { ArrowLeft, Plug, CalendarIcon, Loader2, PlusCircle, Trash2, Info, AlertTriangle } from "lucide-react";
 
+// --- Data Structures ---
 interface TariffRate {
   id: string;
   startTime: string; // HH:mm
   endTime: string;   // HH:mm
   rate: string;      // pence per kWh
+  label?: string;    // Optional label like "Cheap"
 }
 
 interface CalculationResult {
@@ -38,14 +41,58 @@ interface CalculationResult {
   effectiveExportRate: number;
 }
 
+const TARIFF_PRESETS = [
+    {
+      provider: "Octopus Energy",
+      name: "Cosy Home",
+      rates: [
+        { "start": "00:00", "end": "04:00", "rate": 27.24 },
+        { "start": "04:00", "end": "07:00", "rate": 13.36, "label": "Cheap" },
+        { "start": "07:00", "end": "13:00", "rate": 27.24 },
+        { "start": "13:00", "end": "16:00", "rate": 13.36, "label": "Cheap" },
+        { "start": "16:00", "end": "19:00", "rate": 40.86 },
+        { "start": "19:00", "end": "22:00", "rate": 27.24 },
+        { "start": "22:00", "end": "00:00", "rate": 13.36, "label": "Cheap" }
+      ]
+    },
+    {
+      provider: "Octopus Energy",
+      name: "Go",
+      rates: [
+        { start: '00:30', end: '04:30', rate: 9.0, label: 'Cheap' },
+        { start: '04:30', end: '00:30', rate: 28.0 },
+      ],
+    },
+    {
+      provider: "British Gas",
+      name: "Electric Driver",
+      rates: [
+        { "start": "00:00", "end": "05:00", "rate": 8.95, "label": "Cheap" },
+        { "start": "05:00", "end": "00:00", "rate": 32.00 }
+      ]
+    },
+    {
+      provider: "E.ON Next",
+      name: "Drive",
+      rates: [
+        { "start": "00:00", "end": "07:00", "rate": 9.50, "label": "Cheap" },
+        { "start": "07:00", "end": "00:00", "rate": 31.50 }
+      ]
+    },
+    {
+      provider: "EDF Energy",
+      name: "GoElectric Overnight",
+      rates: [
+        { "start": "00:00", "end": "05:00", "rate": 8.00, "label": "Cheap" },
+        { "start": "05:00", "end": "00:00", "rate": 33.00 }
+      ]
+    }
+];
+
 const formatDateForDisplay = (date: Date | undefined): string => {
  return date ? format(date, "PPP") : "Pick a date";
 };
 
-const presetOctopusGo = [
-  { id: uuidv4(), startTime: '00:30', endTime: '04:29', rate: '9.0' },
-  { id: uuidv4(), startTime: '04:30', endTime: '00:29', rate: '28.0' },
-];
 
 export default function TariffsPage() {
   const { apiKey, inverterSerial, isLoadingApiKey } = useApiKey();
@@ -60,6 +107,35 @@ export default function TariffsPage() {
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // State for presets
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [selectedTariffName, setSelectedTariffName] = useState<string>("");
+
+  const availableProviders = useMemo(() => [...new Set(TARIFF_PRESETS.map(t => t.provider))], []);
+  const availableTariffs = useMemo(() => TARIFF_PRESETS.filter(t => t.provider === selectedProvider), [selectedProvider]);
+
+  const handleProviderChange = (provider: string) => {
+    setSelectedProvider(provider);
+    setSelectedTariffName(""); // Reset tariff when provider changes
+    setImportRates([{ id: uuidv4(), startTime: '00:00', endTime: '23:59', rate: '28.0' }]);
+  };
+
+  const handleTariffChange = (tariffName: string) => {
+    setSelectedTariffName(tariffName);
+    const tariff = TARIFF_PRESETS.find(t => t.provider === selectedProvider && t.name === tariffName);
+    if (tariff) {
+        const newRates = tariff.rates.map(r => ({
+            id: uuidv4(),
+            startTime: r.start,
+            endTime: r.end,
+            rate: String(r.rate),
+            label: r.label,
+        }));
+        setImportRates(newRates);
+    }
+  };
+
 
   const handleImportRateChange = (id: string, field: keyof Omit<TariffRate, 'id'>, value: string) => {
     setImportRates(prev => prev.map(rate => rate.id === id ? { ...rate, [field]: value } : rate));
@@ -101,14 +177,14 @@ export default function TariffsPage() {
 
     try {
       const apiStartDate = format(selectedDate, "yyyy-MM-dd");
-      const apiEndDate = format(addDays(selectedDate, 1), "yyyy-MM-dd"); // Query for the full day
+      const apiEndDate = format(addDays(selectedDate, 1), "yyyy-MM-dd");
 
       const flowData = await getEnergyFlows(
         apiKey,
         inverterSerial,
         apiStartDate,
         apiEndDate,
-        0, // Grouping 0 for half-hourly
+        0,
         ['2', '3', '4', '6']
       );
 
@@ -138,9 +214,11 @@ export default function TariffsPage() {
             const periodStart = setSeconds(setMinutes(setHours(entryTime, startH), startM), 0);
             let periodEnd = setSeconds(setMinutes(setHours(entryTime, endH), endM), 59);
 
-            if (periodEnd < periodStart) { // Handles overnight periods like 23:30 to 05:30
-                if (isWithinInterval(entryTime, { start: periodStart, end: setHours(entryTime, 23) }) || 
-                    isWithinInterval(entryTime, { start: setHours(entryTime, 0), end: periodEnd })) {
+            if (periodEnd < periodStart) {
+                const endOfDay = setSeconds(setMinutes(setHours(entryTime, 23), 59), 59);
+                const startOfDay = setSeconds(setMinutes(setHours(entryTime, 0), 0), 0);
+                if (isWithinInterval(entryTime, { start: periodStart, end: endOfDay }) || 
+                    isWithinInterval(entryTime, { start: startOfDay, end: periodEnd })) {
                      matchedRatePence = parseFloat(ratePeriod.rate);
                      break;
                 }
@@ -151,7 +229,7 @@ export default function TariffsPage() {
                 }
             }
         }
-        totalImportCost += importKWh * (matchedRatePence / 100); // Convert pence to pounds
+        totalImportCost += importKWh * (matchedRatePence / 100);
       });
 
       const totalExportRevenue = totalExportKWh * (parseFloat(exportRate) / 100);
@@ -247,7 +325,7 @@ export default function TariffsPage() {
         <Card>
           <CardHeader>
             <CardTitle>1. Calculation Setup</CardTitle>
-            <CardDescription>Select a date and enter your tariff details.</CardDescription>
+            <CardDescription>Select a date, load a preset or enter your tariff details manually.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
@@ -262,11 +340,36 @@ export default function TariffsPage() {
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} initialFocus /></PopoverContent>
               </Popover>
             </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <Label>Load Tariff Preset</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select onValueChange={handleProviderChange} value={selectedProvider}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableProviders.map(provider => (
+                            <SelectItem key={provider} value={provider}>{provider}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Tariff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableTariffs.map(tariff => (
+                            <SelectItem key={tariff.name} value={tariff.name}>{tariff.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+            </div>
             
-            <div className="space-y-4">
+            <div className="space-y-4 pt-4 border-t">
               <div className="flex justify-between items-center">
                 <Label>Import Tariff (p/kWh)</Label>
-                <Button variant="ghost" size="sm" onClick={() => setImportRates(presetOctopusGo)}>Load Octopus Go Preset</Button>
               </div>
               {importRates.map((rate, index) => (
                 <div key={rate.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center p-2 border rounded-md">
@@ -290,7 +393,7 @@ export default function TariffsPage() {
               <Button variant="outline" size="sm" onClick={addImportRate}><PlusCircle className="mr-2 h-4 w-4" /> Add Rate Period</Button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 pt-4 border-t">
               <Label htmlFor="export-rate">Export Tariff (p/kWh)</Label>
               <Input id="export-rate" type="number" placeholder="e.g., 15.0" value={exportRate} onChange={(e) => setExportRate(e.target.value)} />
             </div>
