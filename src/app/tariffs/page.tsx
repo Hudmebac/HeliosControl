@@ -280,6 +280,11 @@ export default function TariffsPage() {
     }
   }, [apiKey, inverterSerial, selectedDate, importRates, exportRate, toast, saveAsDefault, selectedProvider, selectedTariffName]);
 
+  // Recalculate when the selected date changes
+  useEffect(() => {
+    handleCalculateCosts();
+  }, [selectedDate, handleCalculateCosts]); // Added handleCalculateCosts to dependencies
+
 
   const renderResults = () => {
     if (!calculationResult) return null;
@@ -352,8 +357,8 @@ export default function TariffsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>1. Calculation Setup</CardTitle>
-            <CardDescription>Select a date, load a preset or enter your tariff details manually.</CardDescription>
+            <CardTitle>Calculation Setup</CardTitle>
+            <CardDescription>Select a date, Use Default or load a preset or enter your tariff details manually.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
