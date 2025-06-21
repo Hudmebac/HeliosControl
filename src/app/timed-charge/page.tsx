@@ -363,14 +363,6 @@ export default function InverterPresetsPage() {
           <Button variant="default" asChild><Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link></Button>
         </div>
 
-        <Alert>
-            <Info className="h-4 w-4"/>
-            <AlertTitle>New Preset System</AlertTitle>
-            <AlertDescription>
-                This page now uses the official GivEnergy Presets API. Your old schedules based on individual settings are no longer used. Please recreate your desired schedules using this new system.
-            </AlertDescription>
-        </Alert>
-
         {!apiKey || !inverterSerial ? (
             <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Configuration Error</AlertTitle><AlertDescription>API Key or Inverter Serial not found. Please check settings.</AlertDescription></Alert>
         ) : (
