@@ -73,7 +73,7 @@ export default function HomePage() {
  <HandCoins className="h-8 w-8 text-primary mb-3" /> {/* Icon for Tariffs */}
                 <h3 className="text-lg font-semibold">The Financials</h3>
                 <p className="text-sm text-muted-foreground text-center">
-                  View Cost and compare electricity tariffs.
+                  View cost and compare electricity tariffs.
                 </p>
               </div>
             </Link>
