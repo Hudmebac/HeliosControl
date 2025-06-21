@@ -56,6 +56,14 @@ export default function HomePage() {
                 </p>
             </a>
             
+            <Link href="/tariffs" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>            
+              <HandCoins className="h-8 w-8 text-primary mb-3" />
+              <h3 className="text-lg font-semibold">The Financials</h3>
+              <p className="text-sm text-muted-foreground text-center">
+                View cost and compare electricity tariffs.
+              </p>
+            </Link>
+
             <Link href="/ev-charger" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
               <Car className="h-8 w-8 text-primary mb-3" style={{ color: '#ff8c00' }} />
               <h3 className="text-lg font-semibold">EV Charger</h3>
@@ -69,14 +77,6 @@ export default function HomePage() {
               <h3 className="text-lg font-semibold">Timed Charge</h3>
               <p className="text-sm text-muted-foreground text-center">
                 Manage Battery Charge Times.
-              </p>
-            </Link>
-
-            <Link href="/tariffs" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>            
-              <HandCoins className="h-8 w-8 text-primary mb-3" />
-              <h3 className="text-lg font-semibold">The Financials</h3>
-              <p className="text-sm text-muted-foreground text-center">
-                View cost and compare electricity tariffs.
               </p>
             </Link>
 
