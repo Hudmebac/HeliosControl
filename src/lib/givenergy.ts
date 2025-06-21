@@ -56,6 +56,12 @@ export async function _fetchGivEnergyAPI<T>(
     });
 
     if (!response.ok) {
+      if (suppressErrorForStatus.includes(response.status)) {
+        // For suppressed errors like 404, return an empty object.
+        // The calling function can check for the presence of `res.data` to see if it was successful.
+        return {} as T;
+      }
+      
       let errorBody: any = {};
       try {
         errorBody = await response.json();
@@ -75,7 +81,6 @@ export async function _fetchGivEnergyAPI<T>(
       }
       
       const errorMessage = `API Request Error: ${response.status} ${response.statusText}${detailMessage ? ` - Detail: ${String(detailMessage)}` : ''}`;
-
 
       if (!suppressErrorForStatus.includes(response.status)) {
         console.error(`GivEnergy API error for ${fetchUrl}: ${response.status} ${response.statusText}`, errorBody);
