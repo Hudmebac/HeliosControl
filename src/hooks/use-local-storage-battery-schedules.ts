@@ -2,92 +2,92 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { NamedBatterySchedule, BatteryScheduleSettings } from '@/lib/types';
+import type { NamedPreset, PresetSettings, InverterPresetId } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
-const LOCAL_STORAGE_KEY_PREFIX = 'helios-battery-schedules-';
+// Note: This hook now manages all "presets", not just battery schedules, to align with the new API.
+// The name is kept for now to avoid breaking imports, but the internal logic is preset-based.
+const LOCAL_STORAGE_KEY_PREFIX = 'helios-preset-schedules-';
 
 export function useLocalStorageBatterySchedules(inverterSerial: string | null) {
   const getStorageKey = useCallback(() => {
     return inverterSerial ? `${LOCAL_STORAGE_KEY_PREFIX}${inverterSerial}` : null;
   }, [inverterSerial]);
 
-  const [schedules, setSchedules] = useState<NamedBatterySchedule[]>([]);
+  const [presets, setPresets] = useState<NamedPreset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadSchedulesFromStorage = useCallback(() => {
+  const loadPresetsFromStorage = useCallback(() => {
     setIsLoading(true);
     const storageKey = getStorageKey();
     if (!storageKey) {
-      setSchedules([]);
+      setPresets([]);
       setIsLoading(false);
       return;
     }
 
     try {
-      const storedSchedules = localStorage.getItem(storageKey);
-      if (storedSchedules) {
-        const parsedSchedules: NamedBatterySchedule[] = JSON.parse(storedSchedules);
-        setSchedules(parsedSchedules);
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed: NamedPreset[] = JSON.parse(stored);
+        setPresets(parsed);
       } else {
-        setSchedules([]);
+        setPresets([]);
       }
     } catch (error) {
-      console.error("Error loading battery schedules from localStorage:", error);
-      setSchedules([]);
+      console.error("Error loading presets from localStorage:", error);
+      setPresets([]);
     } finally {
       setIsLoading(false);
     }
   }, [getStorageKey]);
 
   useEffect(() => {
-    loadSchedulesFromStorage();
-  }, [inverterSerial, loadSchedulesFromStorage]);
+    loadPresetsFromStorage();
+  }, [inverterSerial, loadPresetsFromStorage]);
 
   useEffect(() => {
     const storageKey = getStorageKey();
     if (storageKey && !isLoading) {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(schedules));
+        localStorage.setItem(storageKey, JSON.stringify(presets));
       } catch (error) {
-        console.error("Error saving battery schedules to localStorage:", error);
+        console.error("Error saving presets to localStorage:", error);
       }
     }
-  }, [schedules, inverterSerial, isLoading, getStorageKey]);
+  }, [presets, inverterSerial, isLoading, getStorageKey]);
 
-  const addSchedule = useCallback((scheduleData: { name: string, settings: BatteryScheduleSettings }): NamedBatterySchedule => {
-    const newSchedule: NamedBatterySchedule = {
-      ...scheduleData,
+  const addPreset = useCallback((presetData: { name: string, presetId: InverterPresetId, settings: PresetSettings }): NamedPreset => {
+    const newPreset: NamedPreset = {
+      ...presetData,
       id: uuidv4(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setSchedules(prevSchedules => [newSchedule, ...prevSchedules]);
-    return newSchedule;
+    setPresets(prev => [newPreset, ...prev]);
+    return newPreset;
   }, []);
 
-  const updateSchedule = useCallback((scheduleId: string, updates: { name: string, settings: BatteryScheduleSettings }) => {
-    setSchedules(prevSchedules =>
-      prevSchedules.map(schedule =>
-        schedule.id === scheduleId
-          ? { ...schedule, name: updates.name, settings: updates.settings, updatedAt: new Date().toISOString() }
-          : schedule
+  const updatePreset = useCallback((presetId: string, updates: { name: string, settings: PresetSettings }) => {
+    setPresets(prev =>
+      prev.map(p =>
+        p.id === presetId
+          ? { ...p, name: updates.name, settings: updates.settings, updatedAt: new Date().toISOString() }
+          : p
       )
     );
   }, []);
 
-  const deleteSchedule = useCallback((scheduleId: string) => {
-    setSchedules(prevSchedules =>
-      prevSchedules.filter(schedule => schedule.id !== scheduleId)
-    );
+  const deletePreset = useCallback((presetId: string) => {
+    setPresets(prev => prev.filter(p => p.id !== presetId));
   }, []);
 
   return {
-    schedules,
-    addSchedule,
-    updateSchedule,
-    deleteSchedule,
+    presets,
+    addPreset,
+    updatePreset,
+    deletePreset,
     isLoading,
-    reloadSchedules: loadSchedulesFromStorage,
+    reloadPresets: loadPresetsFromStorage,
   };
 }

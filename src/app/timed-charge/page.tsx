@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useApiKey } from "@/hooks/use-api-key";
 import { useToast } from "@/hooks/use-toast";
 import { _fetchGivEnergyAPI } from "@/lib/givenergy";
-import type { NamedBatterySchedule, BatteryScheduleSettings } from '@/lib/types';
+import type { NamedPreset, PresetSettings, InverterPresetId, RawPresetResponse, PresetSlot } from '@/lib/types';
 import { useLocalStorageBatterySchedules } from '@/hooks/use-local-storage-battery-schedules';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -16,111 +16,123 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle, ArrowLeft, BatteryCharging, Save, PlusCircle, Edit, Trash2, DownloadCloud, CheckCircle2, RefreshCw } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Loader2, AlertTriangle, ArrowLeft, BatteryCharging, Save, PlusCircle, Edit, Trash2, DownloadCloud, CheckCircle2, RefreshCw, X, Info } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 
-const SETTING_IDS = {
-  ENABLE_AC_CHARGE: '53',
-  CHARGE_SLOT_1_START: '54',
-  CHARGE_SLOT_1_END: '55',
-  CHARGE_TARGET_SOC: '56',
-  CHARGE_SLOT_2_START: '60',
-  CHARGE_SLOT_2_END: '61',
-  CHARGE_TARGET_SOC_2: '62',
-  DISCHARGE_SLOT_1_START: '57',
-  DISCHARGE_SLOT_1_END: '58',
-  DISCHARGE_TARGET_SOC: '59',
-  DISCHARGE_SLOT_2_START: '63',
-  DISCHARGE_SLOT_2_END: '64',
-  DISCHARGE_TARGET_SOC_2: '65',
+
+const PRESET_CONFIG: Record<InverterPresetId, { title: string, description: string, slotAction: string }> = {
+    'timed-charge': {
+        title: "Timed Charge",
+        description: "Charge the battery from the grid during specified times. Ideal for off-peak tariffs.",
+        slotAction: "Charge to"
+    },
+    'timed-export': {
+        title: "Timed Export",
+        description: "Force discharge the battery to the grid at its maximum power. Ideal for peak export tariffs.",
+        slotAction: "Discharge to"
+    },
+    'timed-discharge': {
+        title: "Timed Discharge",
+        description: "Discharge the battery to meet home demand during specified times.",
+        slotAction: "Discharge to"
+    }
 };
 
-const DEFAULT_SETTINGS: BatteryScheduleSettings = {
-  enableAcCharge: false,
-  chargeSlot1: { start: "00:00", end: "00:00", soc: 100 },
-  chargeSlot2: { start: "00:00", end: "00:00", soc: 100 },
-  dischargeSlot1: { start: "00:00", end: "00:00", soc: 4 },
-  dischargeSlot2: { start: "00:00", end: "00:00", soc: 4 },
-};
+const DEFAULT_PRESET_SETTINGS: PresetSettings = { enabled: false, slots: [] };
 
-// --- Dialog Component for Add/Edit ---
-interface BatteryScheduleDialogProps {
+// --- Dialog for Add/Edit ---
+interface PresetDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { name: string, settings: BatteryScheduleSettings }) => void;
-  existingSchedule?: Partial<NamedBatterySchedule>;
+  onSave: (data: { name:string } & Omit<NamedPreset, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  existingPreset?: Partial<NamedPreset>;
+  activePresetId: InverterPresetId;
 }
 
-function BatteryScheduleDialog({ isOpen, onClose, onSave, existingSchedule }: BatteryScheduleDialogProps) {
+function PresetDialog({ isOpen, onClose, onSave, existingPreset, activePresetId }: PresetDialogProps) {
     const [name, setName] = useState('');
-    const [settings, setSettings] = useState<BatteryScheduleSettings>(DEFAULT_SETTINGS);
+    const [settings, setSettings] = useState<PresetSettings>(DEFAULT_PRESET_SETTINGS);
 
     useEffect(() => {
         if (isOpen) {
-            setName(existingSchedule?.name || 'New Schedule');
-            setSettings(existingSchedule?.settings || DEFAULT_SETTINGS);
+            setName(existingPreset?.name || `New ${PRESET_CONFIG[activePresetId].title} Schedule`);
+            // Ensure slots is always an array, providing a default empty slot if none exist
+            const initialSlots = existingPreset?.settings?.slots;
+            const slots = (initialSlots && initialSlots.length > 0) ? initialSlots : [{ start_time: '00:00', end_time: '04:00', percent_limit: 100 }];
+            setSettings(existingPreset?.settings || { enabled: false, slots });
         }
-    }, [isOpen, existingSchedule]);
+    }, [isOpen, existingPreset, activePresetId]);
 
-    const handleSettingChange = (key: keyof BatteryScheduleSettings, value: any) => {
-        setSettings(prev => ({...prev, [key]: value}));
+    const handleSlotChange = (index: number, field: keyof PresetSlot, value: any) => {
+        const newSlots = [...settings.slots];
+        newSlots[index] = { ...newSlots[index], [field]: value };
+        setSettings(prev => ({ ...prev, slots: newSlots }));
     };
-    
-    const handleSlotChange = (slot: 'chargeSlot1' | 'chargeSlot2' | 'dischargeSlot1' | 'dischargeSlot2', field: 'start' | 'end' | 'soc', value: any) => {
-        setSettings(prev => ({
-            ...prev,
-            [slot]: { ...prev[slot], [field]: value }
-        }));
-    };
-    
+
+    const addSlot = () => {
+        setSettings(prev => ({ ...prev, slots: [...prev.slots, { start_time: '00:00', end_time: '00:00', percent_limit: 100 }]}));
+    }
+
+    const removeSlot = (index: number) => {
+        setSettings(prev => ({ ...prev, slots: prev.slots.filter((_, i) => i !== index) }));
+    }
+
     const handleSubmit = () => {
-        onSave({ name, settings });
+        if (!name.trim()) {
+            // Basic validation
+            alert("Please provide a name for the preset.");
+            return;
+        }
+        onSave({
+            name,
+            presetId: activePresetId,
+            settings
+        });
         onClose();
     };
 
     if (!isOpen) return null;
 
-    const renderSlot = (type: 'charge' | 'discharge', slotNum: 1 | 2) => {
-        const slotKey = `${type}Slot${slotNum}` as const;
-        const slotData = settings[slotKey];
-        const isCharge = type === 'charge';
-        return (
-             <div className="space-y-4 p-3 border rounded-md bg-background">
-                <h5 className="font-medium">{isCharge ? `Charge Slot ${slotNum}`: `Discharge Slot ${slotNum}`}</h5>
-                 <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Start</Label><Input type="time" value={slotData.start} onChange={e => handleSlotChange(slotKey, 'start', e.target.value)} /></div>
-                    <div><Label>End</Label><Input type="time" value={slotData.end} onChange={e => handleSlotChange(slotKey, 'end', e.target.value)} /></div>
-                 </div>
-                 <div>
-                    <div className="flex justify-between mb-1"><Label>{isCharge ? 'Charge to' : 'Discharge to'}</Label><span>{slotData.soc}%</span></div>
-                    <Slider min={4} max={100} step={1} value={[slotData.soc]} onValueChange={val => handleSlotChange(slotKey, 'soc', val[0])} />
-                 </div>
-             </div>
-        );
-    };
+    const config = PRESET_CONFIG[activePresetId];
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader><DialogTitle>{existingSchedule?.id ? 'Edit Schedule' : 'New Schedule'}</DialogTitle></DialogHeader>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>{existingPreset?.id ? 'Edit Preset' : `New ${config.title} Preset`}</DialogTitle>
+                    <DialogDescription>{config.description}</DialogDescription>
+                </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                    <div><Label>Schedule Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+                    <div><Label>Preset Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
                     <div className="flex items-center justify-between p-3 border rounded-md">
-                        <Label>Enable Timed Charging</Label>
-                        <Switch checked={settings.enableAcCharge} onCheckedChange={checked => handleSettingChange('enableAcCharge', checked)} />
+                        <Label>Enable this mode on the inverter</Label>
+                        <Switch checked={settings.enabled} onCheckedChange={checked => setSettings(prev => ({...prev, enabled: checked}))} />
                     </div>
-                    <h4 className="font-semibold text-lg pt-2">Charge Times</h4>
-                    {renderSlot('charge', 1)}
-                    {renderSlot('charge', 2)}
-                    <h4 className="font-semibold text-lg pt-2">Discharge Times</h4>
-                    {renderSlot('discharge', 1)}
-                    {renderSlot('discharge', 2)}
+                    
+                    {settings.slots.map((slot, index) => (
+                        <div key={index} className="space-y-4 p-3 border rounded-md bg-background relative">
+                            {settings.slots.length > 1 && (
+                                <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeSlot(index)}><X className="h-4 w-4"/></Button>
+                            )}
+                            <h5 className="font-medium">Slot {index + 1}</h5>
+                             <div className="grid grid-cols-2 gap-3">
+                                <div><Label>Start Time</Label><Input type="time" value={slot.start_time} onChange={e => handleSlotChange(index, 'start_time', e.target.value)} /></div>
+                                <div><Label>End Time</Label><Input type="time" value={slot.end_time} onChange={e => handleSlotChange(index, 'end_time', e.target.value)} /></div>
+                             </div>
+                             <div>
+                                <div className="flex justify-between mb-1"><Label>{config.slotAction}</Label><span>{slot.percent_limit}%</span></div>
+                                <Slider min={4} max={100} step={1} value={[slot.percent_limit]} onValueChange={val => handleSlotChange(index, 'percent_limit', val[0])} />
+                             </div>
+                        </div>
+                    ))}
+                     <Button variant="outline" size="sm" onClick={addSlot}><PlusCircle className="mr-2 h-4 w-4" /> Add Slot</Button>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSubmit}>Save Schedule</Button>
+                    <Button onClick={handleSubmit}>Save Preset</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -128,234 +140,188 @@ function BatteryScheduleDialog({ isOpen, onClose, onSave, existingSchedule }: Ba
 }
 
 // --- Main Page Component ---
-export default function BatterySchedulingPage() {
+export default function InverterPresetsPage() {
   const { apiKey, inverterSerial, isLoading: isApiKeyLoading } = useApiKey();
   const { toast } = useToast();
 
-  const { schedules, addSchedule, updateSchedule, deleteSchedule, isLoading: isLoadingSchedules } = useLocalStorageBatterySchedules(inverterSerial);
-
-  const [currentDeviceSettings, setCurrentDeviceSettings] = useState<BatteryScheduleSettings | null>(null);
-  const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
-  const [isActivating, setIsActivating] = useState<string | null>(null);
+  const { presets, addPreset, updatePreset, deletePreset, isLoading: isLoadingPresets } = useLocalStorageBatterySchedules(inverterSerial);
+  
+  const [activeTab, setActiveTab] = useState<InverterPresetId>('timed-charge');
+  const [currentDeviceValues, setCurrentDeviceValues] = useState<Record<InverterPresetId, PresetSettings | null>>({
+      'timed-charge': null, 'timed-discharge': null, 'timed-export': null
+  });
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  
   const [isLoadingDeviceState, setIsLoadingDeviceState] = useState(true);
+  const [isActivating, setIsActivating] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [scheduleToEdit, setScheduleToEdit] = useState<Partial<NamedBatterySchedule> | undefined>(undefined);
+  const [presetToEdit, setPresetToEdit] = useState<Partial<NamedPreset> | undefined>(undefined);
   
-  const [scheduleToDelete, setScheduleToDelete] = useState<NamedBatterySchedule | null>(null);
+  const [presetToDelete, setPresetToDelete] = useState<NamedPreset | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
-  const fetchCurrentDeviceSettings = useCallback(async () => {
+  const fetchCurrentDevicePreset = useCallback(async (presetId: InverterPresetId) => {
     if (!apiKey || !inverterSerial) return null;
     setIsLoadingDeviceState(true);
     try {
-        const settingValues: Record<string, any> = {};
-        for (const id of Object.values(SETTING_IDS)) {
-            try {
-                const res = await _fetchGivEnergyAPI<{ data: { value: string | number } }>(apiKey, `/inverter/${inverterSerial}/settings/${id}/read`, { suppressErrorForStatus: [404] });
-                if (res && res.data && res.data.value !== undefined) {
-                    settingValues[id] = res.data.value;
-                } else {
-                    console.warn(`Setting ${id} not found on this inverter or returned no data. It will be ignored.`);
-                }
-            } catch (e: any) {
-                console.error(`Failed to fetch setting ${id}:`, e.message);
-            }
-        }
-
-        const deviceSettings: BatteryScheduleSettings = {
-            enableAcCharge: settingValues[SETTING_IDS.ENABLE_AC_CHARGE] === 1 || settingValues[SETTING_IDS.ENABLE_AC_CHARGE] === true,
-            chargeSlot1: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_START] || "00:00"), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_1_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC] || 100) },
-            chargeSlot2: { start: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_START] || "00:00"), end: String(settingValues[SETTING_IDS.CHARGE_SLOT_2_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.CHARGE_TARGET_SOC_2] || 100) },
-            dischargeSlot1: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_START] || "00:00"), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_1_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC] || 4) },
-            dischargeSlot2: { start: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_START] || "00:00"), end: String(settingValues[SETTING_IDS.DISCHARGE_SLOT_2_END] || "00:00"), soc: Number(settingValues[SETTING_IDS.DISCHARGE_TARGET_SOC_2] || 4) },
-        };
-        setCurrentDeviceSettings(deviceSettings);
-        return deviceSettings;
+        const response = await _fetchGivEnergyAPI<RawPresetResponse>(apiKey, `/inverter/${inverterSerial}/presets/${presetId}`);
+        const settings = response.data.value;
+        setCurrentDeviceValues(prev => ({ ...prev, [presetId]: settings }));
+        return settings;
     } catch (error) {
-        console.error("Failed to fetch current device settings:", error);
-        toast({ variant: "destructive", title: "Fetch Error", description: "Could not load current settings from inverter." });
+        console.error(`Failed to fetch current device preset for ${presetId}:`, error);
+        toast({ variant: "destructive", title: "Fetch Error", description: `Could not load ${PRESET_CONFIG[presetId].title} settings from inverter.` });
+        setCurrentDeviceValues(prev => ({ ...prev, [presetId]: null }));
         return null;
     } finally {
         setIsLoadingDeviceState(false);
     }
   }, [apiKey, inverterSerial, toast]);
-
-  const areSettingsEqual = (s1?: BatteryScheduleSettings | null, s2?: BatteryScheduleSettings | null): boolean => {
+  
+  const areSettingsEqual = (s1?: PresetSettings | null, s2?: PresetSettings | null): boolean => {
       if (!s1 || !s2) return false;
-      const normalize = (s: BatteryScheduleSettings) => ({
-          ...s,
-          enableAcCharge: !!s.enableAcCharge,
-          chargeSlot1: { ...s.chargeSlot1, soc: Number(s.chargeSlot1.soc) },
-          chargeSlot2: { ...s.chargeSlot2, soc: Number(s.chargeSlot2.soc) },
-          dischargeSlot1: { ...s.dischargeSlot1, soc: Number(s.dischargeSlot1.soc) },
-          dischargeSlot2: { ...s.dischargeSlot2, soc: Number(s.dischargeSlot2.soc) },
+      const normalize = (s: PresetSettings) => ({
+          enabled: !!s.enabled,
+          slots: (s.slots || []).map(slot => ({
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+              percent_limit: Number(slot.percent_limit)
+          })).sort((a, b) => a.start_time.localeCompare(b.start_time)) // Sort slots for consistent comparison
       });
       return JSON.stringify(normalize(s1)) === JSON.stringify(normalize(s2));
   };
 
   useEffect(() => {
     if (!isApiKeyLoading && apiKey && inverterSerial) {
-        fetchCurrentDeviceSettings();
+        fetchCurrentDevicePreset(activeTab);
     }
-  }, [isApiKeyLoading, apiKey, inverterSerial, fetchCurrentDeviceSettings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isApiKeyLoading, apiKey, inverterSerial, activeTab]); // Re-fetch when tab changes
 
   useEffect(() => {
-    if (currentDeviceSettings && schedules.length > 0) {
-        const found = schedules.find(s => areSettingsEqual(s.settings, currentDeviceSettings));
-        setActiveScheduleId(found?.id || null);
+    const deviceSettings = currentDeviceValues[activeTab];
+    if (deviceSettings && presets.length > 0) {
+        const found = presets.find(p => p.presetId === activeTab && areSettingsEqual(p.settings, deviceSettings));
+        setActivePresetId(found?.id || null);
     } else {
-        setActiveScheduleId(null);
+        setActivePresetId(null);
     }
-  }, [currentDeviceSettings, schedules]);
+  }, [currentDeviceValues, presets, activeTab]);
 
-  const handleActivateSchedule = async (schedule: NamedBatterySchedule) => {
+  const handleActivatePreset = async (preset: NamedPreset) => {
     if (!apiKey || !inverterSerial) return;
-    setIsActivating(schedule.id);
-    let allSucceeded = true;
+    setIsActivating(preset.id);
     try {
-        const settingsMap: Record<string, any> = {
-            [SETTING_IDS.ENABLE_AC_CHARGE]: schedule.settings.enableAcCharge ? 1 : 0,
-            [SETTING_IDS.CHARGE_SLOT_1_START]: schedule.settings.chargeSlot1.start,
-            [SETTING_IDS.CHARGE_SLOT_1_END]: schedule.settings.chargeSlot1.end,
-            [SETTING_IDS.CHARGE_TARGET_SOC]: schedule.settings.chargeSlot1.soc,
-            [SETTING_IDS.CHARGE_SLOT_2_START]: schedule.settings.chargeSlot2.start,
-            [SETTING_IDS.CHARGE_SLOT_2_END]: schedule.settings.chargeSlot2.end,
-            [SETTING_IDS.CHARGE_TARGET_SOC_2]: schedule.settings.chargeSlot2.soc,
-            [SETTING_IDS.DISCHARGE_SLOT_1_START]: schedule.settings.dischargeSlot1.start,
-            [SETTING_IDS.DISCHARGE_SLOT_1_END]: schedule.settings.dischargeSlot1.end,
-            [SETTING_IDS.DISCHARGE_TARGET_SOC]: schedule.settings.dischargeSlot1.soc,
-            [SETTING_IDS.DISCHARGE_SLOT_2_START]: schedule.settings.dischargeSlot2.start,
-            [SETTING_IDS.DISCHARGE_SLOT_2_END]: schedule.settings.dischargeSlot2.end,
-            [SETTING_IDS.DISCHARGE_TARGET_SOC_2]: schedule.settings.dischargeSlot2.soc,
-        };
-
-        for (const [id, value] of Object.entries(settingsMap)) {
-            try {
-                await _fetchGivEnergyAPI(apiKey, `/inverter/${inverterSerial}/settings/${id}/write`, { method: 'POST', body: JSON.stringify({ value }), suppressErrorForStatus: [404] });
-            } catch(e) {
-                allSucceeded = false;
-                console.error(`Failed to write setting ${id}`, e);
-            }
-        }
-
-        if (allSucceeded) {
-            toast({ title: "Schedule Activated", description: `"${schedule.name}" is now active on the inverter.` });
-        } else {
-            toast({ variant: "destructive", title: "Partial Success", description: "Some settings failed to activate. Check console for details." });
-        }
+        await _fetchGivEnergyAPI(apiKey, `/inverter/${inverterSerial}/presets/${preset.presetId}`, {
+            method: 'POST',
+            body: JSON.stringify(preset.settings),
+        });
+        toast({ title: "Preset Activated", description: `"${preset.name}" is now active on the inverter.` });
     } catch (error) {
         toast({ variant: "destructive", title: "Activation Error", description: "An unexpected error occurred." });
     } finally {
-        await fetchCurrentDeviceSettings();
+        await fetchCurrentDevicePreset(preset.presetId);
         setIsActivating(null);
     }
   };
-
+  
   const handleRetrieveFromDevice = async () => {
-    const settings = await fetchCurrentDeviceSettings();
+    const settings = await fetchCurrentDevicePreset(activeTab);
     if (settings) {
-        setScheduleToEdit({ name: `Retrieved - ${new Date().toLocaleString()}`, settings });
+        const config = PRESET_CONFIG[activeTab];
+        setPresetToEdit({ name: `${config.title} - ${new Date().toLocaleDateString()}`, presetId: activeTab, settings });
         setIsDialogOpen(true);
     }
   };
-
-  const handleSaveSchedule = (data: { name: string, settings: BatteryScheduleSettings }) => {
-    if (scheduleToEdit?.id) {
-        updateSchedule(scheduleToEdit.id, data);
-        toast({ title: "Schedule Updated", description: `"${data.name}" has been saved.` });
+  
+  const handleSavePreset = (data: { name: string } & Omit<NamedPreset, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (presetToEdit?.id) {
+        updatePreset(presetToEdit.id, { name: data.name, settings: data.settings });
+        toast({ title: "Preset Updated", description: `"${data.name}" has been saved.` });
     } else {
-        addSchedule(data);
-        toast({ title: "Schedule Added", description: `"${data.name}" has been added to your list.` });
+        addPreset(data);
+        toast({ title: "Preset Added", description: `"${data.name}" has been added to your list.` });
     }
-    setScheduleToEdit(undefined);
+    setPresetToEdit(undefined);
   };
   
-  const openEditDialog = (schedule: NamedBatterySchedule) => {
-    setScheduleToEdit(schedule);
+  const openEditDialog = (preset: NamedPreset) => {
+    setPresetToEdit(preset);
     setIsDialogOpen(true);
   };
   
-  const openDeleteDialog = (schedule: NamedBatterySchedule) => {
-    setScheduleToDelete(schedule);
+  const openDeleteDialog = (preset: NamedPreset) => {
+    setPresetToDelete(preset);
     setIsDeleteAlertOpen(true);
   };
   
-  const confirmDeleteSchedule = () => {
-      if(scheduleToDelete) {
-          deleteSchedule(scheduleToDelete.id);
-          toast({ title: "Schedule Deleted", description: `"${scheduleToDelete.name}" removed from your local list.` });
+  const confirmDeletePreset = () => {
+      if(presetToDelete) {
+          deletePreset(presetToDelete.id);
+          toast({ title: "Preset Deleted", description: `"${presetToDelete.name}" removed from your local list.` });
       }
       setIsDeleteAlertOpen(false);
-      setScheduleToDelete(null);
+      setPresetToDelete(null);
   };
 
-  const formatScheduleSummary = (settings: BatteryScheduleSettings): string => {
-    const parts: string[] = [];
-    if (settings.enableAcCharge) {
-        if(settings.chargeSlot1.start !== settings.chargeSlot1.end) parts.push(`Charge1: ${settings.chargeSlot1.start}-${settings.chargeSlot1.end} to ${settings.chargeSlot1.soc}%`);
-        if(settings.chargeSlot2.start !== settings.chargeSlot2.end) parts.push(`Charge2: ${settings.chargeSlot2.start}-${settings.chargeSlot2.end} to ${settings.chargeSlot2.soc}%`);
-    }
-    if(settings.dischargeSlot1.start !== settings.dischargeSlot1.end) parts.push(`Discharge1: ${settings.dischargeSlot1.start}-${settings.dischargeSlot1.end} to ${settings.dischargeSlot1.soc}%`);
-    if(settings.dischargeSlot2.start !== settings.dischargeSlot2.end) parts.push(`Discharge2: ${settings.dischargeSlot2.start}-${settings.dischargeSlot2.end} to ${settings.dischargeSlot2.soc}%`);
-    return parts.join(' | ') || 'No active slots';
+  const formatPresetSummary = (settings: PresetSettings): string => {
+    if (!settings.enabled) return "Mode is disabled.";
+    if (!settings.slots || settings.slots.length === 0) return "Mode is enabled but has no time slots defined.";
+    
+    return settings.slots.map(slot => 
+        `${slot.start_time}-${slot.end_time} to ${slot.percent_limit}%`
+    ).join(' | ');
   };
 
-  const isLoadingPage = isApiKeyLoading || isLoadingDeviceState || isLoadingSchedules;
+  const renderPresetList = (presetId: InverterPresetId) => {
+    const filteredPresets = presets.filter(p => p.presetId === presetId);
+    const isLoadingPage = isApiKeyLoading || isLoadingDeviceState || isLoadingPresets;
+    const config = PRESET_CONFIG[presetId];
 
-  return (
-    <>
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Battery Scheduling</h1>
-          <Button variant="outline" asChild><Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link></Button>
-        </div>
-
-        {!apiKey || !inverterSerial ? (
-            <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Configuration Error</AlertTitle><AlertDescription>API Key or Inverter Serial not found. Please check settings.</AlertDescription></Alert>
-        ) : (
-          <Card>
+    return (
+        <Card>
             <CardHeader>
                 <div className="flex justify-between items-center">
-                    <CardTitle>Manage Schedules</CardTitle>
+                    <CardTitle>{config.title} Presets</CardTitle>
                     <div className="flex items-center space-x-2">
                         <Button onClick={handleRetrieveFromDevice} variant="outline" size="sm" disabled={isLoadingDeviceState}><DownloadCloud className="mr-2 h-4 w-4" /> Retrieve from Device</Button>
-                        <Button onClick={() => { setScheduleToEdit(undefined); setIsDialogOpen(true); }} size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Add New</Button>
+                        <Button onClick={() => { setPresetToEdit(undefined); setIsDialogOpen(true); }} size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Add New</Button>
                     </div>
                 </div>
                 <CardDescription>
-                    Create, edit, and activate battery schedules. Schedules are saved in your browser. "Active on Device" means the inverter's current settings match a saved schedule.
+                    {config.description} Presets are saved in your browser. "Active on Device" means the inverter's current settings match a saved preset.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 {isLoadingPage ? (
-                     <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading schedules...</div>
-                ) : schedules.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No saved schedules. Click "Add New" or "Retrieve from Device" to get started.</p>
+                     <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /> Loading...</div>
+                ) : filteredPresets.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No saved presets for {config.title}. Click "Add New" or "Retrieve from Device" to get started.</p>
                 ) : (
                     <div className="space-y-3">
-                        {schedules.map(schedule => {
-                            const isActive = schedule.id === activeScheduleId;
-                            const isThisActivating = isActivating === schedule.id;
+                        {filteredPresets.map(preset => {
+                            const isActive = preset.id === activePresetId;
+                            const isThisActivating = isActivating === preset.id;
                             return (
-                                <Card key={schedule.id} className={isActive ? 'border-primary' : ''}>
+                                <Card key={preset.id} className={isActive ? 'border-primary' : ''}>
                                     <CardHeader className="pb-3">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <CardTitle className="text-lg flex items-center">{schedule.name} {isActive && <Badge variant="default" className="ml-2 bg-green-500">Active</Badge>}</CardTitle>
-                                                <CardDescription className="text-xs">Last updated: {new Date(schedule.updatedAt).toLocaleString()}</CardDescription>
+                                                <CardTitle className="text-lg flex items-center">{preset.name} {isActive && <Badge variant="default" className="ml-2 bg-green-500">Active</Badge>}</CardTitle>
+                                                <CardDescription className="text-xs">Last updated: {new Date(preset.updatedAt).toLocaleString()}</CardDescription>
                                             </div>
                                             <div className="flex items-center space-x-1.5">
-                                                <Button size="sm" onClick={() => handleActivateSchedule(schedule)} disabled={isActive || !!isActivating}>
+                                                <Button size="sm" onClick={() => handleActivatePreset(preset)} disabled={isActive || !!isActivating}>
                                                     {isThisActivating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : isActive ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5"/> : null}
                                                     {isThisActivating ? 'Activating' : isActive ? 'Activated' : 'Activate'}
                                                 </Button>
-                                                <Button variant="outline" size="icon" onClick={() => openEditDialog(schedule)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="destructive" size="icon" onClick={() => openDeleteDialog(schedule)}><Trash2 className="h-4 w-4" /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => openEditDialog(preset)}><Edit className="h-4 w-4" /></Button>
+                                                <Button variant="destructive" size="icon" onClick={() => openDeleteDialog(preset)}><Trash2 className="h-4 w-4" /></Button>
                                             </div>
                                         </div>
                                     </CardHeader>
-                                    <CardContent><p className="text-sm text-muted-foreground">{formatScheduleSummary(schedule.settings)}</p></CardContent>
+                                    <CardContent><p className="text-sm text-muted-foreground">{formatPresetSummary(preset.settings)}</p></CardContent>
                                 </Card>
                             );
                         })}
@@ -363,27 +329,62 @@ export default function BatterySchedulingPage() {
                 )}
             </CardContent>
             <CardFooter>
-                 <Button onClick={fetchCurrentDeviceSettings} variant="outline" size="sm" disabled={isLoadingDeviceState}>
+                 <Button onClick={() => fetchCurrentDevicePreset(presetId)} variant="outline" size="sm" disabled={isLoadingDeviceState}>
                     <RefreshCw className="mr-2 h-4 w-4"/> Refresh Device Status
                 </Button>
             </CardFooter>
-          </Card>
+        </Card>
+    );
+  }
+
+  return (
+    <>
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Inverter Preset Manager</h1>
+          <Button variant="outline" asChild><Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link></Button>
+        </div>
+
+        <Alert>
+            <Info className="h-4 w-4"/>
+            <AlertTitle>New Preset System</AlertTitle>
+            <AlertDescription>
+                This page now uses the official GivEnergy Presets API. Your old schedules based on individual settings are no longer used. Please recreate your desired schedules using this new system.
+            </AlertDescription>
+        </Alert>
+
+        {!apiKey || !inverterSerial ? (
+            <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Configuration Error</AlertTitle><AlertDescription>API Key or Inverter Serial not found. Please check settings.</AlertDescription></Alert>
+        ) : (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as InverterPresetId)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="timed-charge">Timed Charge</TabsTrigger>
+                <TabsTrigger value="timed-export">Timed Export</TabsTrigger>
+            </TabsList>
+            <TabsContent value="timed-charge" className="mt-4">
+                {renderPresetList('timed-charge')}
+            </TabsContent>
+            <TabsContent value="timed-export" className="mt-4">
+                {renderPresetList('timed-export')}
+            </TabsContent>
+          </Tabs>
         )}
       </div>
 
-      <BatteryScheduleDialog
+      <PresetDialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        onSave={handleSaveSchedule}
-        existingSchedule={scheduleToEdit}
+        onSave={handleSavePreset}
+        existingPreset={presetToEdit}
+        activePresetId={activeTab}
       />
       
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
           <AlertDialogContent>
-              <AlertDialogHeader><AlertDialogTitle>Delete Schedule?</AlertDialogTitle><AlertDialogDescription>This will permanently delete "{scheduleToDelete?.name}" from your local list. It will not change the settings on your inverter.</AlertDialogDescription></AlertDialogHeader>
+              <AlertDialogHeader><AlertDialogTitle>Delete Preset?</AlertDialogTitle><AlertDialogDescription>This will permanently delete "{presetToDelete?.name}" from your local list. It will not change the settings on your inverter.</AlertDialogDescription></AlertDialogHeader>
               <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={confirmDeleteSchedule}>Delete</AlertDialogAction>
+                  <AlertDialogAction onClick={confirmDeletePreset}>Delete</AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>

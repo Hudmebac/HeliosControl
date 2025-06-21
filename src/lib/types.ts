@@ -343,19 +343,35 @@ export interface NamedEVChargerSchedule {
   updatedAt: string;
 }
 
-// For battery scheduling
-export interface BatteryScheduleSettings {
-  enableAcCharge: boolean;
-  chargeSlot1: { start: string; end:string; soc: number };
-  chargeSlot2: { start: string; end:string; soc: number };
-  dischargeSlot1: { start: string; end:string; soc: number };
-  dischargeSlot2: { start: string; end:string; soc: number };
+// For Inverter Presets (replaces old battery schedule types)
+export type InverterPresetId = 'timed-charge' | 'timed-discharge' | 'timed-export';
+
+export interface PresetSlot {
+  start_time: string; // "HH:mm"
+  end_time: string;   // "HH:mm"
+  percent_limit: number;
 }
 
-export interface NamedBatterySchedule {
-  id: string;
+export interface PresetSettings {
+  enabled: boolean;
+  slots: PresetSlot[];
+}
+
+export interface NamedPreset {
+  id: string; // local UUID
   name: string;
-  settings: BatteryScheduleSettings;
+  presetId: InverterPresetId;
+  settings: PresetSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+// Raw API response for GET /presets/{id}
+export interface RawPresetResponse {
+  data: {
+    name: string;
+    id: InverterPresetId;
+    validation: any; 
+    value: PresetSettings;
+  }
 }
