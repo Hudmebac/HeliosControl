@@ -10,9 +10,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useState, useEffect } from "react";
 
 export function ThemeSwitcher() {
   const { setTheme, theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const themes: {value: string, label: string, icon: React.ReactNode}[] = [
     { value: "light", label: "Light", icon: <Sun className="mr-2 h-4 w-4" /> },
@@ -34,6 +40,13 @@ export function ThemeSwitcher() {
     }
   }
 
+  if (!mounted) {
+    return (
+        <Button variant="ghost" size="icon" aria-label="Toggle theme" disabled>
+            <Laptop className="h-5 w-5" />
+        </Button>
+    );
+  }
 
   return (
     <DropdownMenu>
