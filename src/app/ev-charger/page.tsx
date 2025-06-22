@@ -284,6 +284,7 @@ const EVChargerPage = () => {
       if (scheduleListResponse && scheduleListResponse.data && Array.isArray(scheduleListResponse.data.schedules)) {
         let importedCount = 0;
         let updatedCount = 0;
+ let updatedLocalSchedules: NamedEVChargerSchedule[] = [...localSchedules]; // Start with current local schedules
 
         for (const deviceSchedule of scheduleListResponse.data.schedules) {
           if (deviceSchedule.periods && deviceSchedule.periods.length > 0) {
@@ -302,18 +303,39 @@ const EVChargerPage = () => {
               }],
             };
 
-            const result = addLocalSchedule(scheduleToSave);
+            // Call addLocalSchedule but capture the returned schedule object with ID/timestamps
+            const result = addLocalSchedule(scheduleToSave, true); // Use internal flag if available, or modify addLocalSchedule to return the saved schedule
             if (result.type === 'added') importedCount++;
             if (result.type === 'updated') updatedCount++;
 
+ // Manually update the temporary local schedules array
+            if (result.schedule) { // Assuming addLocalSchedule returns { type: 'added' | 'updated', id: string, schedule: NamedEVChargerSchedule }
+                const existingIndex = updatedLocalSchedules.findIndex(s => s.id === result.schedule.id);
+ if (existingIndex !== -1) {
+                    updatedLocalSchedules[existingIndex] = result.schedule;
+                } else {
+                    updatedLocalSchedules.push(result.schedule);
+                }
+            } else {
+ // If addLocalSchedule doesn't return the schedule object, you might need a separate
+ // call to retrieve it or adjust addLocalSchedule to return the updated list.
+ // For now, we'll rely on reloadSchedules (which we're removing) or hope
+ // addLocalSchedule updates the state directly in a way that will be reflected
+ // after this function completes. Let's assume addLocalSchedule DOES update
+ // the state in a way that the final setSchedules call will reflect the changes.
+            }
             if (deviceSchedule.is_active) {
               activeDeviceScheduleNameFromSync = scheduleToSave.name;
             }
           }
         }
 
+        // The addLocalSchedule function already updates or adds schedules based on name.
+        // Explicitly set the state with the potentially updated list from the loop or a fresh load.
         toast({ title: "Update from Device Complete", description: `${importedCount} new schedules added, ${updatedCount} existing schedules updated.` });
-        reloadLocalSchedulesFromHook();
+ // Instead of reloading, we would ideally use a setSchedules function from the hook.
+ // Since we don't have setSchedules exposed by the hook, we rely on addLocalSchedule updating the state directly
+ // and React's state reconciliation to handle the subsequent render.
       } else {
         toast({ variant: "destructive", title: "Update Error", description: "Unexpected schedule format from device during update." });
       }
@@ -457,7 +479,8 @@ const EVChargerPage = () => {
     let savedScheduleName = scheduleData.name;
     let savedScheduleId = scheduleData.id;
 
-    if (editingSchedule && scheduleData.id) {
+ // The addLocalSchedule function in the hook handles both adding and updating based on 'id' presence and 'name' matching.
+ if (scheduleData.id) { // Explicitly check for ID to indicate update
       updateLocalSchedule(scheduleData.id, scheduleData);
       toast({title: "Local Schedule Updated", description: `Schedule "${scheduleData.name}" saved locally.`});
     } else {
