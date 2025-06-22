@@ -14,7 +14,6 @@ import {
   ZoomIn,
   HelpCircle,
   Search,
-  Building2,
   BookUser,
 } from 'lucide-react';
 
@@ -27,7 +26,7 @@ export default function GuidePage() {
         <p className="text-muted-foreground mt-2">Your comprehensive guide to mastering the application.</p>
       </div>
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-11">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="energy-flow">Energy Flow</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -38,7 +37,6 @@ export default function GuidePage() {
           <TabsTrigger value="deep-dive">Deep Dive</TabsTrigger>
           <TabsTrigger value="faq">FAQ</TabsTrigger>
           <TabsTrigger value="search">Search</TabsTrigger>
-          <TabsTrigger value="aj-renewables">AJ Renewables</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -271,36 +269,6 @@ export default function GuidePage() {
             <p className="mb-4 text-muted-foreground">
               A comprehensive search feature for this guide is planned for a future update. This will allow you to quickly find specific information across all sections of the user manual. Please check back later!
             </p>
-          </ScrollArea>
-        </TabsContent>
-
-        <TabsContent value="aj-renewables">
-          <ScrollArea className="h-[600px] p-4 border rounded-md">
-            <div className="flex items-center mb-4">
-              <Building2 className="h-8 w-8 mr-4 text-primary" />
-              <h2 className="text-2xl font-semibold">About AJ Renewables</h2>
-            </div>
-            <p className="mb-4 text-muted-foreground">
-              This application is proudly made available to customers of AJ Renewables, a leading UK-based provider of bespoke renewable energy solutions. As the experts who installed and commissioned your GivEnergy system, they are committed to helping homeowners and businesses reduce their carbon footprint, achieve energy savings, and secure their energy future through high-quality renewable technology.
-            </p>
-
-            <h3 className="text-xl font-medium mt-6 mb-2">Core Services</h3>
-            <ul className="list-disc list-inside space-y-2 mb-4">
-              <li>Solar PV Systems</li>
-              <li>Battery Storage Solutions (GivEnergy, Tesla, etc.)</li>
-              <li>EV Charging Point Installation</li>
-              <li>Air Source Heat Pumps (ASHPs)</li>
-              <li>Solar Thermal Systems</li>
-            </ul>
-
-            <h3 className="text-xl font-medium mt-6 mb-2">Why Choose AJ Renewables?</h3>
-            <ul className="list-disc list-inside space-y-2 mb-4">
-              <li>Fully accredited (MCS, NICEIC, RECC, HIES).</li>
-              <li>Extensive experience and a customer-focused approach.</li>
-              <li>Full turnkey service from design to installation and handover.</li>
-              <li>Commitment to using premium quality products and providing excellent workmanship.</li>
-            </ul>
-            <p className="text-sm mt-4">For more information, or to get a free, no-obligation quote for additional services, please visit the dedicated <a href="/aj_renewables_info" className="text-primary underline">AJ Renewables Info Page</a> within this app.</p>
           </ScrollArea>
         </TabsContent>
       </Tabs>
