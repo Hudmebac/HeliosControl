@@ -37,7 +37,7 @@ export default function GuidePage() {
     <p className="text-muted-foreground mb-8">Your comprehensive guide to mastering the application.</p>
     
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9">
+        <TabsList className="flex overflow-x-auto whitespace-nowrap w-full grid-cols-2 lg:grid-cols-9 scrollbar-hide">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="energy-flow">Energy Flow</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
