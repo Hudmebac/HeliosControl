@@ -6,7 +6,7 @@ import { useApiKey } from "@/hooks/use-api-key";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
-import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Car, Clock, HandCoins } from "lucide-react";
+import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Car, Clock, HandCoins, BookUserIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
@@ -82,6 +82,13 @@ export default function HomePage() {
               <h3 className="text-lg font-semibold">Energy Flow Data</h3>
               <p className="text-sm text-muted-foreground text-center">
                 Historical energy flow and performance.
+              </p>
+            </Link>
+            <Link href="/guide" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+              <BookUserIcon className="h-8 w-8 text-primary mb-3" style={{ color: '#ff8c00' }} />
+              <h3 className="text-lg font-semibold">Helios Guide</h3>
+              <p className="text-sm text-muted-foreground text-center">
+              Comprehensive guide.
               </p>
             </Link>
 
