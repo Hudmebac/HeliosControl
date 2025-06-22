@@ -58,7 +58,7 @@ export default function GuidePage() {
             'dashboard': {
               title: 'Dashboard Overview',
               content: `The Dashboard is your primary command centre, offering a real-time, at-a-glance overview of your entire GivEnergy ecosystem. It is designed to provide immediate insights into your energy generation, consumption, and storage, helping you make informed decisions instantly. The data refreshes automatically at an interval you can set in the settings menu, or you can perform a manual refresh at any time using the refresh button in the header.
-            Core Components: This dynamic diagram is the heart of the dashboard. It illustrates the live movement of electricity between the four key points of your system: Solar Panels (Generation), your Home (Consumption), the Grid (Import/Export), and your Battery (Charge/Discharge). Animated, pulsing lines indicate the direction and relative magnitude of the power flow, allowing you to see precisely where your energy is coming from and going to at any moment. Metric Cards: Positioned around the flow diagram, these cards provide precise, real-time numerical data for each key component. This includes your current Solar Generation, Home Consumption, Battery State of Charge (SoC) and power flow, and Grid interaction (import/export). These cards offer a quick way to understand the exact performance figures of your system, supplementing the visual flow diagram.
+            Core Components: This dynamic diagram is the heart of the dashboard. It illustrates the live movement of electricity between the four key points of your system: Solar Panels (Generation), your Home (Consumption), the Grid (Import/Export), and your Battery (Charge/Discharge). Animated, pulsing lines indicate the direction and relative magnitude of the power flow, allowing you to see precisely where your energy is coming from and going to at any moment. For instance, a thick, fast-pulsing line from 'Solar' to 'Home' signifies high solar generation directly powering your appliances. You can configure the automatic refresh rate in the <Link href="#" className="text-primary underline" onClick={() => setActiveTab('settings')}>Settings tab</Link> or click the refresh icon in the header for an instant update. Metric Cards: Positioned around the flow diagram, these cards provide precise, real-time numerical data for each key component. This includes your current Solar Generation, Home Consumption, Battery State of Charge (SoC) and power flow, and Grid interaction (import/export). These cards offer a quick way to understand the exact performance figures of your system, supplementing the visual flow diagram.
             Purpose and Use: Use the dashboard to quickly assess your home's energy status. For example, seeing high solar generation and low home consumption is the perfect time to run high-powered appliances like a washing machine or to charge your electric vehicle, maximising your use of free, self-generated energy. Conversely, if you observe high grid import during peak hours, you might choose to defer non-essential energy use until a cheaper tariff period. The dashboard is your guide to becoming more energy-efficient and cost-effective. By understanding the live flow, you can adapt your behaviour to reduce your carbon footprint and your energy bills.`,
             },
             'energy-flow': {
@@ -186,7 +186,7 @@ export default function GuidePage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex overflow-x-auto whitespace-nowrap w-full grid-cols-2 lg:grid-cols-9 scrollbar-hide">
+        <TabsList className="flex overflow-x-auto whitespace-nowrap w-full scrollbar-hide">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="energy-flow">Energy Flow</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -205,7 +205,7 @@ export default function GuidePage() {
               <h2 className="text-2xl font-semibold">Dashboard Overview</h2>
             </div>
             <p className="mb-4 text-muted-foreground">
-              The Dashboard is your primary command centre, offering a real-time, at-a-glance overview of your entire GivEnergy ecosystem. It is designed to provide immediate insights into your energy generation, consumption, and storage, helping you make informed decisions instantly. The data refreshes automatically at an interval you can set in the settings menu, or you can perform a manual refresh at any time using the refresh button in the header.
+              The Dashboard is your primary command centre, offering a real-time, at-a-glance overview of your entire GivEnergy ecosystem. It is designed to provide immediate insights into your energy generation, consumption, and storage, helping you make informed decisions instantly. The data refreshes automatically at an interval you can set in the <Link href="#" className="text-primary underline" onClick={() => setActiveTab('settings')}>Settings tab</Link>, or you can perform a manual refresh at any time using the refresh button in the header.
             </p>
 
             <h3 className="text-xl font-medium mt-6 mb-2">Core Components</h3>
@@ -213,7 +213,7 @@ export default function GuidePage() {
               <li>
                 <strong>Energy Flow Visualisation:</strong> This dynamic diagram is the heart of the dashboard. It illustrates the live movement of electricity between the four key points of your system: Solar Panels (Generation), your Home (Consumption), the Grid (Import/Export), and your Battery (Charge/Discharge). Animated, pulsing lines indicate the direction and relative magnitude of the power flow, allowing you to see precisely where your energy is coming from and going to at any moment.
               </li>
-              <li>
+              <li>{/* Metric Card Details are explained in the Energy Flow tab, keep it brief here */}
                 <strong>Metric Cards:</strong> Positioned around the flow diagram, these cards provide precise, real-time numerical data for each key component. This includes your current Solar Generation, Home Consumption, Battery State of Charge (SoC) and power flow, and Grid interaction (import/export). These cards offer a quick way to understand the exact performance figures of your system, supplementing the visual flow diagram.
               </li>
             </ul>
@@ -247,10 +247,11 @@ export default function GuidePage() {
             <h3 className="text-xl font-medium mt-6 mb-2">Metric Card Details</h3>
             <ul className="list-disc list-inside space-y-2 mb-4">
               <li><strong>Solar Production:</strong> Shows the instantaneous power output from your PV array in kilowatts (kW) or watts (W). This figure fluctuates based on the intensity of sunlight.</li>
-              <li><strong>Home Consumption:</strong> A calculated value representing the total electrical load of your house at that moment. This is the sum of all appliances, lighting, and devices currently running.</li>
-              <li><strong>Grid Status:</strong> Displays the power being imported from or exported to the grid. The dashboard indicates the direction of flow clearly. Positive values mean export, negative values (or an 'importing' label) mean import.</li>
-              <li><strong>Battery Status:</strong> Shows the current State of Charge (SoC) as a percentage, and the rate at which it is charging or discharging in kW or W. A positive power value indicates discharging, while a negative value indicates charging.</li>
+              <li><strong>Home Consumption:</strong> A calculated value representing the total electrical load of your house at that moment. This is the sum of all appliances, lighting, and devices currently running (e.g., <strong>0.8 kW</strong> with minimal use, or <strong>5.2 kW</strong> when running the oven and washing machine).</li>
+              <li><strong>Grid Status:</strong> Displays the power being imported from or exported to the grid. The dashboard indicates the direction of flow clearly. Positive values mean export (e.g., <strong>+2.1 kW Export</strong>), negative values (or an &apos;importing&apos; label) mean import (e.g., <strong>-1.5 kW Import</strong>).</li>
+              <li><strong>Battery Status:</strong> Shows the current State of Charge (SoC) as a percentage, and the rate at which it is charging or discharging in kW or W. A positive power value indicates discharging (e.g., <strong>75% SoC, +3.0 kW Discharging</strong>), while a negative value indicates charging (e.g., <strong>50% SoC, -4.2 kW Charging</strong>).</li>
             </ul>
+            <p className="text-sm italic text-muted-foreground">Understanding these instantaneous &apos;Power&apos; (kW) values is key to seeing what&apos;s happening right now. For a deeper dive into the difference between Power (kW) and accumulated Energy (kWh), please see the <Link href="#" className="text-primary underline" onClick={() => setActiveTab('deep-dive')}>Deep Dive section</Link>.</p>
           </ScrollArea>
         </TabsContent>
 
