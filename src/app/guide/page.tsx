@@ -400,26 +400,60 @@ export default function GuidePage() {
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="faq">
-          <ScrollArea className="h-[600px] p-4 border rounded-md">
-            <div className="flex items-center mb-4">
-              <HelpCircle className="h-8 w-8 mr-4 text-primary" />
-              <h2 className="text-2xl font-semibold">Frequently Asked Questions</h2>
-            </div>
+<TabsContent value="faq">
+  <ScrollArea className="h-[600px] p-4 border rounded-md">
+    <div className="flex items-center mb-4">
+      <HelpCircle className="h-8 w-8 mr-4 text-primary" />
+      <h2 className="text-2xl font-semibold">Frequently Asked Questions</h2>
+    </div>
 
-            <h3 className="text-xl font-medium mt-6 mb-2">Why are my dashboard values not updating?</h3>
-            <p className="mb-4 text-muted-foreground">This can be due to several reasons: 1) Your API key might be incorrect, expired, or lack &quot;Full Control&quot; permissions. Please generate a new one following the instructions in the Settings tab of this guide. 2) Your home internet or the inverter&apos;s connection to it may be down. 3) The GivEnergy API service might be temporarily unavailable. Check your API key in settings and ensure your system is showing as &quot;online&quot; in the official GivEnergy portal.</p>
+    {/* ⚙️ Troubleshooting & Data Accuracy */}
+    <h3 className="text-lg font-semibold text-primary mt-8 mb-4">⚙️ Troubleshooting & Data Accuracy</h3>
 
-            <h3 className="text-xl font-medium mt-6 mb-2">Why don&apos;t the financial calculations exactly match my utility bill?</h3>
-            <p className="mb-4 text-muted-foreground">The calculations are estimates based on the energy data from the API and the tariff rates you provide. They are very accurate for guidance but will likely differ slightly from your official bill. This is because your utility bill also includes daily standing charges, VAT, and may use different rounding methods, which are not factored into the app&apos;s calculations.</p>
+    <h3 className="text-xl font-medium mt-6 mb-2">Why are my dashboard values not updating?</h3>
+    <p className="mb-4 text-muted-foreground">This can be due to several reasons: 1) Your API key might be incorrect, expired, or lack "Full Control" permissions. Please generate a new one following the instructions in the Settings tab of this guide. 2) Your home internet or the inverter's connection to it may be down. 3) The GivEnergy API service might be temporarily unavailable. Check your API key in settings and ensure your system is showing as "online" in the official GivEnergy portal.</p>
 
-            <h3 className="text-xl font-medium mt-6 mb-2">Is my data secure? What does Helios Control collect?</h3>
-            <p className="mb-4 text-muted-foreground">Helios Control is designed with privacy as a priority. Your GivEnergy API key, along with any saved EV charger or inverter presets, are stored *only* in your local browser storage on your device. This data is never sent to any server other than the official GivEnergy API for data retrieval and command execution. The application itself is &quot;serverless&quot; and does not have its own backend database to store any user data.</p>
-            
-            <h3 className="text-xl font-medium mt-6 mb-2">Why do the figures sometimes differ from the official GivEnergy app?</h3>
-            <p className="mb-4 text-muted-foreground">Minor discrepancies can occur due to differences in data refresh timing between the two applications. Both apps use the same core API data, but may fetch it at slightly different intervals, leading to small, temporary variations in the &quot;live&quot; values displayed. Furthermore, this app may use slightly different calculations for derived values like &quot;Home Consumption&quot;, which can lead to minor differences.</p>
-          </ScrollArea>
-        </TabsContent>
+    <h3 className="text-xl font-medium mt-6 mb-2">My schedule didn’t apply. What might be wrong?</h3>
+    <p className="mb-4 text-muted-foreground">Double-check that the battery isn’t already full or empty, the inverter isn’t in a conflicting mode, and the schedule time hasn’t already passed. Reapplying your preset after refreshing the dashboard may help.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Why do the figures sometimes differ from the official GivEnergy app?</h3>
+    <p className="mb-4 text-muted-foreground">Minor discrepancies can occur due to differences in data refresh timing between the two applications. Both apps use the same core API data, but may fetch it at slightly different intervals, leading to small, temporary variations in the "live" values displayed. Furthermore, this app may use slightly different calculations for derived values like "Home Consumption", which can lead to minor differences.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Why don't the financial calculations exactly match my utility bill?</h3>
+    <p className="mb-4 text-muted-foreground">The calculations are estimates based on the energy data from the API and the tariff rates you provide. They are very accurate for guidance but will likely differ slightly from your official bill. This is because your utility bill also includes daily standing charges, VAT, and may use different rounding methods, which are not factored into the app's calculations.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">What happens if the GivEnergy API goes down?</h3>
+    <p className="mb-4 text-muted-foreground">The app may temporarily lose access to live data or control features. Once the API is back online, everything will automatically resume without user action needed.</p>
+
+    {/* 📊 Features & Functionality */}
+    <h3 className="text-lg font-semibold text-primary mt-8 mb-4">📊 Features & Functionality</h3>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">What does "Inverter Control" actually let me do?</h3>
+    <p className="mb-4 text-muted-foreground">The Inverter Control tab allows you to set charge/discharge times, change operational modes (e.g., Eco, Backup), or apply saved presets. All commands are securely sent to your GivEnergy system via the official API.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Can I control my EV charger with Helios?</h3>
+    <p className="mb-4 text-muted-foreground">Yes — if your charger is linked via GivEnergy, you’ll be able to schedule, adjust power, and view charging data directly within the EV Charger tab.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">What’s the difference between Manual, Timed Charge, and Eco modes?</h3>
+    <p className="mb-4 text-muted-foreground"><strong>Manual</strong>: You’re in full control — set charge/discharge instantly.<br /><strong>Timed Charge</strong>: Schedule charging during off-peak hours.<br /><strong>Eco</strong>: Prioritizes solar energy and surplus management automatically.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">How does Helios calculate “Home Consumption” and “Solar Used on Site”?</h3>
+    <p className="mb-4 text-muted-foreground"><strong>Home Consumption</strong> = Generation + Battery Discharge + Grid Import − Battery Charge − Export.<br /><strong>Solar Used on Site</strong> = Generation − Export.<br />These real-time values give you insight into energy flow and usage efficiency.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Does Helios work offline?</h3>
+    <p className="mb-4 text-muted-foreground">Some cached values and presets may still be viewable, but live updates and controls require an internet connection since the app depends on GivEnergy’s API.</p>
+
+    {/* 🛡️ Security & Data Handling */}
+    <h3 className="text-lg font-semibold text-primary mt-8 mb-4">🛡️ Security & Data Handling</h3>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Is my data secure? What does Helios Control collect?</h3>
+    <p className="mb-4 text-muted-foreground">Helios Control is designed with privacy as a priority. Your GivEnergy API key, along with any saved EV charger or inverter presets, are stored <em>only</em> in your local browser storage on your device. This data is never sent to any server other than the official GivEnergy API for data retrieval and command execution. The application itself is "serverless" and does not have its own backend database to store any user data.</p>
+
+    <h3 className="text-xl font-medium mt-6 mb-2">Can I use Helios across multiple devices?</h3>
+    <p className="mb-4 text-muted-foreground">Yes, but settings and presets are stored per device. To replicate a setup elsewhere, you’ll need to manually re-enter or export/import your preferences.</p>
+
+  </ScrollArea>
+</TabsContent>
       </Tabs>
     </div>
   );
