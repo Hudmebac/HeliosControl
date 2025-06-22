@@ -21,7 +21,7 @@ import { ENERGY_FLOW_TYPE_DETAILS as FLOW_DETAILS_MAP } from "@/lib/types";
 import { format, subDays, parse, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, subMonths, getYear, isValid, differenceInDays, parseISO, addDays } from "date-fns";
 import { ArrowLeft, CalendarIcon, Loader2, AlertTriangle, BarChart3, InfoIcon, HelpCircle, BarChartHorizontalBig } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "next-themes";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EnergyFlowSummaryCard } from "@/components/history/EnergyFlowSummaryCard";
 
@@ -627,3 +627,5 @@ export default function EnergyHistoryPage() {
     </div>
   );
 }
+
+    
