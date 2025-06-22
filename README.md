@@ -10,7 +10,6 @@ Helios Control benefits from features provided by the development environment:
 
 *   **AI Coding Assistance:** Get intelligent code suggestions and complete tasks faster, accelerating development workflows.
 *   **Multimodal Prompting:** Utilize a wider range of input types for AI interactions, allowing for more flexible and powerful assistance.
-*   **Enhanced Firebase Integration:** Seamlessly work with Firebase services within the Studio, simplifying backend operations and deployment.
 *   **Improved Performance:** Experience a faster and more responsive development environment, leading to increased productivity.
 *   **More Customization Options:** Tailor the Studio to your preferences and workflow, creating a personalized development experience.
 
