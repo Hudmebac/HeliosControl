@@ -60,6 +60,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string[] } }
 ): Promise<NextResponse> {
+  // In Next.js App Router, params is directly available and does not need awaiting.
   const slugPath = params.slug.join('/');
   const requestUrl = new URL(request.url);
   const searchParams = requestUrl.search;
@@ -91,6 +92,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { slug: string[] } }
 ): Promise<NextResponse> {
+  // In Next.js App Router, params is directly available and does not need awaiting.
   const slugPath = params.slug.join('/');
   let targetUrl = `${GIVENERGY_API_TARGET_BASE}/${slugPath}`; // Changed to let
   const authToken = request.headers.get('Authorization');
