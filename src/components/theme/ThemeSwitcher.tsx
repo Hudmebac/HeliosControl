@@ -2,7 +2,7 @@
 "use client"
 
 import { Moon, Sun, Contrast, Laptop } from "lucide-react";
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,12 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Theme } from "@/lib/types";
 
 export function ThemeSwitcher() {
-  const { setTheme, theme } = useTheme();
+  const { setTheme, theme, resolvedTheme } = useTheme();
 
-  const themes: {value: Theme, label: string, icon: React.ReactNode}[] = [
+  const themes: {value: string, label: string, icon: React.ReactNode}[] = [
     { value: "light", label: "Light", icon: <Sun className="mr-2 h-4 w-4" /> },
     { value: "dark", label: "Dark", icon: <Moon className="mr-2 h-4 w-4" /> },
     { value: "hc-light", label: "High Contrast Light", icon: <Contrast className="mr-2 h-4 w-4" /> },
@@ -24,13 +23,14 @@ export function ThemeSwitcher() {
   ];
 
   const currentThemeIcon = () => {
-    switch(theme) {
+    // When theme is "system", resolvedTheme gives the actual theme applied
+    const displayTheme = theme === "system" ? resolvedTheme : theme;
+    switch(displayTheme) {
       case 'light': return <Sun className="h-5 w-5" />;
       case 'dark': return <Moon className="h-5 w-5" />;
       case 'hc-light':
       case 'hc-dark': return <Contrast className="h-5 w-5" />;
-      case 'system': return <Laptop className="h-5 w-5" />;
-      default: return <Sun className="h-5 w-5" />;
+      default: return <Laptop className="h-5 w-5" />;
     }
   }
 

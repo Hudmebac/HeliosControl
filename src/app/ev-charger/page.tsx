@@ -18,7 +18,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/hooks/use-api-key';
 import { useToast } from '@/hooks/use-toast';
 import { mapEVChargerAPIStatus } from '@/lib/givenergy';
@@ -91,7 +90,6 @@ const EVChargerPage = () => {
     maxBatteryDischargeToEvc: 0,
     chargeRate: 6,
   });
-  const { theme } = useTheme();
 
   const [commandChargePowerLimit, setCommandChargePowerLimit] = useState<{ value: number; unit: string; min: number; max: number; } | null>(null);
   const [commandSessionEnergyLimit, setCommandSessionEnergyLimit] = useState<{ value: number | null; unit: string; min: number; max: number; } | null>(null);
@@ -1504,7 +1502,7 @@ const EVChargerPage = () => {
                                               }}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                            <Bar dataKey="energyKWh" name="Energy Delivered" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--primary))" : "hsl(var(--primary))"} radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="energyKWh" name="Energy Delivered" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                                           </BarChart>
                                         </ResponsiveContainer>
                                       </div>
@@ -1536,7 +1534,7 @@ const EVChargerPage = () => {
                                               }}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                            <Bar dataKey="durationMinutes" name="Session Duration" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--chart-2))" : "hsl(var(--chart-3))"} radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="durationMinutes" name="Session Duration" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                                           </BarChart>
                                         </ResponsiveContainer>
                                       </div>
@@ -1567,7 +1565,7 @@ const EVChargerPage = () => {
                                                 formatter={(value: number) => [`${value.toFixed(2)} kWh`, "Total Energy"]}
                                               />
                                               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                              <Bar dataKey="totalEnergyKWh" name="Total Energy per Day" fill={theme === 'dark' || theme === 'hc-dark' ? "hsl(var(--chart-4))" : "hsl(var(--chart-5))"} radius={[4, 4, 0, 0]} />
+                                              <Bar dataKey="totalEnergyKWh" name="Total Energy per Day" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                           </ResponsiveContainer>
                                         </div>
