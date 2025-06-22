@@ -1,26 +1,23 @@
 
 "use client"
 
+import { useState, useEffect } from "react";
 import { useApiKey } from "@/hooks/use-api-key";
 import Link from "next/link";
-import { useIsMobile } from "@/hooks/use-mobile"; // Import the useIsMobile hook
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Car, Clock, HandCoins } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button"; // Added for potential settings button
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   const { apiKey, isLoading: isApiKeyHookLoading } = useApiKey();
-  const isMobile = useIsMobile(); // Use the useIsMobile hook to detect mobile
+  const isMobile = useIsMobile();
+  const [isClient, setIsClient] = useState(false);
 
-  if (isApiKeyHookLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]"style={{ borderColor: '#ff8c00'}}>
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading Helios Control...</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleGivEnergyCloudClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (isMobile) {
@@ -97,11 +94,11 @@ export default function HomePage() {
             </Link>
 
             <a
-              href={isMobile ? 'https://givenergy.cloud/dashboard' : 'https://givenergy.cloud/dashboard'}
+              href={'https://givenergy.cloud/dashboard'}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={handleGivEnergyCloudClick}
-              data-href-mobile={isMobile ? 'givenergy://' : undefined}
+              onClick={isClient ? handleGivEnergyCloudClick : undefined}
+              data-href-mobile={isClient && isMobile ? 'givenergy://' : undefined}
               className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}
             >
               <img src="https://heliosaj.netlify.app/_next/image?url=%2Fimages%2FGEIcon.webp&w=32&q=75" alt="GivEnergy Icon" className="h-8 w-auto mb-3" />
