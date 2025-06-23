@@ -2,8 +2,6 @@
 'use client';
 
 import * as React from 'react';
-import { loadStripe, type Stripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,9 +10,6 @@ import { useToast } from '@/hooks/use-toast';
 import { createCheckoutSession } from './actions';
 import { ArrowLeft, CreditCard, Gift, Heart, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-
-// Make sure to use the NEXT_PUBLIC_ prefix for environment variables exposed to the browser
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 const donationAmounts = [5, 10, 20, 50]; // In GBP
 
@@ -39,8 +34,7 @@ const CheckoutForm = () => {
       }
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const formAction = async (formData: FormData) => {
     setIsLoading(true);
 
     const amountInPounds = selectedAmount !== null ? selectedAmount : parseFloat(customAmount);
@@ -58,23 +52,13 @@ const CheckoutForm = () => {
     const amountInPence = Math.round(amountInPounds * 100);
 
     try {
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error('Stripe.js has not loaded yet.');
-      }
-      
-      const { sessionId } = await createCheckoutSession({
+      // The server action will handle the redirect, so we just call it.
+      await createCheckoutSession({
         amount: amountInPence,
         name: `Donation to Helios Control`,
         description: `A one-time donation of £${amountInPounds.toFixed(2)} to support the development of Helios Control.`,
       });
-
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      
-      if (error) {
-        throw new Error(error.message);
-      }
-
+      // If successful, the browser will be redirected by the server, so code below won't run.
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       toast({
@@ -83,6 +67,7 @@ const CheckoutForm = () => {
         description: errorMessage,
       });
     } finally {
+      // This might not run if redirect is successful, which is fine.
       setIsLoading(false);
     }
   };
@@ -99,7 +84,7 @@ const CheckoutForm = () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form action={formAction} className="space-y-6">
           <div className="space-y-2">
             <Label>Choose an amount (GBP)</Label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -162,9 +147,7 @@ export default function DonatePage() {
                     </Link>
                 </Button>
             </div>
-            <Elements stripe={stripePromise}>
-                <CheckoutForm />
-            </Elements>
+            <CheckoutForm />
         </div>
     )
 }

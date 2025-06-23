@@ -48,11 +48,11 @@ export async function createCheckoutSession(args: CreateCheckoutSessionArgs) {
       cancel_url: `${appUrl}/donate?status=cancelled`,
     });
     
-    if (!session.id) {
-        throw new Error('Failed to create Stripe session.');
+    if (!session.url) {
+        throw new Error('Failed to create Stripe session URL.');
     }
 
-    return { sessionId: session.id };
+    redirect(session.url);
   } catch (error) {
     console.error('Stripe session creation failed:', error);
     if (error instanceof Error) {
