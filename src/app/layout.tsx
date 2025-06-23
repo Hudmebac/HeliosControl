@@ -23,7 +23,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className={`${inter.className} antialiased min-h-screen bg-background text-foreground flex flex-col`}>
+      <body className={`${inter.className} antialiased min-h-screen bg-background text-foreground flex flex-col`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
