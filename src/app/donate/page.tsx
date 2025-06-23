@@ -57,10 +57,25 @@ export default function DonatePage() {
                         <Heart className="mr-3 h-6 w-6 text-primary" />
                         Support Helios Control
                     </CardTitle>
-                    <CardDescription>
-                        Your generosity fuels more than just servers—it powers innovation, sustainability, and a better energy future for everyone. Every donation helps us refine features, expand access, and keep Helios Control free and open for all.
-                        Thank you for being part of the journey.
-                    </CardDescription>
+                    <CardDescription className="space-y-4">
+  <p>
+    You're not just donating—you’re <strong>supercharging solar smarts</strong>! Your contribution helps us keep Helios Control glowing with new features, smoother UX, and integrations like <strong>GivEnergy</strong> that make managing your energy feel like a walk in the sun.
+  </p>
+
+  <p>
+    From effortless battery scheduling to intuitive dashboards and tariff-aware insights, every pound you give helps us build tools that are as bright as the energy they manage.
+  </p>
+
+  <div className="space-y-1">
+    <p>💡 Got a bug to squash?</p>
+    <p>🌱 A feature idea to grow?</p>
+    <p>📬 Or just want to say hi?</p>
+  </div>
+
+  <p>
+    Drop us a line at <a href="mailto:heliosheggie@gmail.com" className="underline text-primary">heliosheggie@gmail.com</a> — we love hearing from fellow solar adventurers.
+  </p>
+</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form action={formAction} className="space-y-6">
