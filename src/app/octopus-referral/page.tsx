@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Copy, Share2, Twitter, Facebook, MessageCircle, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { OctopusEnergyLogo } from '@/components/logos/OctopusEnergyLogo';
 
 const OctopusReferralPage: React.FC = () => {
   const referralLink = 'https://share.octopus.energy/new-grove-296';
@@ -47,7 +48,7 @@ const OctopusReferralPage: React.FC = () => {
 
       <Card>
         <CardHeader className="text-center">
-          <img src="https://logolook.net/wp-content/uploads/2023/05/Octopus-Energy-Logo.png" alt="Octopus Energy Logo" className="h-16 w-auto mx-auto mb-4" />
+          <OctopusEnergyLogo className="h-24 w-auto mx-auto mb-4" />
           <CardTitle className="text-2xl">Refer your friends</CardTitle>
           <CardDescription className="text-lg">
             Split £100 with every friend who signs up with this link
