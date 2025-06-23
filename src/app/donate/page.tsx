@@ -19,9 +19,9 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
 const donationAmounts = [5, 10, 20, 50]; // In GBP
 
 const CheckoutForm = () => {
-  const [customAmount, setCustomAmount] = useState('');
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(10);
-  const [isLoading, setIsLoading] = useState(false);
+  const [customAmount, setCustomAmount] = React.useState('');
+  const [selectedAmount, setSelectedAmount] = React.useState<number | null>(10);
+  const [isLoading, setIsLoading] = React.useState(false);
   const { toast } = useToast();
 
   const handleAmountSelect = (amount: number) => {
