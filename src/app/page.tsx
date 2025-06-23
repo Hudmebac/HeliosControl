@@ -102,6 +102,23 @@ export default function HomePage() {
               </p>
             </Link>
 
+            
+
+            <Link href="/octopus-referral" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+              <Gift className="h-8 w-8 text-primary mb-3" />
+              <h3 className="text-lg font-semibold">Octopus Referral</h3>
+              <p className="text-sm text-muted-foreground text-center">
+                Get £50 credit if you switch, I recommend Octopus Energy.
+              </p>
+            </Link>
+
+            <Link href="/donate" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+              <HandCoins className="h-8 w-8 text-primary mb-3" />
+              <h3 className="text-lg font-semibold">Support This App</h3>
+              <p className="text-sm text-muted-foreground text-center">
+                If you find Helios useful, consider a donation to support development.
+              </p>
+            </Link>
             <Link href="/aj_renewables_info" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
               <img src="https://heliosaj.netlify.app/favicon.ico" alt="AJ Renewables" className="h-12 w-auto mb-" />
               <h3 className="text-lg font-semibold">AJ Renewables</h3>
@@ -123,22 +140,6 @@ export default function HomePage() {
                 GivEnergy App / Cloud dashboard.
               </p>
             </a>
-
-            <Link href="/octopus-referral" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
-              <Gift className="h-8 w-8 text-primary mb-3" />
-              <h3 className="text-lg font-semibold">Octopus Referral</h3>
-              <p className="text-sm text-muted-foreground text-center">
-                Share a £100 credit with a friend.
-              </p>
-            </Link>
-
-            <Link href="/donate" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
-              <HandCoins className="h-8 w-8 text-primary mb-3" />
-              <h3 className="text-lg font-semibold">Support This App</h3>
-              <p className="text-sm text-muted-foreground text-center">
-                If you find Helios useful, consider a donation to support development.
-              </p>
-            </Link>
           </div>
         </>
       ) : (
