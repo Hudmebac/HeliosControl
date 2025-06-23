@@ -129,13 +129,8 @@
     --input: 0 0% 100%; /* White Input Border */
     --ring: 39 100% 55%; /* Bright Orange */
   }
-}
 
-@layer base {
   * {
     @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground antialiased;
   }
 }
