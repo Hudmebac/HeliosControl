@@ -105,13 +105,20 @@ export default function HomePage() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={isClient ? handleGivEnergyCloudClick : undefined}
-              data-href-mobile={isClient && isMobile ? 'givenergy://' : undefined}
               className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}
             >
               <img src="https://heliosaj.netlify.app/_next/image?url=%2Fimages%2FGEIcon.webp&w=32&q=75" alt="GivEnergy Icon" className="h-8 w-auto mb-3" />
               <h3 className="text-lg font-semibold">GivEnergy </h3>
               <p className="text-sm text-muted-foreground text-center">
                 GivEnergy App / Cloud dashboard.
+              </p>
+            </a>
+
+            <a href="https://www.buymeacoffee.com/your-username" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+              <HandCoins className="h-8 w-8 text-primary mb-3" />
+              <h3 className="text-lg font-semibold">Support This App</h3>
+              <p className="text-sm text-muted-foreground text-center">
+                If you find Helios useful, consider a donation to support development.
               </p>
             </a>
           </div>
