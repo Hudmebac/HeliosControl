@@ -5,7 +5,7 @@ import { AppLogo } from "@/components/layout/AppLogo";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Loader2, Timer } from "lucide-react";
+import { Settings, RefreshCw, Loader2, Timer, Heart } from "lucide-react";
 import { Sun } from "lucide-react";
 import {
   Sheet,
@@ -68,6 +68,14 @@ export function Header() {
           )}
 
           <ThemeSwitcher />
+
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/donate" aria-label="Support the app">
+              <Heart className="h-5 w-5" />
+            </Link>
+          </Button>
+          {/* End Support Link */}
+
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Open application settings">
