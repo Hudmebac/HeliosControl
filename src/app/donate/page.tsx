@@ -1,42 +1,12 @@
-
 'use client';
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { createCheckoutSession } from './actions';
-import { ArrowLeft, CreditCard, Gift, Heart, Loader2 } from 'lucide-react';
+import { ArrowLeft, CreditCard, Gift, Heart } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DonatePage() {
-    const [isLoading, setIsLoading] = React.useState(false);
-    const { toast } = useToast();
-
-    const formAction = async (formData: FormData) => {
-        setIsLoading(true);
-
-        const amountInPounds = 5; // Fixed donation amount
-        const amountInPence = Math.round(amountInPounds * 100);
-
-        try {
-            await createCheckoutSession({
-                amount: amountInPence,
-                name: `Donation to Helios Control`,
-                description: `A one-time donation of £${amountInPounds.toFixed(2)} to support the development of Helios Control.`,
-            });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-            toast({
-                variant: 'destructive',
-                title: 'Donation Failed',
-                description: errorMessage,
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     return (
         <div className="w-full space-y-6">
             <div className="flex justify-between items-center mb-4">
@@ -58,33 +28,24 @@ export default function DonatePage() {
                         Support Helios Control
                     </CardTitle>
                     <CardDescription className="space-y-4">
-  <p>
-    You're not just donating—you’re <strong>supercharging solar smarts</strong>! Your contribution helps us keep Helios Control glowing with new features, smoother UX, and integrations like <strong>GivEnergy</strong> that make managing your energy feel like a walk in the sun.
-  </p>
-
-  <p>
-    From effortless battery scheduling to intuitive dashboards and tariff-aware insights, every pound you give helps us build tools that are as bright as the energy they manage.
-  </p>
-
-  <div className="space-y-1">
-    <p>💡 Got a bug to squash?</p>
-    <p>🌱 A feature idea to grow?</p>
-    <p>📬 Or just want to say hi?</p>
-  </div>
-
-  <p>
-    Drop us a line at <a href="mailto:heliosheggie@gmail.com" className="underline text-primary">heliosheggie@gmail.com</a> — we love hearing from fellow solar adventurers.
-  </p>
-</CardDescription>
+                        <p>
+                            Your generosity fuels more than just servers—it powers innovation, sustainability, and a better energy future for everyone. Every donation helps us refine features, expand access, and keep Helios Control free and open for all.
+                        </p>
+                        <p>
+                            Thank you for being part of the journey.
+                        </p>
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form action={formAction} className="space-y-6">
+                    <div className="space-y-6">
                          <p className="text-center text-muted-foreground pt-4">Click below to make a £5 donation and help us keep the lights (and insights) on.</p>
-                        <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg">
-                            {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
-                            Donate £5 with Stripe
+                        <Button asChild className="w-full h-12 text-lg">
+                            <a href="https://buy.stripe.com/14A7sK8fK21l8x38Z94wM00" target="_blank" rel="noopener noreferrer">
+                                <CreditCard className="mr-2 h-5 w-5" />
+                                Donate £5 with Stripe
+                            </a>
                         </Button>
-                    </form>
+                    </div>
                 </CardContent>
             </Card>
         </div>
