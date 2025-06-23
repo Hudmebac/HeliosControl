@@ -4,7 +4,6 @@
 import { useState, useEffect } from "react";
 import { useApiKey } from "@/hooks/use-api-key";
 import Link from "next/link";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 import { Loader2, AlertCircle, Settings, Sunrise, LineChart, Car, Clock, HandCoins, BookUserIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,7 +11,6 @@ import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   const { apiKey, isLoading: isApiKeyHookLoading } = useApiKey();
-  const isMobile = useIsMobile();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -20,24 +18,37 @@ export default function HomePage() {
   }, []);
 
   const handleGivEnergyCloudClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isMobile) {
-      event.preventDefault(); // Prevent default navigation
-      const appUrl = 'givenergy://'; // Custom URL scheme for GivEnergy app (assumed)
-      const storeUrl = 'https://play.google.com/store/apps/details?id=com.mobile.givenergy&utm_source=emea_Med';
+    if (!isClient || window.innerWidth > 768) return; // Only apply logic on client-side for mobile
 
-      // Attempt to open the app
-      window.location.href = appUrl;
+    event.preventDefault(); // Prevent default navigation
+    const appUrl = 'givenergy://'; // Custom URL scheme for GivEnergy app (assumed)
+    const storeUrl = 'https://play.google.com/store/apps/details?id=com.mobile.givenergy&utm_source=emea_Med';
 
-      // Set a timer to redirect to the store if the app doesn't open
-      // This is a heuristic and might not work perfectly across all devices/browsers
-      const timer = setTimeout(() => {
-        window.open(storeUrl, '_blank');
-      }, 300); // Adjust delay as needed
+    // Attempt to open the app
+    window.location.href = appUrl;
 
-      // Optional: Clear the timer if the user navigates away (app opens)
-      window.addEventListener('blur', () => clearTimeout(timer), { once: true });
-    }
+    // Set a timer to redirect to the store if the app doesn't open
+    const timer = setTimeout(() => {
+      window.open(storeUrl, '_blank');
+    }, 500); // 500ms delay
+
+    // Clear the timer if the user navigates away (app opens)
+    const onBlur = () => {
+      clearTimeout(timer);
+      window.removeEventListener('blur', onBlur);
+    };
+    window.addEventListener('blur', onBlur);
   };
+
+
+  if (isApiKeyHookLoading || !isClient) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Loading Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-6">
@@ -104,7 +115,7 @@ export default function HomePage() {
               href={'https://givenergy.cloud/dashboard'}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={isClient ? handleGivEnergyCloudClick : undefined}
+              onClick={handleGivEnergyCloudClick}
               className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}
             >
               <img src="https://heliosaj.netlify.app/_next/image?url=%2Fimages%2FGEIcon.webp&w=32&q=75" alt="GivEnergy Icon" className="h-8 w-auto mb-3" />
@@ -114,13 +125,13 @@ export default function HomePage() {
               </p>
             </a>
 
-            <a href="https://www.buymeacoffee.com/your-username" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
+            <Link href="/donate" className="flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-colors hover:bg-muted/50 cursor-pointer h-48" style={{ borderColor: '#ff8c00' }}>
               <HandCoins className="h-8 w-8 text-primary mb-3" />
               <h3 className="text-lg font-semibold">Support This App</h3>
               <p className="text-sm text-muted-foreground text-center">
                 If you find Helios useful, consider a donation to support development.
               </p>
-            </a>
+            </Link>
           </div>
         </>
       ) : (

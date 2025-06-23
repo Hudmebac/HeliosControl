@@ -1,0 +1,59 @@
+
+'use server';
+
+import Stripe from 'stripe';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+interface CreateCheckoutSessionArgs {
+  amount: number; // Amount in smallest currency unit (e.g., pence)
+  currency?: string;
+  name: string;
+  description: string;
+}
+
+export async function createCheckoutSession(args: CreateCheckoutSessionArgs) {
+  const { amount, currency = 'gbp', name, description } = args;
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('Stripe secret key is not configured.');
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: currency,
+            product_data: {
+              name: name,
+              description: description,
+            },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${appUrl}/donate?status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl}/donate?status=cancelled`,
+    });
+    
+    if (!session.id) {
+        throw new Error('Failed to create Stripe session.');
+    }
+
+    return { sessionId: session.id };
+  } catch (error) {
+    console.error('Stripe session creation failed:', error);
+    if (error instanceof Error) {
+        throw new Error(`Stripe Error: ${error.message}`);
+    }
+    throw new Error('An unknown error occurred while creating the Stripe session.');
+  }
+}
