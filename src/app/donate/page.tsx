@@ -4,51 +4,19 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { createCheckoutSession } from './actions';
 import { ArrowLeft, CreditCard, Gift, Heart, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-const donationAmounts = [5, 10, 20, 50]; // In GBP
-
 export default function DonatePage() {
-    const [customAmount, setCustomAmount] = React.useState('');
-    const [selectedAmount, setSelectedAmount] = React.useState<number | null>(10);
     const [isLoading, setIsLoading] = React.useState(false);
     const { toast } = useToast();
-
-    const handleAmountSelect = (amount: number) => {
-        setSelectedAmount(amount);
-        setCustomAmount('');
-    };
-
-    const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        setCustomAmount(value);
-        if (value && !isNaN(Number(value))) {
-            setSelectedAmount(null);
-        } else if (!value) {
-            setSelectedAmount(10); // Default back if custom is cleared
-        }
-    };
 
     const formAction = async (formData: FormData) => {
         setIsLoading(true);
 
-        const amountInPounds = selectedAmount !== null ? selectedAmount : parseFloat(customAmount);
-
-        if (isNaN(amountInPounds) || amountInPounds < 1) {
-            toast({
-                variant: 'destructive',
-                title: 'Invalid Amount',
-                description: 'Please enter a donation amount of at least £1.',
-            });
-            setIsLoading(false);
-            return;
-        }
-
+        const amountInPounds = 5; // Fixed donation amount
         const amountInPence = Math.round(amountInPounds * 100);
 
         try {
@@ -95,38 +63,10 @@ export default function DonatePage() {
                 </CardHeader>
                 <CardContent>
                     <form action={formAction} className="space-y-6">
-                        <div className="space-y-2">
-                            <Label>Select an amount (£)</Label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                {donationAmounts.map((amount) => (
-                                    <Button
-                                        key={amount}
-                                        type="button"
-                                        variant={selectedAmount === amount ? 'default' : 'outline'}
-                                        onClick={() => handleAmountSelect(amount)}
-                                    >
-                                        £{amount}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="custom-amount">Or enter a custom amount (£)</Label>
-                            <Input
-                                id="custom-amount"
-                                type="number"
-                                placeholder="e.g., 25"
-                                value={customAmount}
-                                onChange={handleCustomAmountChange}
-                                min="1"
-                                step="any"
-                            />
-                        </div>
-
+                         <p className="text-center text-muted-foreground pt-4">Click the button below to make a £5 donation.</p>
                         <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg">
                             {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
-                            Donate with Stripe
+                            Donate £5 with Stripe
                         </Button>
                     </form>
                 </CardContent>
