@@ -58,12 +58,13 @@ export default function DonatePage() {
                         Support Helios Control
                     </CardTitle>
                     <CardDescription>
-                        Your generous support helps cover development and server costs, allowing us to keep improving Helios Control. Thank you!
+                        Your generosity fuels more than just servers—it powers innovation, sustainability, and a better energy future for everyone. Every donation helps us refine features, expand access, and keep Helios Control free and open for all.
+                        Thank you for being part of the journey.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form action={formAction} className="space-y-6">
-                         <p className="text-center text-muted-foreground pt-4">Click the button below to make a £5 donation.</p>
+                         <p className="text-center text-muted-foreground pt-4">Click below to make a £5 donation and help us keep the lights (and insights) on.</p>
                         <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg">
                             {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
                             Donate £5 with Stripe
