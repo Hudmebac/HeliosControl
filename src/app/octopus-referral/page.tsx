@@ -13,7 +13,7 @@ import { ArrowLeft, Copy, Facebook, Mail, MessageCircle, Twitter } from 'lucide-
 export default function OctopusReferralPage() {
   const { toast } = useToast();
   const referralLink = 'https://share.octopus.energy/new-grove-296';
-  const shareText = "I've been using Octopus Energy and I think you'd like them too. We both get £50 credit if you switch using my link!";
+  const shareText = "I've been using Octopus Energy and I think you'd like them too. You get £50 credit if you switch using this link!";
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -59,7 +59,7 @@ export default function OctopusReferralPage() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col items-center space-y-4">
-              <p className="text-sm font-medium">Share your referral link on social media:</p>
+              <p className="text-sm font-medium">Share the referral link on social media:</p>
               <div className="flex space-x-4">
                 <Button asChild variant="outline" size="icon">
                   <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(referralLink)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on Twitter">
