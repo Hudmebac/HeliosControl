@@ -27,8 +27,9 @@ export async function createCheckoutSession(args: CreateCheckoutSessionArgs) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+  let session: Stripe.Checkout.Session;
   try {
-    const session = await stripe.checkout.sessions.create({
+    session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -47,12 +48,6 @@ export async function createCheckoutSession(args: CreateCheckoutSessionArgs) {
       success_url: `${appUrl}/donate?status=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/donate?status=cancelled`,
     });
-    
-    if (!session.url) {
-        throw new Error('Failed to create Stripe session URL.');
-    }
-
-    redirect(session.url);
   } catch (error) {
     console.error('Stripe session creation failed:', error);
     if (error instanceof Error) {
@@ -60,4 +55,10 @@ export async function createCheckoutSession(args: CreateCheckoutSessionArgs) {
     }
     throw new Error('An unknown error occurred while creating the Stripe session.');
   }
+
+  if (!session.url) {
+      throw new Error('Failed to create Stripe session URL.');
+  }
+
+  redirect(session.url);
 }
