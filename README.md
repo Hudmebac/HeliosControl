@@ -39,3 +39,11 @@ To begin using Helios Control, follow these steps:
 1.  **Clone the repository:**
 
 To get started, take a look at src/app/page.tsx.
+
+npm install
+npm install next
+npm install react
+npm install recharts
+npm install axios
+npm install react-day-picker date-fns
+

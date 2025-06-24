@@ -308,7 +308,7 @@ const AJRenewablesInfoPage: React.FC = () => {
           </div>
           <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-8">
             | A.J. Fire Protection and Electricals Ltd - Registered office address:  Unit 6 Unit 6, Lochgelly Business Park, Auchterderran Road, Lochgelly, Scotland, KY5 9HF | Company number: SC691544
-            A.J. Fire Protection and Electricals Ltd (t/a AJ Renewables) is an Introducer Appointed Representative (Financial Services Register No. 1006977) of Phoenix Financial Consultants Limited (Phoenix). Phoenix is a credit broker, not a lender. Phoenix is authorised and regulated by the Financial Conduct Authority (FRN: 539195), and offers finance trom its panel of lenders. All finance subject to status and credit checks.
+            A.J. Fire Protection and Electricals Ltd (t/a AJ Renewables) is an Introducer Appointed Representative (Financial Services Register No. 1006977) of Phoenix Financial Consultants Limited (Phoenix). Phoenix is a credit broker, not a lender. Phoenix is authorised and regulated by the Financial Conduct Authority (FRN: 539195), and offers finance from its panel of lenders. All finance subject to status and credit checks.
           </p>
         </footer>
       </div>

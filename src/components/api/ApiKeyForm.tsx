@@ -54,7 +54,7 @@ export function ApiKeyForm() {
       await saveApiKey(data.apiKey);
       toast({
         title: "API Key Saved",
-        description: "Your GivEnergy API key has been securely stored and system identifiers fetched.",
+        description: "Your GivEnergy API key has been securely stored, and system identifiers have been fetched. Please now refresh App.",
       });
     } catch (error: any) {
       toast({

@@ -69,7 +69,7 @@ export function Header() {
 
           <ThemeSwitcher />
 
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild className="text-primary">
             <Link href="/donate" aria-label="Support the app">
               <Heart className="h-5 w-5" />
             </Link>
