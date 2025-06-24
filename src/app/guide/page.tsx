@@ -408,6 +408,36 @@ export default function GuidePage() {
       <h2 className="text-2xl font-semibold">Frequently Asked Questions</h2>
     </div>
 
+{/* ⚙️ Creator Details */}
+<h3 className="text-lg font-semibold text-primary mt-8 mb-4">⚙️ Who made this amazing application?</h3>
+
+<h3 className="text-xl font-medium mt-6 mb-2">Who and Why!</h3>
+<p className="mb-4 text-muted-foreground">
+  I’m Craig Heggie, a Senior Technical Product Manager with a passion for solving complex problems and making tech feel effortless. While I don’t write code myself, I spend my days working alongside brilliant engineers to bring great ideas to life.
+  <br /><br />
+  After installing solar panels, an inverter, a battery system, and a car charger at home, my curiosity sparked a side project—one that quickly turned into a hobby I couldn’t put down. I started building simple apps to help me understand and optimise my energy usage. That hobby became:  
+  <a 
+    href="https://heggie.netlify.app/" 
+    target="_blank" 
+    rel="noopener noreferrer" 
+    className="text-primary underline hover:text-primary/80 transition-colors"
+  >
+     HeggieHub
+  </a>, a collection of tools aimed at making sustainable living easier and more transparent, alongside side projects that helped grow my skills.
+  <br /><br />
+  One of my favorites is:  
+  <a 
+    href="https://heliosaj.netlify.app/" 
+    target="_blank" 
+    rel="noopener noreferrer" 
+    className="text-primary underline hover:text-primary/80 transition-colors"
+  >
+    HelioHeggie
+  </a>—a solar forecasting app tailored to my own setup. What began as a personal experiment soon evolved into a deeper integration with the GivEnergy API, unlocking the kind of insights and control I always wished the standard tools provided.
+  <br /><br />
+  It’s all about making sense of the data, surfacing what matters, and helping others take charge of their energy story. Hope you find it helpful—and maybe even a little inspiring.
+</p>
+    
     {/* ⚙️ Troubleshooting & Data Accuracy */}
     <h3 className="text-lg font-semibold text-primary mt-8 mb-4">⚙️ Troubleshooting & Data Accuracy</h3>
 
