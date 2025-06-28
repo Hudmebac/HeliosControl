@@ -46,51 +46,96 @@ interface CalculationResult {
 }
 
 const TARIFF_PRESETS = [
-    {
-      provider: "Octopus Energy",
-      name: "Cosy Home",
-      rates: [
-        { "start": "00:00", "end": "04:00", "rate": 27.24 },
-        { "start": "04:00", "end": "07:00", "rate": 13.36, "label": "Cheap" },
-        { "start": "07:00", "end": "13:00", "rate": 27.24 },
-        { "start": "13:00", "end": "16:00", "rate": 13.36, "label": "Cheap" },
-        { "start": "16:00", "end": "19:00", "rate": 40.86 },
-        { "start": "19:00", "end": "22:00", "rate": 27.24 },
-        { "start": "22:00", "end": "00:00", "rate": 13.36, "label": "Cheap" }
-      ]
-    },
-    {
-      provider: "Octopus Energy",
-      name: "Go",
-      rates: [
-        { start: '00:30', end: '04:30', rate: 9.0, label: 'Cheap' },
-        { start: '04:30', end: '00:30', rate: 28.0 },
-      ],
-    },
-    {
-      provider: "British Gas",
-      name: "Electric Driver",
-      rates: [
-        { "start": "00:00", "end": "05:00", "rate": 8.95, "label": "Cheap" },
-        { "start": "05:00", "end": "00:00", "rate": 32.00 }
-      ]
-    },
-    {
-      provider: "E.ON Next",
-      name: "Drive",
-      rates: [
-        { "start": "00:00", "end": "07:00", "rate": 9.50, "label": "Cheap" },
-        { "start": "07:00", "end": "00:00", "rate": 31.50 }
-      ]
-    },
-    {
-      provider: "EDF Energy",
-      name: "GoElectric Overnight",
-      rates: [
-        { "start": "00:00", "end": "05:00", "rate": 8.00, "label": "Cheap" },
-        { "start": "05:00", "end": "00:00", "rate": 33.00 }
-      ]
-    }
+  {
+    provider: "Octopus Energy (England)",
+    name: "Cosy Home",
+    rates: [
+      { start: "00:00", end: "04:00", rate: 25.09 },
+      { start: "04:00", end: "07:00", rate: 12.25, label: "Cheap" },
+      { start: "07:00", end: "13:00", rate: 25.09 },
+      { start: "13:00", end: "16:00", rate: 12.25, label: "Cheap" },
+      { start: "16:00", end: "19:00", rate: 36.26 },
+      { start: "19:00", end: "22:00", rate: 25.09 },
+      { start: "22:00", end: "00:00", rate: 12.25, label: "Cheap" }
+    ]
+  },
+  {
+    provider: "Octopus Energy (Scotland)",
+    name: "Cosy Home",
+    rates: [
+      { start: "00:00", end: "04:00", rate: 24.533 },
+      { start: "04:00", end: "07:00", rate: 12.031, label: "Cheap" },
+      { start: "07:00", end: "13:00", rate: 24.533 },
+      { start: "13:00", end: "16:00", rate: 12.031, label: "Cheap" },
+      { start: "16:00", end: "19:00", rate: 36.8 },
+      { start: "19:00", end: "22:00", rate: 24.533 },
+      { start: "22:00", end: "00:00", rate: 12.031, label: "Cheap" }
+    ]
+  },
+  {
+    provider: "Octopus Energy (England)",
+    name: "Go",
+    rates: [
+      { start: "00:30", end: "04:30", rate: 8.50, label: "Cheap" },
+      { start: "04:30", end: "00:30", rate: 28.96 }
+    ]
+  },
+  {
+    provider: "Octopus Energy (Scotland)",
+    name: "Go",
+    rates: [
+      { start: "00:30", end: "04:30", rate: 8.50, label: "Cheap" },
+      { start: "04:30", end: "00:30", rate: 27.77 }
+    ]
+  },
+  {
+    provider: "British Gas (England)",
+    name: "Electric Driver",
+    rates: [
+      { start: "00:00", end: "05:00", rate: 7.90, label: "Cheap" },
+      { start: "05:00", end: "00:00", rate: 30.00 }
+    ]
+  },
+  {
+    provider: "British Gas (Scotland)",
+    name: "Electric Driver",
+    rates: [
+      { start: "00:00", end: "05:00", rate: 7.90, label: "Cheap" },
+      { start: "05:00", end: "00:00", rate: 29.20 }
+    ]
+  },
+  {
+    provider: "E.ON Next (England)",
+    name: "Drive",
+    rates: [
+      { start: "00:00", end: "07:00", rate: 6.70, label: "Cheap" },
+      { start: "07:00", end: "00:00", rate: 27.03 }
+    ]
+  },
+  {
+    provider: "E.ON Next (Scotland)",
+    name: "Drive",
+    rates: [
+      { start: "00:00", end: "07:00", rate: 6.70, label: "Cheap" },
+      { start: "07:00", end: "00:00", rate: 26.45 }
+    ]
+  },
+  {
+    provider: "EDF Energy (England)",
+    name: "GoElectric Overnight",
+    rates: [
+      { start: "00:00", end: "05:00", rate: 9.00, label: "Cheap" },
+      { start: "05:00", end: "00:00", rate: 23.27 }
+    ]
+  },
+  {
+    provider: "EDF Energy (Scotland)",
+    name: "GoElectric Overnight",
+    rates: [
+      { start: "00:00", end: "05:00", rate: 9.00, label: "Cheap" },
+      { start: "05:00", end: "00:00", rate: 22.65 }
+    ]
+  }
 ];
 
 const formatDateForDisplay = (date: Date | undefined): string => {
@@ -163,6 +208,10 @@ export default function TariffsPage() {
         const newRates = tariff.rates.map(r => ({ id: uuidv4(), startTime: r.start, endTime: r.end, rate: String(r.rate), label: r.label }));
         setImportRates(newRates);
     }
+ toast({
+      title: "Tariff Preset Loaded",
+      description: "Review, as some Suppliers charge regional prices, remember and save as default.",
+ });
   };
 
   const handleImportRateChange = (id: string, field: keyof Omit<TariffRate, 'id'>, value: string) => {
