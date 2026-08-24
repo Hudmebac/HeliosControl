@@ -159,7 +159,7 @@ export default function TariffsPage() {
   const [importRates, setImportRates] = useState<TariffRate[]>([
     { id: uuidv4(), startTime: '00:00', endTime: '23:59', rate: '28.0' },
   ]);
-  const [exportRate, setExportRate] = useState<string>('15.0');
+  const [exportRate, setExportRate] = useState<string>('13.0');
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
