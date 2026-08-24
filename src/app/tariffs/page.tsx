@@ -132,8 +132,8 @@ const TARIFF_PRESETS = [
     provider: "EDF Energy (Scotland)",
     name: "GoElectric Overnight",
     rates: [
-      { start: "00:00", end: "05:00", rate: 9.00, label: "Cheap" },
-      { start: "05:00", end: "00:00", rate: 22.65 }
+      { start: "23:00", end: "05:59", rate: 6.99, label: "Cheap" },
+      { start: "06:00", end: "23:00", rate: 31.11 }
     ]
   }
 ];
