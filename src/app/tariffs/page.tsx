@@ -1,8 +1,7 @@
-
 "use client";
 
 import * as React from 'react';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays, subMonths, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, parse, setHours, setMinutes, setSeconds, isWithinInterval, addDays } from 'date-fns';
 import Link from "next/link";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
@@ -381,7 +380,20 @@ export default function TariffsPage() {
                   <Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{formatDateForDisplay(periodType === 'day' ? dailyDate : weeklyDate)}</Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={periodType === 'day' ? dailyDate : weeklyDate} onSelect={date => { (periodType === 'day' ? setDailyDate : setWeeklyDate)(date); (periodType === 'day' ? setIsDailyCalendarOpen : setIsWeeklyCalendarOpen)(false); }} initialFocus />
+                  <Calendar
+                    mode="single"
+                    selected={periodType === 'day' ? dailyDate : weeklyDate}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      if (periodType === 'day') {
+                        setDailyDate(date);
+                        setIsDailyCalendarOpen(false);
+                      } else {
+                        setWeeklyDate(date);
+                        setIsWeeklyCalendarOpen(false);
+                      }
+                    }}
+                  />
                 </PopoverContent>
               </Popover>
             )}
@@ -421,7 +433,7 @@ export default function TariffsPage() {
                 <TooltipProvider>
                   <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild><Info className="inline-block h-4 w-4 mr-2 text-muted-foreground hover:text-foreground cursor-help" /></TooltipTrigger>
-                    <TooltipContent className="max-w-sm">This tool fetches your half-hourly energy import/export data and applies your specified tariff rates to calculate your costs. All rates should be in pence per kWh (e.g., 28.5).</TooltipContent>
+                    <TooltipContent className="max-w-sm">This tool fetches your half-hourly energy import/export data and applies your specified tariff rates to calculate your costs. All rates should be entered in pence per kWh (p/kWh).</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                  Load a preset or enter your tariff details manually.
@@ -431,11 +443,11 @@ export default function TariffsPage() {
               <div className="space-y-4 pt-4 border-t">
                 <Label>Load a Tariff Preset</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Select onValueChange={handleProviderChange} value={selectedProvider}>
+                  <Select onValueChange={(v) => handleProviderChange(v)} value={selectedProvider}>
                     <SelectTrigger><SelectValue placeholder="Select Provider" /></SelectTrigger>
                     <SelectContent>{availableProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Select onValueChange={handleTariffChange} value={selectedTariffName} disabled={!selectedProvider}>
+                  <Select onValueChange={(v) => handleTariffChange(v)} value={selectedTariffName} disabled={!selectedProvider}>
                     <SelectTrigger><SelectValue placeholder="Select Tariff" /></SelectTrigger>
                     <SelectContent>{availableTariffs.map(t => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
                   </Select>
@@ -470,11 +482,11 @@ export default function TariffsPage() {
       
       <div className="mt-6 space-y-6">
           {(!apiKey || !inverterSerial) && !isLoadingApiKey && (
-             <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>API Key or Inverter Not Found</AlertTitle><AlertDescription>Please set your GivEnergy API key and ensure your inverter is detected in the main application settings.</AlertDescription></Alert>
+             <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>API Key or Inverter Not Found</AlertTitle><AlertDescription>Please set your GivEnergy API key and ensure your inverter serial is configured in settings.</AlertDescription></Alert>
           )}
           {error && (<Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
           {isLoading && (
-             <Card className="flex items-center justify-center min-h-[200px]"><div className="text-center"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /><p className="mt-2 text-muted-foreground">Fetching data and calculating costs...</p></div></Card>
+             <Card className="flex items-center justify-center min-h-[200px]"><div className="text-center"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /><p className="mt-2 text-muted-foreground">Calculating...</p></div></Card>
           )}
           {!isLoading && calculationResult && renderResults()}
           {!isLoading && !calculationResult && !error && (
